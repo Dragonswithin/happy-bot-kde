@@ -1,0 +1,20 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Dragonswithin"
+      }
+    ],
+    "Category": "Utilities",
+    "Description": "KDE sidebar for a local AI assistant.",
+    "EnabledByDefault": false,
+    "Icon": "assistant",
+    "Id": "io.github.dragonswithin.kdeaiassistant",
+    "License": "MIT",
+    "Name": "KDE AI Assistant",
+    "Version": "0.1.0",
+    "Website": "https://github.com/Dragonswithin/kde-ai-assistant"
+  },
+  "X-Plasma-API-Minimum-Version": "6.0"
+}
