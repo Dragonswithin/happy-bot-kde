@@ -2,7 +2,7 @@
 
 - This repo is a standalone KDE Plasma assistant surface, not AIControl's
   machine-plumbing repo.
-- Keep the UI/backend bridge reusable. AIControl/OpenCode/OpenChamber may be
+- Keep the UI/backend bridge reusable. AIControl may be
   the first backend, but new code should avoid hard-coded AIControl paths when
   a user-configurable path or environment variable is reasonable.
 - Prefer user-local install paths for the desktop assistant:

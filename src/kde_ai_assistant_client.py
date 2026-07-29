@@ -97,12 +97,11 @@ def parse_args() -> argparse.Namespace:
     context = sub.add_parser("context", help="Capture KDE desktop context.")
     context.add_argument("--kind", choices=("combined", "clipboard", "window"), default="combined")
 
-    ask = sub.add_parser("ask", help="Ask the assistant through OpenCode.")
+    ask = sub.add_parser("ask", help="Ask through the configured assistant backend.")
     ask.add_argument("message", nargs="+")
     ask.add_argument("--context-kind", choices=("combined", "clipboard", "window"), default="combined")
 
     sub.add_parser("open-full-ui", help="Open the user's full assistant UI.")
-    sub.add_parser("open-openchamber", help="Compatibility alias for open-full-ui.")
     sub.add_parser("screenshot", help="Take an explicit context screenshot into XDG_RUNTIME_DIR.")
     return parser.parse_args()
 
@@ -123,7 +122,7 @@ def main() -> int:
         elif args.command == "ask":
             payload = {"message": " ".join(args.message), "contextKind": args.context_kind}
             emit(request_json("POST", "/ask", payload, timeout=360.0), args.pretty)
-        elif args.command in {"open-full-ui", "open-openchamber"}:
+        elif args.command == "open-full-ui":
             emit(request_json("POST", "/open-full-ui", {"open": True}), args.pretty)
         elif args.command == "screenshot":
             emit(request_json("POST", "/screenshot", {}), args.pretty)

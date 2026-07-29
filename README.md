@@ -1,8 +1,8 @@
 # KDE AI Assistant
 
 A Plasma 6 panel applet and small per-user daemon for a fast desktop AI
-sidebar. The current backend adapter talks to OpenCode/OpenChamber, but the
-project is structured so other local or hosted AI backends can be added later.
+sidebar. No response backend is currently configured; the project remains a
+scaffold for a future local or hosted assistant.
 
 ## What It Provides
 
@@ -13,12 +13,12 @@ project is structured so other local or hosted AI backends can be added later.
 - Button to open the full assistant web UI.
 - Per-user daemon with loopback HTTP API and transient runtime state.
 
-## Current Backend
+## Current State
 
-The first backend uses:
+The response path is intentionally disabled. The daemon still contains the
+desktop-context, screenshot, and optional full-web-UI plumbing, but chat
+requests return an unavailable response until a new backend is selected.
 
-- OpenCode for answers via `opencode run`.
-- OpenChamber as the optional full web UI.
 - KWin DBus for active-window metadata.
 - Klipper DBus for clipboard text.
 - Spectacle for user-requested screenshots.
@@ -28,14 +28,9 @@ Useful environment overrides:
 - `KDE_AI_ASSISTANT_DAEMON_HOST`
 - `KDE_AI_ASSISTANT_DAEMON_PORT`
 - `KDE_AI_ASSISTANT_DAEMON_URL`
-- `KDE_AI_ASSISTANT_WORKSPACE`
-- `KDE_AI_ASSISTANT_ASK_TIMEOUT`
-- `KDE_AI_ASSISTANT_OPENCODE_AGENT`
 - `KDE_AI_ASSISTANT_FULL_UI_URL`
-- `KDE_AI_ASSISTANT_OPENCHAMBER_URL`
 - `KDE_AI_ASSISTANT_ROOT_BROKER`
 - `KDE_AI_ASSISTANT_ADMIN_GROUP`
-- `OPENCODE_BINARY`
 
 ## Install
 

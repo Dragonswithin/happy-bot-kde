@@ -20,7 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
-from urllib.request import Request, urlopen
 
 
 SCHEMA = "kde_ai_assistant_daemon.v1"
@@ -28,7 +27,6 @@ BASE_PORT = 19000
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PUBLIC_ASSISTANT_URL = "https://ai.example.com"
 MAX_CLIPBOARD_CHARS = 12000
-MAX_PROMPT_CHARS = 60000
 SERVICE_NAME = "kde-ai-assistant-daemon.service"
 
 
@@ -49,10 +47,6 @@ def runtime_root() -> Path:
 
 def state_path() -> Path:
     return runtime_root() / "daemon.json"
-
-
-def default_workspace() -> Path:
-    return Path.home() / "AI Assistant"
 
 
 def short_text(value: str, limit: int) -> str:
@@ -180,74 +174,14 @@ def combined_context(kind: str = "combined") -> dict[str, Any]:
 
 
 def discover_full_ui_url() -> str:
-    configured = (
-        os.environ.get("KDE_AI_ASSISTANT_FULL_UI_URL", "")
-        or os.environ.get("KDE_AI_ASSISTANT_OPENCHAMBER_URL", "")
-    ).strip()
-    if configured:
-        return configured
-
-    run_dir = Path.home() / ".config" / "openchamber" / "run"
-    candidates = sorted(run_dir.glob("openchamber-*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
-    for candidate in candidates:
-        try:
-            data = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        port = data.get("port") or str(candidate.stem).rsplit("-", 1)[-1]
-        try:
-            port_int = int(port)
-        except (TypeError, ValueError):
-            continue
-        url = f"http://127.0.0.1:{port_int}"
-        if url_ok(f"{url}/health", timeout=0.8):
-            return url
-
-    if url_ok("http://127.0.0.1:3000/health", timeout=0.8):
-        return "http://127.0.0.1:3000"
-    return DEFAULT_PUBLIC_ASSISTANT_URL
-
-
-def url_ok(url: str, timeout: float = 1.0) -> bool:
-    try:
-        with urlopen(url, timeout=timeout) as response:
-            return 200 <= int(response.status) < 500
-    except Exception:
-        return False
-
-
-def find_opencode() -> str | None:
-    for candidate in (
-        os.environ.get("OPENCODE_BINARY", ""),
-        str(Path.home() / ".local" / "bin" / "opencode"),
-        shutil.which("opencode") or "",
-        "/usr/bin/opencode",
-    ):
-        if not candidate:
-            continue
-        path = Path(candidate)
-        if path.exists() and os.access(path, os.X_OK):
-            return str(path)
-    return None
-
-
-def format_prompt(message: str, context: dict[str, Any]) -> str:
-    parts = ["You are the KDE AI Assistant for this local desktop session."]
-    parts.append("Answer the user directly and use the attached desktop context only when it is relevant.")
-    parts.append("")
-    parts.append("[Desktop Context]")
-    parts.append(json.dumps(context, indent=2, ensure_ascii=False))
-    parts.append("")
-    parts.append("[User Request]")
-    parts.append(message.strip())
-    return short_text("\n".join(parts), MAX_PROMPT_CHARS)
+    return os.environ.get("KDE_AI_ASSISTANT_FULL_UI_URL", "").strip() or DEFAULT_PUBLIC_ASSISTANT_URL
 
 
 @dataclass
 class SharedState:
     host: str
     port: int
-    status: str = "idle"
+    status: str = "offline"
     last_error: str = ""
     last_context_kind: str = ""
     last_activity_at: str = ""
@@ -265,7 +199,6 @@ class SharedState:
             "pid": os.getpid(),
             "base_url": self.base_url,
             "full_ui_url": discover_full_ui_url(),
-            "openchamber_url": discover_full_ui_url(),
             "last_error": self.last_error,
             "last_context_kind": self.last_context_kind,
             "last_activity_at": self.last_activity_at,
@@ -355,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/ask":
             self._handle_ask(body)
             return
-        if parsed.path in {"/open-full-ui", "/open-openchamber"}:
+        if parsed.path == "/open-full-ui":
             url = discover_full_ui_url()
             if body.get("open", True):
                 webbrowser.open(url)
@@ -386,16 +319,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         context_kind = str(body.get("contextKind") or "combined")
         context = combined_context(context_kind)
-        prompt = format_prompt(message, context)
-        update_state(status="thinking", last_context_kind=context_kind)
-        try:
-            answer = run_opencode(prompt)
-        except Exception as exc:  # noqa: BLE001 - user-facing bridge should compact failures.
-            update_state(status="idle", last_error=str(exc))
-            self._json(500, {"ok": False, "error": str(exc), "context": context})
-            return
-        update_state(status="idle", last_error="")
-        self._json(200, {"ok": True, "answer": answer, "context": context})
+        error = "No assistant response backend is configured."
+        update_state(status="offline", last_error=error, last_context_kind=context_kind)
+        self._json(503, {"ok": False, "error": error, "context": context})
 
 
 def update_state(**changes: Any) -> None:
@@ -412,31 +338,6 @@ def current_state() -> SharedState:
     if STATE is None:
         raise RuntimeError("daemon state is not initialized")
     return STATE
-
-
-def run_opencode(prompt: str) -> str:
-    binary = find_opencode()
-    if not binary:
-        raise RuntimeError("OpenCode binary was not found in OPENCODE_BINARY, ~/.local/bin, or PATH")
-    workspace = Path(
-        os.environ.get("KDE_AI_ASSISTANT_WORKSPACE", "")
-        or str(default_workspace())
-    ).expanduser()
-    workspace.mkdir(parents=True, exist_ok=True)
-    timeout = float(os.environ.get("KDE_AI_ASSISTANT_ASK_TIMEOUT", "300"))
-    agent = os.environ.get("KDE_AI_ASSISTANT_OPENCODE_AGENT", "ops")
-    command = [binary, "run", "--dir", str(workspace), "--agent", agent, prompt]
-    completed = subprocess.run(
-        command,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError((completed.stderr or completed.stdout or "OpenCode run failed").strip())
-    return (completed.stdout or "").strip()
 
 
 def take_screenshot() -> dict[str, Any]:

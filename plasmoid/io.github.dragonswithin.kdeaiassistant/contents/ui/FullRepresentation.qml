@@ -82,7 +82,7 @@ PlasmaExtras.Representation {
     function refreshStatus() {
         request("GET", "/health", null, function(data) {
             const status = data.status || "idle";
-            const summary = data.full_ui_url || data.openchamber_url
+            const summary = data.full_ui_url
                 ? i18n("Ready as %1", data.user || "")
                 : i18n("Ready");
             setStatus(status, summary);
