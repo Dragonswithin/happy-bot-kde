@@ -46,26 +46,46 @@ scripts/install.sh
 
 The installer copies:
 
-- `src/kde_ai_assistant_daemon.py` to `~/.local/bin/kde-ai-assistant-daemon`
-- `src/kde_ai_assistant_client.py` to `~/.local/bin/kde-ai-assistant`
+- `src/kde_ai_assistant/` to `~/.local/lib/kde-ai-assistant/kde_ai_assistant/`
+- `launchers/kde-ai-assistant-daemon` and `launchers/kde-ai-assistant` to
+  `~/.local/bin/`
 - `systemd/user/kde-ai-assistant-daemon.service` to
   `~/.config/systemd/user/kde-ai-assistant-daemon.service`
 - the Plasma applet package to the user's Plasma package store with
   `kpackagetool6`
 
-Then add the "AI Assistant" widget to a Plasma panel, next to the application
-launcher. To focus it from the keyboard, set a shortcut on the widget's
-Keyboard Shortcuts settings page. To test it in a window instead:
+It then enables and restarts the daemon. Running it again upgrades in place.
+
+Add the "AI Assistant" widget to a Plasma panel, next to the application
+launcher. Right-click it and choose Configure to switch between a search bar
+and a button, set the bar width and the results size, and (on the Keyboard
+Shortcuts page) set a shortcut that focuses it. After an upgrade, log out and
+in, or restart plasmashell, so the panel loads the new widget code.
+
+To test the widget in a window instead:
 
 ```bash
 plasmawindowed io.github.dragonswithin.kdeaiassistant
 ```
 
+Widget load errors are not printed to the terminal; read them with
+`journalctl --user -e | grep -E 'plasmashell|plasmawindowed'`.
+
+## Access Control
+
+The daemon listens on loopback only and can act for the user, so every
+request must carry the bearer token it writes at each start to
+`$XDG_RUNTIME_DIR/kde-ai-assistant/token` (mode 0600). Requests with an
+`Origin` header (any browser page) or a foreign `Host` header are refused.
+The CLI and the widget read the token themselves.
+
 ## Checks
 
 ```bash
-python3 -m py_compile src/kde_ai_assistant_daemon.py src/kde_ai_assistant_client.py
+python3 -m unittest discover -s tests
+python3 -m py_compile src/kde_ai_assistant/*.py
 bash -n scripts/install.sh
+systemd-analyze --user verify systemd/user/kde-ai-assistant-daemon.service
 systemctl --user status kde-ai-assistant-daemon.service
 kde-ai-assistant status --pretty
 kde-ai-assistant context --kind window --pretty

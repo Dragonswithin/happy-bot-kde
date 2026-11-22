@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Launcher installed as ``~/.local/bin/kde-ai-assistant``. Runs the command-line client.
+
+The package is not pip-installed; ``scripts/install.sh`` copies it to
+``~/.local/lib/kde-ai-assistant`` (override with ``KDE_AI_ASSISTANT_LIB``), and
+this file only puts that directory on the import path and calls the entry
+point. Run from a checkout, it falls back to the repository's ``src``.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+_installed = Path(os.environ.get("KDE_AI_ASSISTANT_LIB") or Path.home() / ".local/lib/kde-ai-assistant")
+_checkout = Path(__file__).resolve().parent.parent / "src"
+sys.path.insert(0, str(_installed if (_installed / "kde_ai_assistant").is_dir() else _checkout))
+
+from kde_ai_assistant.cli import main  # noqa: E402 - path set up above
+
+raise SystemExit(main())

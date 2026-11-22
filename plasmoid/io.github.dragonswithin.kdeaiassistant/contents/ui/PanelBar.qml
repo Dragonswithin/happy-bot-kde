@@ -18,8 +18,13 @@ import org.kde.plasma.components as PlasmaComponents3
  * It owns no conversation state. It reports intent through signals and
  * main.qml decides what they do: `focusRequested` when the user clicks the
  * unfocused field (the panel window must be granted keyboard focus before
- * the field can take it), `submitted` on Enter, `dismissed` on Escape, and
- * `inputFocusChanged` so the results popup can follow focus.
+ * the field can take it), `submitted` on Enter with text, `reopenRequested`
+ * on Enter with an empty field, `dismissed` on Escape, and
+ * `inputFocusedChanged` so the results popup can close when focus leaves.
+ *
+ * Its width is fixed at `widthInGridUnits` (the applet's `barWidth`
+ * setting): minimum, preferred and maximum are the same so the panel neither
+ * squeezes nor stretches it.
  *
  * The click-catching MouseArea exists only while the field is unfocused: a
  * Plasma panel refuses keyboard focus until the applet's status is
@@ -33,16 +38,18 @@ Item {
     property bool busy: false
     property string statusText: ""
     property bool offline: false
+    property int widthInGridUnits: 18
     readonly property bool inputFocused: field.activeFocus
     readonly property alias text: field.text
 
     signal focusRequested()
     signal submitted(string text)
+    signal reopenRequested()
     signal dismissed()
 
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 10
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 18
-    Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+    Layout.minimumWidth: Kirigami.Units.gridUnit * widthInGridUnits
+    Layout.preferredWidth: Layout.minimumWidth
+    Layout.maximumWidth: Layout.minimumWidth
     Layout.fillHeight: true
 
     function takeFocus() {
@@ -111,6 +118,8 @@ Item {
         const text = field.text.trim();
         if (text.length > 0) {
             bar.submitted(text);
+        } else {
+            bar.reopenRequested();
         }
     }
 }

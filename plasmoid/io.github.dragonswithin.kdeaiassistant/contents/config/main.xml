@@ -17,5 +17,25 @@
     <entry name="inputInPopup" type="Bool">
       <default>false</default>
     </entry>
+    <!-- Width of the panel text field, in Plasma grid units (one grid unit
+         is about the height of a line of text). Default 18. Range 8 to 60.
+         Ignored when the panel shows the button instead of the field. -->
+    <entry name="barWidth" type="Int">
+      <default>18</default>
+      <min>8</min>
+      <max>60</max>
+    </entry>
+    <!-- Size of the results popup in Plasma grid units. Defaults 30 wide by
+         26 tall. Ranges: width 20 to 70, height 12 to 50. -->
+    <entry name="popupWidth" type="Int">
+      <default>30</default>
+      <min>20</min>
+      <max>70</max>
+    </entry>
+    <entry name="popupHeight" type="Int">
+      <default>26</default>
+      <min>12</min>
+      <max>50</max>
+    </entry>
   </group>
 </kcfg>

@@ -21,21 +21,25 @@ import org.kde.plasma.plasmoid
  * - Keyboard focus. A panel only accepts key input while an applet reports
  *   AcceptingInputStatus, so `wantsInput` drives `Plasmoid.status` and is
  *   set before the field is focused and cleared when the field loses focus.
- * - Popup visibility. The popup opens on submit, reopens when the field
- *   regains focus with a conversation in progress, and closes when focus
- *   leaves the field.
+ * - Popup visibility. Clicking or focusing the field never opens the popup.
+ *   It opens when a request is submitted, reopens on Enter in an empty
+ *   field if there is a conversation to show, and closes when focus leaves
+ *   the field or on Escape.
  *
  * The applet's activation shortcut (set by the user in the applet's
  * Keyboard Shortcuts page) focuses the field or opens the popup.
  *
- * The daemon address defaults to the per-uid loopback port used by
- * src/kde_ai_assistant_daemon.py and can be overridden with the `daemonUrl`
- * setting in contents/config/main.xml.
+ * The daemon address defaults to the per-uid loopback port defined in
+ * src/kde_ai_assistant/runtime_paths.py and can be overridden with the
+ * `daemonUrl` setting in contents/config/main.xml. The token file path is
+ * the one that module's `token_path` uses.
  */
 PlasmoidItem {
     id: root
 
-    readonly property string runtimeLocation: String(QtCore.StandardPaths.writableLocation(QtCore.StandardPaths.RuntimeLocation))
+    // StandardPaths returns a file:// URL in QML; the scheme is stripped so
+    // the value is a plain directory path such as /run/user/1000.
+    readonly property string runtimeLocation: String(QtCore.StandardPaths.writableLocation(QtCore.StandardPaths.RuntimeLocation)).replace(/^file:\/\//, "")
     readonly property int sessionUid: {
         const match = runtimeLocation.match(/\/run\/user\/([0-9]+)/);
         return match ? parseInt(match[1]) : 1000;
@@ -65,12 +69,15 @@ PlasmoidItem {
     AssistantSession {
         id: session
         daemonUrl: root.daemonUrl
+        tokenFile: root.runtimeLocation + "/kde-ai-assistant/token"
     }
 
     ResultsPopup {
         id: popup
         session: session
         inputInPopup: root.inputInPopup
+        widthInGridUnits: Plasmoid.configuration.popupWidth
+        heightInGridUnits: Plasmoid.configuration.popupHeight
         visualParent: root
         location: Plasmoid.location
         onSubmitted: (text, contextKind) => session.ask(text, contextKind)
@@ -87,6 +94,7 @@ PlasmoidItem {
         busy: session.busy
         statusText: session.statusText
         offline: session.status === "offline"
+        widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: root.focusBar()
         onSubmitted: text => {
@@ -95,14 +103,13 @@ PlasmoidItem {
                 popup.visible = true;
             }
         }
+        onReopenRequested: popup.visible = session.hasTranscript
         onDismissed: {
             popup.visible = false;
             root.wantsInput = false;
         }
         onInputFocusedChanged: {
-            if (inputFocused) {
-                popup.visible = session.hasTranscript;
-            } else {
+            if (!inputFocused) {
                 root.wantsInput = false;
                 popup.visible = false;
             }

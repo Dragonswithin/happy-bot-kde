@@ -27,13 +27,16 @@ import org.kde.plasma.extras as PlasmaExtras
  *   own input field, and closes itself when it is deactivated.
  *
  * `submitted` carries text typed into the embedded field; the panel field
- * reports its own text to main.qml directly.
+ * reports its own text to main.qml directly. The window's size comes from
+ * the applet's `popupWidth` and `popupHeight` settings.
  */
 PlasmaCore.Dialog {
     id: popup
 
     required property AssistantSession session
     property bool inputInPopup: false
+    property int widthInGridUnits: 30
+    property int heightInGridUnits: 26
 
     signal submitted(string text, string contextKind)
     signal dismissed()
@@ -53,8 +56,8 @@ PlasmaCore.Dialog {
     }
 
     mainItem: Item {
-        implicitWidth: Kirigami.Units.gridUnit * 30
-        implicitHeight: Kirigami.Units.gridUnit * 26
+        implicitWidth: Kirigami.Units.gridUnit * popup.widthInGridUnits
+        implicitHeight: Kirigami.Units.gridUnit * popup.heightInGridUnits
 
         ColumnLayout {
             anchors.fill: parent

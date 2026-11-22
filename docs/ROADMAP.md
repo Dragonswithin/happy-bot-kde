@@ -115,7 +115,9 @@ links, apps). A conversation continues in the same popup until dismissed.
 Two paths share the bar so it feels fast with a slow local model:
 
 - **Instant path (while typing):** debounced query to the search-index tool
-  only. No model. Results are selectable with the keyboard.
+  only. No model. Results are selectable with the keyboard. The popup opens
+  for this only once there are hits to show; clicking or focusing the empty
+  bar never opens anything.
 - **Agent path (Enter):** the full request goes to the agent loop, which may
   call the same index tool, web search, or any action tool.
 
@@ -363,6 +365,26 @@ first usable release: Phases 0 to 6.**
   first Phase 0 attempt used them and the applet never loaded.
 - `scripts/install.sh` does not restart a daemon that is already running, so
   an upgrade keeps serving old code. Fix in Phase 1.
+
+**Phase 1 (passed 2026-11-22).**
+
+- Exit check, run against the installed daemon: no token returns 401; a
+  valid token with an `Origin` header returns 403; a valid token returns
+  200; the applet in the real panel reaches `/health` and recovers by
+  itself within one poll after the daemon restarts with a new token.
+- The applet reads the token by running `cat` through the
+  `org.kde.plasma.plasma5support` "executable" data source. It works.
+- `QtCore.StandardPaths.writableLocation()` returns a `file://` URL in QML,
+  not a path. Strip the scheme before using it in a command.
+- A running plasmashell keeps the applet QML it loaded. After an upgrade the
+  panel needs `systemctl --user restart plasma-plasmashell.service` or a new
+  login; `plasmawindowed` always loads the installed version.
+- Do not set a panel's `AppletOrder` through plasmashell scripting. It left
+  the widget outside the layout, drawn over other widgets. Add the widget
+  with `addWidget` and let the user place it.
+- The maintainer's panel requirements, now implemented as applet settings: the bar
+  width and results size are configurable; the panel can show a button
+  instead of the bar; clicking or focusing the bar never opens the popup.
 
 ## Decisions
 
