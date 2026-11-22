@@ -7,12 +7,12 @@
       }
     ],
     "Category": "Utilities",
-    "Description": "KDE sidebar for a local AI assistant.",
+    "Description": "Panel search bar that finds, answers and acts using any AI model you configure.",
     "EnabledByDefault": false,
-    "Icon": "assistant",
+    "Icon": "search",
     "Id": "io.github.dragonswithin.kdeaiassistant",
     "License": "MIT",
-    "Name": "KDE AI Assistant",
+    "Name": "AI Assistant",
     "Version": "0.1.0",
     "Website": "https://github.com/Dragonswithin/kde-ai-assistant"
   },

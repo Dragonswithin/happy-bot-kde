@@ -8,34 +8,41 @@ import QtQuick
 import QtQuick.Controls as QQC2
 
 import org.kde.kirigami as Kirigami
-import org.kde.plasma.plasmoid
 
+/**
+ * Icon form of the applet, used where an inline text field cannot work: a
+ * vertical panel, or when the user enables "type in the popup" because the
+ * panel field does not receive keyboard focus on their system.
+ *
+ * It shows the daemon status as a coloured dot and a busy spinner, and emits
+ * `clicked`; main.qml opens the results popup with its own input field in
+ * response. It holds no state of its own.
+ */
 Item {
-    id: root
+    id: compact
 
-    required property PlasmoidItem plasmoidItem
     property string status: "idle"
+    property string iconName: "search"
+
+    signal clicked()
 
     implicitWidth: Kirigami.Units.iconSizes.medium
     implicitHeight: Kirigami.Units.iconSizes.medium
 
     MouseArea {
         anchors.fill: parent
-        onClicked: root.plasmoidItem.expanded = !root.plasmoidItem.expanded
+        onClicked: compact.clicked()
     }
 
     Kirigami.Icon {
-        id: icon
         anchors.fill: parent
-        source: Plasmoid.icon
-        opacity: root.status === "offline" ? 0.45 : 1.0
+        source: compact.iconName
+        opacity: compact.status === "offline" ? 0.45 : 1.0
     }
 
     QQC2.BusyIndicator {
-        anchors.centerIn: parent
-        width: parent.width
-        height: parent.height
-        running: root.status === "thinking"
+        anchors.fill: parent
+        running: compact.status === "thinking"
         visible: running
     }
 
@@ -46,9 +53,8 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         color: {
-            if (root.status === "thinking") return Kirigami.Theme.activeTextColor;
-            if (root.status === "needs_approval") return Kirigami.Theme.neutralTextColor;
-            if (root.status === "offline") return Kirigami.Theme.negativeTextColor;
+            if (compact.status === "thinking") return Kirigami.Theme.activeTextColor;
+            if (compact.status === "offline") return Kirigami.Theme.negativeTextColor;
             return Kirigami.Theme.positiveTextColor;
         }
         border.color: Kirigami.Theme.backgroundColor

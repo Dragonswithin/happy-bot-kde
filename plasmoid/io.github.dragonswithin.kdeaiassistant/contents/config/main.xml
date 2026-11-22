@@ -4,8 +4,18 @@
       xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
   <kcfgfile name=""/>
   <group name="General">
+    <!-- Address of the per-user daemon. Empty (default) means the loopback
+         port derived from the user's uid: http://127.0.0.1:(19000 + uid - 1000).
+         Set only to reach a daemon started on a non-default port. -->
     <entry name="daemonUrl" type="String">
       <default></default>
+    </entry>
+    <!-- Where the user types. false (default): in a text field embedded in
+         the panel. true: the panel shows an icon and the field is inside the
+         results popup. Use true if the panel field does not accept keyboard
+         input on your system. Vertical panels always behave as true. -->
+    <entry name="inputInPopup" type="Bool">
+      <default>false</default>
     </entry>
   </group>
 </kcfg>

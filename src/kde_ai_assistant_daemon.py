@@ -13,7 +13,6 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,7 +24,6 @@ from urllib.parse import parse_qs, urlparse
 SCHEMA = "kde_ai_assistant_daemon.v1"
 BASE_PORT = 19000
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PUBLIC_ASSISTANT_URL = "https://ai.example.com"
 MAX_CLIPBOARD_CHARS = 12000
 SERVICE_NAME = "kde-ai-assistant-daemon.service"
 
@@ -173,10 +171,6 @@ def combined_context(kind: str = "combined") -> dict[str, Any]:
     }
 
 
-def discover_full_ui_url() -> str:
-    return os.environ.get("KDE_AI_ASSISTANT_FULL_UI_URL", "").strip() or DEFAULT_PUBLIC_ASSISTANT_URL
-
-
 @dataclass
 class SharedState:
     host: str
@@ -198,7 +192,6 @@ class SharedState:
             "uid": os.getuid(),
             "pid": os.getpid(),
             "base_url": self.base_url,
-            "full_ui_url": discover_full_ui_url(),
             "last_error": self.last_error,
             "last_context_kind": self.last_context_kind,
             "last_activity_at": self.last_activity_at,
@@ -287,12 +280,6 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path == "/ask":
             self._handle_ask(body)
-            return
-        if parsed.path == "/open-full-ui":
-            url = discover_full_ui_url()
-            if body.get("open", True):
-                webbrowser.open(url)
-            self._json(200, {"ok": True, "url": url})
             return
         if parsed.path == "/screenshot":
             self._json(200, take_screenshot())

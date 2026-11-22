@@ -1,5 +1,15 @@
 # KDE AI Assistant Project Instructions
 
+- Product goal: a search bar on the Plasma panel beside the launcher where
+  the user types anything and the computer does it: find files through the
+  user's existing index, answer from the web through their configured search
+  tool, or act on the system through tools, using any model the user
+  configures. It is one app with one install and setup, not a chat sidebar
+  and not a set of services the user wires together. `docs/ROADMAP.md` is the
+  authoritative goal, architecture and phase order; read it before planning
+  or coding.
+- No model, vendor or endpoint is assumed in code. Local services are offered
+  as suggestions; the user chooses.
 - This repo is a standalone KDE Plasma assistant surface, not AIControl's
   machine-plumbing repo.
 - Keep the UI/backend bridge reusable. AIControl may be

@@ -101,7 +101,6 @@ def parse_args() -> argparse.Namespace:
     ask.add_argument("message", nargs="+")
     ask.add_argument("--context-kind", choices=("combined", "clipboard", "window"), default="combined")
 
-    sub.add_parser("open-full-ui", help="Open the user's full assistant UI.")
     sub.add_parser("screenshot", help="Take an explicit context screenshot into XDG_RUNTIME_DIR.")
     return parser.parse_args()
 
@@ -122,8 +121,6 @@ def main() -> int:
         elif args.command == "ask":
             payload = {"message": " ".join(args.message), "contextKind": args.context_kind}
             emit(request_json("POST", "/ask", payload, timeout=360.0), args.pretty)
-        elif args.command == "open-full-ui":
-            emit(request_json("POST", "/open-full-ui", {"open": True}), args.pretty)
         elif args.command == "screenshot":
             emit(request_json("POST", "/screenshot", {}), args.pretty)
         else:
