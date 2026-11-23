@@ -14,8 +14,10 @@ Event stream, in addition to the agent loop's events (see ``agent_loop``):
 - an ``error`` event with ``code`` ``not_configured`` when no model is set
   up, or ``busy`` when this conversation already has a turn running.
 
-Only read-risk tools are offered until the permission gate exists
-(``ALLOWED_RISKS``).
+Every tool is offered. A ``PermissionGate`` built from the
+``approval_policy`` setting and the server's ``ApprovalBroker`` decides, per
+call, whether it runs at once or waits for the user; its approval events
+travel in this same stream and the answer arrives through ``POST /approve``.
 
 If the client disconnects, the turn is cancelled: the model request is
 dropped at the next chunk and no further tools run. The history is left
@@ -29,14 +31,13 @@ from typing import TYPE_CHECKING, Any, Callable
 from . import settings as settings_store
 from .agent_loop import run_turn, system_prompt
 from .conversation import Message
+from .permissions import PermissionGate
 from .providers import ProviderError, create_provider
-from .tools.mcp_bridge import build_registry
-from .tools.registry import RISK_READ
+from .tools.catalog import build_registry
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
 
-ALLOWED_RISKS = (RISK_READ,)
 MAX_MESSAGE_CHARS = 20000
 
 
@@ -70,9 +71,9 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
 
     try:
         conversation.cancel.clear()
-        registry, warnings = build_registry(server.mcp, settings, ALLOWED_RISKS)
+        registry, warnings = build_registry(server.mcp, settings)
         if not conversation.history:
-            conversation.history.append(Message("system", system_prompt()))
+            conversation.history.append(Message("system", system_prompt(settings.get("folders"))))
         conversation.history.append(Message("user", message))
         server.state.update(status="thinking", last_error="")
 
@@ -89,7 +90,9 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             "tools": registry.names(),
             "warnings": warnings,
         })
-        run_turn(provider, conversation.history, registry, emit, conversation.cancel, model["context_window"])
+        gate = PermissionGate(
+            settings.get("approval_policy", "danger"), server.approvals, emit, conversation.cancel, server.runtime_dir)
+        run_turn(provider, conversation.history, registry, emit, conversation.cancel, model["context_window"], gate=gate)
     finally:
         conversation.turn_lock.release()
         server.state.update(status="idle")

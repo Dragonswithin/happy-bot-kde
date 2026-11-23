@@ -283,15 +283,17 @@ src/kde_ai_assistant/
     ask_stream.py       one streamed turn for POST /ask
     conversations.py    in-memory conversation histories
     kwin_bridge.py      runs snippets inside KWin, returns their result
+    permissions.py      approval policy, the gate, pending approvals, action log
+    shell_risk.py       decides whether a shell command is a danger action
     providers/          base contract, openai_compatible
-    tools/              registry, observe (read tools), mcp_bridge
+    tools/              registry, catalog, observe, windows, apps, system,
+                        files, shell, mcp_bridge
     daemon_routes.py    what each endpoint does
     mcp_client.py       stdio MCP sessions, child-process supervision
     mcp_discovery.py    finds tool servers in other programs' configs
     tool_roles.py       file_search / web_search role mapping and proposals
     instant_search.py   no-model query path to the file_search tool
     desktop_actions.py  actions on the desktop, starting with opening things
-    permissions.py      risk classes, policy, pending approvals
     settings.py         config file, secret lookup
     desktop_context.py  existing KWin / Klipper / Spectacle capture
 tests/
@@ -352,7 +354,8 @@ scenarios pass from the bar.
 *Exit:* "click Save in the focused dialog" and typing into a focused field
 work in a Qt and a GTK app on a text-only local model.
 
-**Phase 6: One-go install and setup.** First-run setup, settings page,
+**Phase 6: One-go install and setup.** First-run setup, settings page
+(models, keys, tool servers and roles, approval policy, folders),
 single install and uninstall commands, error messages with fixes. Test on a
 fresh user account with no prior configuration.
 *Exit:* on a fresh account, one install command plus first-run setup reaches
@@ -483,6 +486,41 @@ first usable release: Phases 0 to 6.**
   - The candidate MCP servers were not installed. With both native paths
     proven, bundling a third-party server would add a Rust or `uv` runtime to
     a project that must install in one go. Phase 5 builds tier 3 natively.
+
+**Phase 4 (passed 2026-11-22).**
+
+- Exit check on the local model, from the CLI with throwaway windows and
+  files: two windows tiled left and right (16 s); volume set to 30% and dark
+  mode recognised as already on (6 s); largest items in Downloads (8 s);
+  three files renamed by modification date (21 s); clipboard summarised and
+  written back (7 s); "external monitor only" correctly reported one
+  display; a deletion request paused for approval, was declined, the file
+  stayed, and the action log recorded it. The maintainer confirmed from the bar that
+  the approval card's Allow moves the file to the trash and that a window
+  request runs without asking.
+- Not verified for real: connecting to Wi-Fi (this machine is wired and its
+  Wi-Fi radio is off) and switching between two displays (one is connected).
+  Both tools exist and their argument handling is tested.
+- Risk is decided per call, not per tool. `run_command` uses `shell_risk`;
+  file tools are `danger` only when a call passes `overwrite: true` onto an
+  existing file, targets a system path, or trashes something. Making
+  overwrite an explicit argument keeps the classifier and the handler in
+  agreement: the handler never replaces anything the call did not ask to.
+- An approval is only requested for a call that can succeed. The first
+  panel test asked the maintainer to approve trashing a path that did not exist (the
+  model guessed the folder), which looked like Allow doing nothing. Tools now
+  have a `precheck` that runs before the gate.
+- The model is told where the user's standard folders are. They follow the
+  system's XDG user-dirs (what KDE's Locations page sets) and can be
+  overridden with the assistant's `folders` setting; the maintainer asked for both.
+- KWin applies window geometry after a script returns, so window tools
+  report the geometry they requested rather than reading it back.
+- Models pass window ids without their braces; ids match either way.
+- The CLI declines approvals when it has no terminal, so a script cannot
+  approve a dangerous action.
+- The maintainer removed the Clipboard and Window quick buttons from the popup.
+- There are about 45 built-in tools. The local model handles the full list;
+  first-token latency was not measurably worse than with ten.
 
 ## Decisions
 

@@ -19,8 +19,8 @@ import org.kde.plasma.extras as PlasmaExtras
  * error line when the last search failed, and the conversation when
  * `showConversation` is set: a status line with Stop and New, the entries
  * (the user's requests, the assistant's Markdown answers as they stream in,
- * one line per tool call with its state, notices and errors), and two quick
- * requests. main.qml owns
+ * one line per tool call with its state, approval cards with Allow and Deny
+ * for actions that wait on the user, notices and errors). main.qml owns
  * its visibility, which hit is selected, and anchors it to the applet.
  *
  * It runs in one of two modes, chosen by `inputInPopup`:
@@ -34,8 +34,7 @@ import org.kde.plasma.extras as PlasmaExtras
  * The embedded field reports exactly what PanelBar.qml reports
  * (`queryEdited`, `accepted`, `selectionMove`) so main.qml treats both the
  * same. `hitActivated(location)` is a clicked result or a link clicked in
- * an answer; `quickRequest(text)` is a canned request from the Clipboard
- * and Window buttons; `closeRequested` is the close button.
+ * an answer; `closeRequested` is the close button.
  *
  * Height follows content: with only hits showing the window is as tall as
  * the rows need; with the conversation showing it uses the configured
@@ -58,7 +57,6 @@ PlasmaCore.Dialog {
     signal accepted(string text)
     signal selectionMove(int delta)
     signal hitActivated(string location)
-    signal quickRequest(string text)
     signal closeRequested()
     signal dismissed()
 
@@ -273,6 +271,9 @@ PlasmaCore.Dialog {
                         required property string kind
                         required property string text
                         required property string state
+                        required property string callId
+                        required property string detail
+                        required property bool canRemember
 
                         width: transcript.width
                         implicitHeight: body.implicitHeight
@@ -335,6 +336,100 @@ PlasmaCore.Dialog {
                                 }
                             }
 
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Kirigami.Units.smallSpacing
+                                visible: entry.kind === "approval"
+                                implicitHeight: card.implicitHeight + Kirigami.Units.largeSpacing
+                                radius: Kirigami.Units.cornerRadius
+                                color: "transparent"
+                                border.width: 1
+                                border.color: entry.state === "waiting"
+                                    ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.disabledTextColor
+
+                                ColumnLayout {
+                                    id: card
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.margins: Kirigami.Units.smallSpacing * 2
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Kirigami.Units.smallSpacing
+
+                                        Kirigami.Icon {
+                                            source: "dialog-warning"
+                                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                                            Layout.alignment: Qt.AlignTop
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 0
+
+                                            PlasmaComponents3.Label {
+                                                Layout.fillWidth: true
+                                                text: entry.text
+                                                textFormat: Text.PlainText
+                                                wrapMode: Text.WrapAnywhere
+                                                font.bold: true
+                                            }
+
+                                            PlasmaComponents3.Label {
+                                                Layout.fillWidth: true
+                                                visible: entry.detail.length > 0
+                                                text: i18n("Needs your approval: %1", entry.detail)
+                                                textFormat: Text.PlainText
+                                                wrapMode: Text.Wrap
+                                                font: Kirigami.Theme.smallFont
+                                                opacity: 0.8
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        visible: entry.state === "waiting"
+
+                                        PlasmaComponents3.Button {
+                                            text: i18n("Allow")
+                                            icon.name: "dialog-ok"
+                                            onClicked: popup.session.answerApproval(entry.callId, "allow", false)
+                                        }
+
+                                        PlasmaComponents3.Button {
+                                            text: i18n("Always this session")
+                                            visible: entry.canRemember
+                                            onClicked: popup.session.answerApproval(entry.callId, "allow", true)
+                                        }
+
+                                        Item {
+                                            Layout.fillWidth: true
+                                        }
+
+                                        PlasmaComponents3.Button {
+                                            text: i18n("Deny")
+                                            icon.name: "dialog-cancel"
+                                            onClicked: popup.session.answerApproval(entry.callId, "deny", false)
+                                        }
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        Layout.fillWidth: true
+                                        visible: entry.state !== "waiting"
+                                        text: entry.state === "allow" ? i18n("Allowed")
+                                            : entry.state === "deny" ? i18n("Declined")
+                                            : entry.state === "timeout" ? i18n("Not answered in time; not run")
+                                            : i18n("Cancelled; not run")
+                                        font: Kirigami.Theme.smallFont
+                                        opacity: 0.7
+                                    }
+                                }
+                            }
+
                             PlasmaComponents3.Label {
                                 Layout.fillWidth: true
                                 visible: entry.kind === "error" || entry.kind === "notice"
@@ -346,25 +441,6 @@ PlasmaCore.Dialog {
                             }
                         }
                     }
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                visible: content.conversationVisible
-
-                PlasmaComponents3.Button {
-                    text: i18n("Clipboard")
-                    icon.name: "edit-paste"
-                    enabled: !popup.session.busy
-                    onClicked: popup.quickRequest(i18n("Look at what is on my clipboard and help me with it."))
-                }
-
-                PlasmaComponents3.Button {
-                    text: i18n("Window")
-                    icon.name: "window"
-                    enabled: !popup.session.busy
-                    onClicked: popup.quickRequest(i18n("Look at my active window and tell me what you can help with."))
                 }
             }
         }

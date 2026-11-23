@@ -17,8 +17,9 @@ The server refuses to bind to a non-loopback address.
 
 The server object is also where the daemon's long-lived parts hang: its
 ``DaemonState`` (mirrored to ``daemon.json`` in the runtime directory so
-clients can find the base URL), the current settings, and the ``McpManager``
-that owns the tool-server child processes. ``replace_settings`` is the single
+clients can find the base URL), the current settings, the conversations, the
+``ApprovalBroker`` holding approval requests that await the user, and the
+``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
 manager, under one lock. Unreadable settings at start do not stop the daemon;
 it runs with defaults and reports ``settings_error`` in ``/health``.
@@ -55,6 +56,7 @@ from .ask_stream import ClientGone, stream_ask
 from .conversations import ConversationStore
 from .daemon_routes import ROUTES
 from .mcp_client import McpManager
+from .permissions import ApprovalBroker
 from .runtime_paths import (
     DEFAULT_HOST,
     default_port,
@@ -160,6 +162,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.config_file = config_file or settings_store.config_path()
         self.mcp = McpManager()
         self.conversations = ConversationStore()
+        self.approvals = ApprovalBroker()
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:

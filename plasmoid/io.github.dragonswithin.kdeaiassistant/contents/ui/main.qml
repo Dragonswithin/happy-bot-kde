@@ -22,7 +22,9 @@ import org.kde.plasma.plasmoid
  *   AcceptingInputStatus, so `wantsInput` drives `Plasmoid.status` and is
  *   set before the field is focused and cleared when the field loses focus.
  * - Popup visibility (`updatePopup`). Clicking or focusing the field never
- *   opens the popup. In bar mode it is visible while the field has focus
+ *   opens the popup, with one exception: while an action is waiting for the
+ *   user's approval the applet asks for attention, and focusing the field
+ *   shows the conversation so the approval card is in front of them. In bar mode it is visible while the field has focus
  *   and there is something to show: file hits for the typed text, a search
  *   failure, or a conversation the user opened by submitting a request (or
  *   by pressing Enter in an empty field). Escape closes the conversation.
@@ -65,6 +67,9 @@ PlasmoidItem {
     Plasmoid.status: {
         if (wantsInput) {
             return PlasmaCore.Types.AcceptingInputStatus;
+        }
+        if (session.pendingApprovals > 0) {
+            return PlasmaCore.Types.NeedsAttentionStatus;
         }
         return session.busy ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
     }
@@ -110,10 +115,6 @@ PlasmoidItem {
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
         onHitActivated: location => root.openHit(location)
-        onQuickRequest: text => {
-            root.conversationOpen = true;
-            session.ask(text);
-        }
         onDismissed: root.popupToggled = false
         onCloseRequested: root.closePopup()
     }
@@ -129,8 +130,8 @@ PlasmoidItem {
 
     fullRepresentation: PanelBar {
         busy: session.busy
-        statusText: session.statusText
-        offline: session.status === "offline"
+        statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here") : session.statusText
+        offline: session.status === "offline" || session.pendingApprovals > 0
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: root.focusBar()
@@ -141,6 +142,8 @@ PlasmoidItem {
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
+            } else if (session.pendingApprovals > 0) {
+                root.conversationOpen = true;
             }
             root.updatePopup();
         }

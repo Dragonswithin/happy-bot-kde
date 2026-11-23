@@ -1,4 +1,4 @@
-"""Exposes the user's MCP tool servers as assistant tools, and builds the registry.
+"""Exposes the user's MCP tool servers as assistant tools.
 
 For each enabled tool server this lists its tools and wraps each one as a
 ``Tool`` whose handler forwards the call through ``McpManager``. A bridged
@@ -13,9 +13,6 @@ optional ``tools`` allow-list in the settings hides everything else.
 
 A server that fails to start does not fail the turn: its tools are simply
 absent and the reason is returned in ``warnings`` for the user.
-
-``build_registry`` assembles the built-in tools plus bridged ones, keeping
-only tools whose risk is in ``allowed_risks``.
 """
 
 from __future__ import annotations
@@ -25,8 +22,7 @@ import re
 from typing import Any
 
 from ..mcp_client import McpError, McpManager
-from .observe import observe_tools
-from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema
+from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, object_schema
 
 MCP_CALL_TIMEOUT_SECONDS = 90.0
 _UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
@@ -84,21 +80,6 @@ def mcp_tools(manager: McpManager, settings: dict[str, Any]) -> tuple[list[Tool]
                 risk=RISK_READ if (entry.get("read_only") or role) else RISK_CHANGE,
                 handler=_make_handler(manager, server, name),
                 source=server,
+                summarize=lambda arguments, label=f"{server}: {name}": label,
             ))
     return tools, warnings
-
-
-def build_registry(
-    manager: McpManager,
-    settings: dict[str, Any],
-    allowed_risks: tuple[str, ...],
-) -> tuple[ToolRegistry, list[str]]:
-    """Assemble built-in and bridged tools limited to ``allowed_risks``."""
-    bridged, warnings = mcp_tools(manager, settings)
-    selected: list[Tool] = []
-    seen: set[str] = set()
-    for tool in [*observe_tools(), *bridged]:
-        if tool.risk in allowed_risks and tool.name not in seen:
-            seen.add(tool.name)
-            selected.append(tool)
-    return ToolRegistry(selected), warnings

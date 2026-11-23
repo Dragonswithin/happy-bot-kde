@@ -33,6 +33,14 @@ Schema (version 1)::
         }
       },
       "active_model": "<name>",               # default ""; which model answers requests
+      "folders": {"Documents": "/path"},      # default {}; overrides for the user's standard folders.
+                                              #   Names: Desktop, Documents, Downloads, Pictures, Music,
+                                              #   Videos. A folder not listed here is wherever the system
+                                              #   has it (XDG user-dirs, which KDE's Locations page sets).
+      "approval_policy": "danger",            # default "danger"; which tool calls wait for the user:
+                                              #   "danger"     only deletion and OS-level changes
+                                              #   "changes"    anything that changes state
+                                              #   "everything" every call, including reads
       "roles": {
         "file_search": {                      # optional; the tool the search bar queries while typing
           "server": "<name>", "tool": "<tool name>",
@@ -69,6 +77,8 @@ from .runtime_paths import APP_DIR_NAME, write_private_file
 SETTINGS_VERSION = 1
 PROVIDER_KINDS = ("openai_compatible",)
 DEFAULT_CONTEXT_WINDOW = 32768
+APPROVAL_POLICIES = ("danger", "changes", "everything")
+FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 ROLE_NAMES = ("file_search", "web_search")
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
@@ -87,7 +97,10 @@ def config_path() -> Path:
 
 
 def default_settings() -> dict[str, Any]:
-    return {"version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": ""}
+    return {
+        "version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": "",
+        "approval_policy": "danger", "folders": {},
+    }
 
 
 def _require(condition: bool, message: str) -> None:
@@ -192,7 +205,7 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
 def validate_settings(raw: Any) -> dict[str, Any]:
     """Return a normalised copy of ``raw`` with defaults filled in, or raise ``SettingsError``."""
     _require(isinstance(raw, dict), "settings must be an object")
-    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model"}, "")
+    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
     raw_roles = raw.get("roles", {})
@@ -206,12 +219,24 @@ def validate_settings(raw: Any) -> dict[str, Any]:
     models = {name: _validate_model(name, value) for name, value in raw_models.items()}
     _require(isinstance(active_model, str), "'active_model' must be a model name")
     _require(not active_model or active_model in models, f"'active_model': model '{active_model}' is not set up")
+    folders = raw.get("folders", {})
+    _require(isinstance(folders, dict), "'folders' must be an object")
+    for name, path in folders.items():
+        _require(name in FOLDER_NAMES, f"'folders': unknown folder '{name}' (known: {', '.join(FOLDER_NAMES)})")
+        _require(
+            isinstance(path, str) and path.startswith(("/", "~")),
+            f"'folders': {name} must be an absolute path or start with ~",
+        )
+    policy = raw.get("approval_policy", "danger")
+    _require(policy in APPROVAL_POLICIES, f"'approval_policy' must be one of {', '.join(APPROVAL_POLICIES)}")
     return {
         "version": SETTINGS_VERSION,
         "tool_servers": servers,
         "roles": roles,
         "models": models,
         "active_model": active_model,
+        "approval_policy": policy,
+        "folders": {name: os.path.expanduser(path) for name, path in folders.items()},
     }
 
 

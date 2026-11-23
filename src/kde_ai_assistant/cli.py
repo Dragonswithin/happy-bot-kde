@@ -7,7 +7,9 @@ authenticates with the bearer token the daemon writes into the runtime
 directory (see ``runtime_paths``).
 
 ``ask`` streams: the assistant's text is printed as it arrives and tool
-activity is reported on stderr, so stdout holds only the answer. Every other
+activity is reported on stderr, so stdout holds only the answer. When an
+action needs approval it asks on the terminal; without a terminal it declines
+at once, so a script can never approve a dangerous action by accident. Every other
 command prints one JSON reply.
 
 Besides the basic commands it is the scriptable way to do what the settings
@@ -41,6 +43,7 @@ from .runtime_paths import DEFAULT_HOST, default_port, read_token, state_path
 SERVICE_NAME = "kde-ai-assistant-daemon.service"
 CONTEXT_KINDS = ("combined", "clipboard", "window")
 ROLE_NAMES = ("file_search", "web_search")
+FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 
 
 def read_state() -> dict[str, Any]:
@@ -113,6 +116,8 @@ def stream_ask(message: str, conversation_id: str = "") -> int:
                 print(f"[conversation {event['conversation_id']} model {event['model']}]", file=sys.stderr)
             elif kind == "tool_call":
                 print(f"[tool] {event['name']} {json.dumps(event['arguments'], ensure_ascii=False)}", file=sys.stderr)
+            elif kind == "approval_required":
+                answer_approval(event)
             elif kind == "tool_result" and not event["ok"]:
                 print(f"[tool failed] {event['name']}: {event['text'][:200]}", file=sys.stderr)
             elif kind == "error":
@@ -123,6 +128,23 @@ def stream_ask(message: str, conversation_id: str = "") -> int:
     if wrote_text:
         sys.stdout.write("\n")
     return status
+
+
+def answer_approval(event: dict[str, Any]) -> None:
+    """Ask on the terminal whether a waiting action may run, and tell the daemon."""
+    print(f"\n[approval needed] {event['summary']}", file=sys.stderr)
+    if event.get("detail"):
+        print(f"                  Reason: {event['detail']}", file=sys.stderr)
+    decision = "deny"
+    if sys.stdin.isatty():
+        try:
+            reply = input("                  Allow this once? [y/N] ")
+        except (EOFError, KeyboardInterrupt):
+            reply = ""
+        decision = "allow" if reply.strip().lower() in ("y", "yes") else "deny"
+    else:
+        print("                  No terminal to ask on; declined.", file=sys.stderr)
+    request_json("POST", "/approve", {"id": event["id"], "decision": decision})
 
 
 def daemon_ready() -> bool:
@@ -204,6 +226,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     tools_import.add_argument("--read-only", action="store_true", help="Declare that none of its tools change anything.")
     tools_remove = tools_sub.add_parser("remove", help="Remove a configured tool server.")
     tools_remove.add_argument("name")
+    tools_set = tools_sub.add_parser("set", help="Change how a configured tool server is used.")
+    tools_set.add_argument("name")
+    tools_set.add_argument("--read-only", choices=("yes", "no"), help="Whether none of its allowed tools change anything.")
+    tools_set.add_argument("--allow", help="Comma-separated tool names to offer; 'all' offers every tool.")
+    tools_set.add_argument("--enabled", choices=("yes", "no"))
+
+    folders = sub.add_parser("folders", help="Show or override where Desktop, Documents, Downloads and so on are.")
+    folders.add_argument("name", nargs="?", choices=FOLDER_NAMES)
+    folders.add_argument("path", nargs="?", help="New location; 'default' goes back to the system's location.")
+
+    policy = sub.add_parser("policy", help="Show or set which actions wait for your approval.")
+    policy.add_argument("value", nargs="?", choices=("danger", "changes", "everything"))
 
     role = sub.add_parser("role", help="Choose which tool does file search or web search.")
     role_sub = role.add_subparsers(dest="role_command", required=True)
@@ -235,6 +269,15 @@ def run_tools(args: argparse.Namespace) -> dict[str, Any]:
     settings = current_settings()
     if args.name not in settings["tool_servers"]:
         return {"ok": False, "error": f"no tool server named '{args.name}' is set up"}
+    if args.tools_command == "set":
+        server = settings["tool_servers"][args.name]
+        if args.read_only:
+            server["read_only"] = args.read_only == "yes"
+        if args.enabled:
+            server["enabled"] = args.enabled == "yes"
+        if args.allow:
+            server["tools"] = None if args.allow == "all" else [item.strip() for item in args.allow.split(",") if item.strip()]
+        return request_json("PUT", "/settings", {"settings": settings})
     del settings["tool_servers"][args.name]
     settings["roles"] = {name: role for name, role in settings["roles"].items() if role["server"] != args.name}
     return request_json("PUT", "/settings", {"settings": settings})
@@ -325,6 +368,27 @@ def main(argv: list[str] | None = None) -> int:
             return stream_ask(" ".join(args.message), args.conversation)
         elif args.command == "model":
             reply = run_model(args)
+        elif args.command == "folders":
+            settings = current_settings()
+            if args.name and args.path:
+                if args.path == "default":
+                    settings["folders"].pop(args.name, None)
+                else:
+                    settings["folders"][args.name] = os.path.abspath(os.path.expanduser(args.path))
+                reply = request_json("PUT", "/settings", {"settings": settings})
+                if reply.get("ok") is not False:
+                    reply = request_json("GET", "/settings")
+            else:
+                reply = request_json("GET", "/settings")
+            if reply.get("ok") is not False:
+                reply = {"ok": True, "folders": reply["effective_folders"], "overridden": sorted(reply["settings"]["folders"])}
+        elif args.command == "policy":
+            settings = current_settings()
+            if args.value:
+                settings["approval_policy"] = args.value
+                reply = request_json("PUT", "/settings", {"settings": settings})
+            else:
+                reply = {"ok": True, "approval_policy": settings["approval_policy"]}
         elif args.command == "search":
             reply = request_json("GET", f"/search?q={quote(' '.join(args.query))}&limit={args.limit}", timeout=20.0)
         elif args.command == "open":

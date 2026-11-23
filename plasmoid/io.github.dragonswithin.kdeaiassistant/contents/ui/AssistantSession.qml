@@ -27,6 +27,12 @@ import org.kde.plasma.plasma5support as P5Support
  *   and "error" use `text`.
  * - kind "tool" is one tool call: `text` is its display name, `state` is
  *   "running", "ok" or "failed", `callId` links the result to the call.
+ * - kind "approval" is an action waiting for the user: `text` says what will
+ *   run, `detail` why it needs approval, `callId` is the approval id,
+ *   `canRemember` whether "allow for this session" may be offered, and
+ *   `state` is "waiting" until `answerApproval` or the daemon resolves it
+ *   ("allow", "deny", "timeout", "cancelled"). `pendingApprovals` counts the
+ *   waiting ones so the panel can draw attention.
  *
  * The daemon keeps the history; `conversationId` (from the stream's first
  * event) is sent with follow-ups and cleared by `newChat`. `cancel` aborts
@@ -63,6 +69,7 @@ Item {
 
     readonly property ListModel entries: ListModel {}
     readonly property bool hasTranscript: entries.count > 0
+    property int pendingApprovals: 0
 
     property var hits: []
     property string searchError: ""
@@ -95,8 +102,28 @@ Item {
         session.statusText = summary;
     }
 
-    function appendEntry(kind, text, state, callId) {
-        session.entries.append({ kind: kind, text: text || "", state: state || "", callId: callId || "" });
+    function appendEntry(kind, text, state, callId, detail, canRemember) {
+        session.entries.append({
+            kind: kind, text: text || "", state: state || "", callId: callId || "",
+            detail: detail || "", canRemember: canRemember === true
+        });
+    }
+
+    function setEntryState(callId, state) {
+        for (let index = session.entries.count - 1; index >= 0; index--) {
+            if (session.entries.get(index).callId === callId) {
+                session.entries.setProperty(index, "state", state);
+                return;
+            }
+        }
+    }
+
+    /** Sends the user's decision on a waiting action: "allow" or "deny". */
+    function answerApproval(approvalId, decision, remember) {
+        request("POST", "/approve", { id: approvalId, decision: decision, remember: remember === true },
+            function(data) {}, function(data) {
+                session.appendEntry("error", data.error || i18n("The answer could not be delivered"));
+            });
     }
 
     P5Support.DataSource {
@@ -296,9 +323,13 @@ Item {
     function finishStream() {
         session.activeStream = null;
         session.busy = false;
+        session.pendingApprovals = 0;
         for (let index = 0; index < session.entries.count; index++) {
-            if (session.entries.get(index).state === "running") {
+            const state = session.entries.get(index).state;
+            if (state === "running") {
                 session.entries.setProperty(index, "state", "failed");
+            } else if (state === "waiting") {
+                session.entries.setProperty(index, "state", "cancelled");
             }
         }
         refreshStatus();
@@ -328,15 +359,21 @@ Item {
             break;
         case "tool_call":
             setStatus("thinking", i18n("Using %1", toolLabel(event.name)));
-            appendEntry("tool", toolLabel(event.name), "running", event.id);
+            appendEntry("tool", event.summary && event.summary !== event.name
+                ? event.summary : toolLabel(event.name), "running", event.id);
             break;
         case "tool_result":
-            for (let index = last; index >= 0; index--) {
-                if (session.entries.get(index).callId === event.id) {
-                    session.entries.setProperty(index, "state", event.ok ? "ok" : "failed");
-                    break;
-                }
-            }
+            setEntryState(event.id, event.ok ? "ok" : "failed");
+            break;
+        case "approval_required":
+            setStatus("thinking", i18n("Waiting for your approval"));
+            session.pendingApprovals += 1;
+            appendEntry("approval", event.summary, "waiting", event.id, event.detail, event.can_remember);
+            break;
+        case "approval_resolved":
+            session.pendingApprovals = Math.max(0, session.pendingApprovals - 1);
+            setEntryState(event.id, event.decision);
+            setStatus("thinking", i18n("Working"));
             break;
         case "done":
             if (event.stop === "cancelled") {

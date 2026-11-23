@@ -5,6 +5,14 @@ and carry it out: a model-facing name, description and JSON-schema
 parameters, a risk class, and a handler that takes the model's arguments and
 returns text for the model to read.
 
+A tool's ``risk`` is its default. A tool whose effect depends on its
+arguments (a shell command, a file write) also supplies ``classify``, which
+returns ``(risk, reason)`` for one specific call; the permission gate uses
+that. ``summarize`` gives the one-line, human description of a call that the
+approval card shows. ``precheck`` raises ``ToolFailure`` for a call that
+cannot succeed (a missing file, for example); it runs before the permission
+gate so the user is never asked to approve something that would fail.
+
 Risk classes (see docs/ROADMAP.md, Permission Gate):
 
 - ``read``: no state change.
@@ -46,6 +54,9 @@ class Tool:
     risk: str
     handler: Callable[[dict[str, Any]], str]
     source: str = "builtin"
+    classify: Callable[[dict[str, Any]], tuple[str, str]] | None = None
+    summarize: Callable[[dict[str, Any]], str] | None = None
+    precheck: Callable[[dict[str, Any]], None] | None = None
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.parameters)
@@ -82,6 +93,43 @@ class ToolRegistry:
 
     def names(self) -> list[str]:
         return list(self._tools)
+
+    def assess(self, name: str, arguments: dict[str, Any]) -> tuple[str, str, str]:
+        """Return ``(risk, summary, detail)`` for one call, for the permission gate.
+
+        ``summary`` is a short human description; ``detail`` adds the reason a
+        call was classed as dangerous, when there is one. A classifier that
+        fails is treated as ``danger`` so a bug cannot wave a call through.
+        """
+        tool = self._tools.get(name)
+        if tool is None:
+            return RISK_READ, name, ""
+        risk, reason = tool.risk, ""
+        if tool.classify is not None:
+            try:
+                risk, reason = tool.classify(arguments)
+            except Exception as error:  # noqa: BLE001 - fail closed
+                risk, reason = RISK_DANGER, f"could not be checked ({error})"
+        summary = name
+        if tool.summarize is not None:
+            try:
+                summary = tool.summarize(arguments)
+            except Exception:  # noqa: BLE001 - a summary is cosmetic
+                summary = name
+        return risk, summary, reason
+
+    def precheck(self, name: str, arguments: dict[str, Any]) -> str:
+        """Return why this call cannot succeed, or "" if nothing rules it out."""
+        tool = self._tools.get(name)
+        if tool is None or tool.precheck is None:
+            return ""
+        try:
+            tool.precheck(arguments)
+        except ToolFailure as failure:
+            return str(failure)
+        except Exception:  # noqa: BLE001 - a faulty precheck must not block the call
+            return ""
+        return ""
 
     def run(self, name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Run a tool; return ``(succeeded, text for the model)``."""

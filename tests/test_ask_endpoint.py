@@ -96,18 +96,22 @@ class AskEndpointTests(unittest.TestCase):
         self.assertEqual(self.model.headers[0]["authorization"], "Bearer sk-secret")
         self.assertEqual(self.call("GET", "/health")["status"], "idle")
 
-    def test_only_read_tools_are_offered_before_the_permission_gate(self) -> None:
+    def test_every_tool_is_offered_and_bridged_risk_follows_what_the_user_declared(self) -> None:
         self.configure(read_only=False)
         self.model.replies.append(chunks_for("ok"))
         offered = self.ask("hi")[0]["tools"]
-        self.assertIn("fake__find_files", offered)          # role-assigned, so read
-        self.assertNotIn("fake__crash", offered)            # unvouched server tool
-        self.configure(read_only=True)
-        self.model.replies.append(chunks_for("ok"))
-        self.assertIn("fake__echo_env", self.ask("hi")[0]["tools"])
-        description = self.model.requests[0]["tools"]
-        preferred = [t for t in description if t["function"]["name"] == "fake__find_files"][0]
+        for name in ("fake__find_files", "fake__crash", "run_command", "trash_path", "arrange_window", "set_volume"):
+            self.assertIn(name, offered)
+        preferred = [t for t in self.model.requests[0]["tools"] if t["function"]["name"] == "fake__find_files"][0]
         self.assertTrue(preferred["function"]["description"].startswith("Preferred tool for finding"))
+
+        from kde_ai_assistant.tools.catalog import build_registry
+        registry, _ = build_registry(self.server.mcp, self.server.settings)
+        self.assertEqual(registry.assess("fake__find_files", {})[0], "read")     # role-assigned
+        self.assertEqual(registry.assess("fake__crash", {})[0], "change")        # unvouched server tool
+        self.configure(read_only=True)
+        registry, _ = build_registry(self.server.mcp, self.server.settings)
+        self.assertEqual(registry.assess("fake__crash", {})[0], "read")
 
     def test_conversation_is_remembered_and_new_ones_start_clean(self) -> None:
         self.configure()

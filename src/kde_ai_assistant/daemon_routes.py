@@ -21,6 +21,8 @@ Endpoints:
 - ``POST /models/test``: check that a configured model answers and can call
   tools. This sends one small request to the model.
 - ``POST /cancel``: stop a conversation's running turn.
+- ``POST /approve``: the user's answer to an approval request
+  (``{"id", "decision": "allow"|"deny", "remember": bool}``).
 - ``POST /screenshot``.
 
 ``POST /ask`` is not here: it streams, so ``daemon_http`` hands it to
@@ -37,6 +39,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 from . import desktop_actions, desktop_context, instant_search, mcp_discovery, settings as settings_store
+from .agent_loop import user_folders
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .mcp_client import McpError
 from .providers import ProviderError, create_provider
@@ -97,7 +100,13 @@ def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
 
 
 def get_settings(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
-    return 200, {"ok": True, "settings": settings_store.redacted(server.settings)}
+    # ``effective_folders`` is read-only information for the settings UI: where
+    # each standard folder currently resolves to, overrides included.
+    return 200, {
+        "ok": True,
+        "settings": settings_store.redacted(server.settings),
+        "effective_folders": user_folders(server.settings.get("folders")),
+    }
 
 
 def put_settings(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -232,6 +241,14 @@ def cancel(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     return 200, {"ok": True, "cancelled": server.conversations.cancel(str(body.get("conversation_id") or ""))}
 
 
+def approve(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    accepted = server.approvals.resolve(
+        str(body.get("id") or ""), str(body.get("decision") or ""), bool(body.get("remember", False)))
+    if not accepted:
+        return _error(404, "That request is no longer waiting for an answer.", "invalid")
+    return 200, {"ok": True}
+
+
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
@@ -246,4 +263,5 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/models/probe"): probe_models,
     ("POST", "/models/test"): test_model,
     ("POST", "/cancel"): cancel,
+    ("POST", "/approve"): approve,
 }

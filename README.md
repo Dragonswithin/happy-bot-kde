@@ -18,13 +18,21 @@ architecture and phase order are in `docs/ROADMAP.md`.
 - Desktop context capture: active window (KWin), clipboard (Klipper),
   explicit screenshots (Spectacle).
 
-- Requests typed into the bar are answered by the AI model you configure,
-  streamed into the popup. The model can look things up with read-only
-  tools: your file search, your web search, the focused window, open
-  windows, the clipboard, files and folders, disk usage, KDE settings.
+- Requests typed into the bar are carried out or answered by the AI model
+  you configure, streamed into the popup with a line for each step.
+- The assistant can read and act: arrange, focus and close windows, start
+  applications, open files and links, change volume, media playback, Wi-Fi,
+  Bluetooth, displays, colour scheme and KDE settings, set the clipboard,
+  create, move and copy files, and run shell commands.
+- Anything that deletes (including moving to the trash and replacing a
+  file) or makes an OS-level change pauses and shows an approval card.
+  Everything else runs at once. `kde-ai-assistant policy changes` or
+  `policy everything` makes it ask more often.
+- Every action that changed something is recorded in
+  `$XDG_RUNTIME_DIR/kde-ai-assistant/actions.jsonl` until you log out.
 
-The assistant cannot change anything on the system yet; actions and the
-approval step are the next phase in `docs/ROADMAP.md`.
+It cannot yet click or type inside other applications; that is the next
+phase in `docs/ROADMAP.md`.
 
 ## Setting Up A Model
 
@@ -39,7 +47,10 @@ kde-ai-assistant model use NAME
 kde-ai-assistant ask "what is on my clipboard?"
 ```
 
-`--header NAME=VALUE` adds a request header for services that need one. With
+`--header NAME=VALUE` adds a request header for services that need one.
+`kde-ai-assistant folders` shows where the assistant thinks Desktop,
+Documents and Downloads are (it follows the system's settings), and
+`kde-ai-assistant folders Documents /some/path` overrides one. With
 a hosted model, whatever the tools read (clipboard, file contents) is sent to
 that service.
 
