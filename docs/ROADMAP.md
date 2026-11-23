@@ -585,12 +585,21 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
     All passed. News was run on both models in Phase 3.
   - The maintainer confirmed the bar's right-click menu opens the settings dialog and
     the Assistant page shows the model, search tools, approvals and folders.
-- Not verified by anyone: the installer on an account that has never had
-  the assistant (panel placement, `~/.local/bin` on `PATH`, the daemon
-  starting at login), the portal consent staying granted after a new login,
-  the applet's activation shortcut, `--uninstall`, connecting to Wi-Fi,
-  switching between two displays, and the whole settings page flow driven by
-  hand from a blank state.
+- Installer, checked 2026-11-23 against an empty throwaway home directory
+  with `systemctl` and `qdbus6` replaced by recorders (so the real session
+  was not touched): a first install placed the package, launchers and unit,
+  enabled and restarted the daemon, asked Plasma to add the bar once, and
+  warned that `~/.local/bin` was not on `PATH`; the installed command ran
+  from that home without the checkout. A second run upgraded in place and
+  did not add the bar again. `--uninstall` disabled the daemon, removed the
+  bar from panels and every installed file, and kept the settings;
+  `--purge` removed those too and left the home empty.
+- Not verified by anyone: the installer on a real account that has never
+  had the assistant (that the bar actually lands in the panel and the daemon
+  starts at login), the portal consent staying granted after a new login,
+  the applet's activation shortcut, connecting to Wi-Fi, switching between
+  two displays, and the whole settings page flow driven by hand from a blank
+  state.
 - The `qmllint` on this machine's `PATH` is the Qt 5 one. It cannot parse
   these files, and Qt tools log to the journal unless
   `QT_FORCE_STDERR_LOGGING=1` is set, so earlier "lint passed" results for
