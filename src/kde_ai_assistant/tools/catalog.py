@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..mcp_client import McpManager
+from .app_visibility import app_visibility_tools
 from .apps import app_tools
 from .files import file_tools
 from .gui import gui_tools
@@ -26,7 +27,8 @@ from .windows import window_tools
 
 
 def builtin_tools() -> list[Tool]:
-    return with_read_summaries([*observe_tools(), *window_tools(), *gui_tools(), *app_tools(), *system_tools(),
+    return with_read_summaries([*observe_tools(), *window_tools(), *gui_tools(), *app_tools(), *app_visibility_tools(),
+                                *system_tools(),
                                 *file_tools(), *shell_tools()])
 
 

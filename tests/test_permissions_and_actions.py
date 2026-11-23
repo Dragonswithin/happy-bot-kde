@@ -586,3 +586,87 @@ class ApprovalOverHttpTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppVisibilityTests(unittest.TestCase):
+    """verify_app_install and refresh_app_menu with the shell, cache and restart stubbed out."""
+
+    def setUp(self) -> None:
+        from unittest import mock
+
+        from kde_ai_assistant.tools import app_visibility
+
+        self.v = app_visibility
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name) / "flatpak" / "exports" / "share"
+        (root / "applications").mkdir(parents=True)
+        self.root = str(root)
+        self.entry = root / "applications" / "org.example.Browser.desktop"
+        self.entry.write_text("[Desktop Entry]\nType=Application\nName=Browser\nExec=browser\n", encoding="utf-8")
+        self.app = {"id": "org.example.Browser.desktop", "name": "Browser", "generic": "", "keywords": "",
+                    "comment": "", "path": str(self.entry)}
+        self.restarts: list[list[str]] = []
+        patches = [
+            mock.patch.object(app_visibility, "installed_applications", return_value=[self.app]),
+            mock.patch.object(app_visibility, "session_data_dirs", return_value=[self.root, "/usr/share"]),
+            mock.patch.object(app_visibility, "rebuild_menu_cache", return_value=True),
+            mock.patch.object(app_visibility, "RESTART_DELAY_SECONDS", 0),
+            mock.patch.object(app_visibility, "run_command",
+                              side_effect=lambda command, timeout=0: self.restarts.append(command) or {"stdout": ""}),
+        ]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        app_visibility._restart_pending = False
+
+    def shell_sees(self, dirs: list[str]):
+        from unittest import mock
+
+        return mock.patch.object(self.v, "shell_data_dirs", return_value=(123, dirs))
+
+    def cached(self, value: bool):
+        from unittest import mock
+
+        return mock.patch.object(self.v, "menu_cache_contains", return_value=value)
+
+    def test_visible_when_the_shell_searches_the_folder_and_the_cache_has_it(self) -> None:
+        with self.shell_sees([self.root, "/usr/share"]), self.cached(True):
+            self.assertIn("visible in the launcher", self.v.verify_app_install({"name": "browser"}))
+
+    def test_not_visible_when_the_shell_does_not_search_the_folder(self) -> None:
+        with self.shell_sees(["/usr/local/share", "/usr/share"]), self.cached(False):
+            result = self.v.verify_app_install({"name": "Browser"})
+        self.assertIn("NOT visible yet", result)
+        self.assertIn(self.root, result)
+        with self.shell_sees([self.root]), self.cached(False):
+            self.assertIn("menu cache has not picked it up", self.v.verify_app_install({"name": "Browser"}))
+
+    def test_missing_app_is_a_clear_failure(self) -> None:
+        from unittest import mock
+
+        with mock.patch.object(self.v, "installed_applications", return_value=[]), \
+                self.assertRaisesRegex(ToolFailure, "No launcher entry"):
+            self.v.verify_app_install({"name": "Nothing"})
+
+    def test_refresh_schedules_a_shell_restart_only_when_the_shell_lacks_the_folder(self) -> None:
+        with self.shell_sees([self.root, "/usr/share"]), self.cached(True):
+            result = self.v.refresh_app_menu({"name": "Browser"})
+        self.assertNotIn("restart", result)
+        self.assertFalse(self.v.run_after_turn())
+
+        with self.shell_sees(["/usr/share"]), self.cached(True):
+            result = self.v.refresh_app_menu({"name": "Browser"})
+        self.assertIn("panel will restart", result)
+        self.assertIn(["systemctl", "--user", "set-environment", f"XDG_DATA_DIRS={self.root}:/usr/share"], self.restarts)
+        self.assertNotIn(["systemctl", "--user", "restart", "plasma-plasmashell.service"], self.restarts)
+        self.assertTrue(self.v.run_after_turn())
+        deadline = time.monotonic() + 3
+        while ["systemctl", "--user", "restart", "plasma-plasmashell.service"] not in self.restarts and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertIn(["systemctl", "--user", "restart", "plasma-plasmashell.service"], self.restarts)
+        self.assertFalse(self.v.run_after_turn(), "a scheduled restart runs once")
+
+    def test_refresh_fails_loudly_when_the_cache_still_lacks_the_app(self) -> None:
+        with self.shell_sees([self.root]), self.cached(False), self.assertRaisesRegex(ToolFailure, "still does not list"):
+            self.v.refresh_app_menu({"name": "Browser"})

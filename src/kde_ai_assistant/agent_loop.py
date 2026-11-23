@@ -117,6 +117,9 @@ def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
         "(pacman -Ss), the AUR (search it with yay -Ss; prefer a package ending in -bin), the project's own Flatpak "
         "(check every configured remote with flatpak remote-ls or flatpak search, and install from the remote that "
         "has it). Prefer pre-built packages; build from source only when no pre-built one exists or the user asks.",
+        "- An install is finished only when the application can be opened. After installing an application, "
+        "call verify_app_install. If it reports that the app is not visible, call refresh_app_menu, then tell "
+        "the user what happened. Report success only after verification, and say how to open the app.",
         "- Never install from a third-party build, an unofficial repository or a downloaded install script without "
         "asking the user first: say who publishes it and why the official sources did not work, then wait for "
         "their answer.",

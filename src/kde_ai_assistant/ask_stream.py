@@ -25,6 +25,8 @@ saved when the turn ends however it ends, so it can be reopened later (see
 
 A turn that takes longer than ``NOTIFY_AFTER_SECONDS`` ends with a desktop
 notification, so the user learns it finished even with the popup closed.
+Work a tool deferred to after the turn (a Plasma shell restart requested by
+``tools.app_visibility``) runs once the turn has finished streaming.
 
 If the client disconnects, the turn is cancelled: the model request is
 dropped at the next chunk and no further tools run. The history is left
@@ -42,6 +44,7 @@ from .agent_loop import run_turn, system_prompt
 from .conversation import Message
 from .desktop_context import run_command
 from .permissions import PermissionGate
+from .tools import app_visibility
 from .providers import ProviderError, create_provider
 from .tools.catalog import build_registry
 
@@ -113,6 +116,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         server.state.update(status="idle")
         if time.monotonic() - started > NOTIFY_AFTER_SECONDS:
             notify_finished(conversation.title)
+        app_visibility.run_after_turn()
 
 
 def notify_finished(title: str) -> None:

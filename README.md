@@ -35,7 +35,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
   assistant never handles it. It waits for that window's command to finish
   (the box says it is waiting for you), then reports how it went.
 - When installing, it looks for a pre-built package (official repositories,
-  `-bin` AUR packages, Flatpak) before building from source.
+  `-bin` AUR packages, Flatpak) before building from source, asks before
+  using any third-party source, and checks afterwards that the app shows in
+  the launcher, refreshing the launcher (and, if needed, restarting the
+  panel right after the request) when it does not.
   Everything else runs at once. `kde-ai-assistant policy changes` or
   `policy everything` makes it ask more often.
 - Conversations are kept: reopening the box returns to the current one, and

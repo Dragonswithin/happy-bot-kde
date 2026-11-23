@@ -662,6 +662,15 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
   and the approval names its source, and the model must use official
   sources in order and ask before any third-party build. The maintainer had the
   nightly removed.
+- The fourth attempt installed the official Flatpak correctly but it did not
+  show in the launcher: the Plasma shell had been started without the
+  Flatpak folders in `XDG_DATA_DIRS`. The maintainer's point: the assistant must finish
+  installs itself. New tools `verify_app_install` (is the entry in a folder
+  the running shell searches, and in the menu cache built for that list?)
+  and `refresh_app_menu` (rebuild the cache; if the shell lacks the folder,
+  update the session environment and restart the shell just after the
+  request, since restarting mid-request would end it). The model may report
+  an install as done only after verification.
 - Verified with a real Konsole (a harmless command; nothing installed).
   Not verified: a real install, and whether the local model describes a
   declined action accurately (in one test it claimed to have opened the
