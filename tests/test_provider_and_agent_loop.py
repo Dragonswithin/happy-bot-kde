@@ -24,7 +24,7 @@ from kde_ai_assistant.conversation import (  # noqa: E402
     Message, TextDelta, ThinkingDelta, ToolCall, ToolCallReady, ToolSpec, TurnEnd, trim_history)
 from kde_ai_assistant.providers import ProviderError, create_provider  # noqa: E402
 from kde_ai_assistant.providers.openai_compatible import OpenAICompatibleProvider, list_models  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
+from kde_ai_assistant.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
 
 ECHO = ToolSpec("echo", "Echo text.", object_schema({"text": {"type": "string"}}, ["text"]))
 
@@ -255,6 +255,33 @@ class AgentLoopTests(unittest.TestCase):
         self.assertIn("not valid JSON", results[2]["text"])
         self.assertEqual(self.ran, [])
         self.assertEqual(self.events[-1], {"type": "done", "stop": "answered"})
+        self.assert_history_valid()
+
+    def test_a_dangerous_step_that_succeeded_is_not_repeated_but_a_failed_one_can_be(self) -> None:
+        installs: list[dict] = []
+
+        def install(arguments: dict) -> str:
+            installs.append(arguments)
+            if arguments.get("fail"):
+                raise ToolFailure("[exit status 1]")
+            return "[exit status 0]"
+
+        self.registry = ToolRegistry([*(self.registry.get(name) for name in ("echo",)),
+                                      Tool("install", "Installs.", object_schema(), RISK_DANGER, install)])
+        provider = ScriptedProvider(
+            [call("1", "install", package="a"), call("2", "echo", text="x")],
+            [call("3", "install", package="a"), call("4", "echo", text="x")],
+            [call("5", "install", package="b", fail=True)],
+            [call("6", "install", package="b", fail=True), call("7", "install", package="c")],
+            [TextDelta("Done.")])
+        self.run_loop(provider)
+        self.assertEqual(installs, [{"package": "a"}, {"package": "b", "fail": True},
+                                    {"package": "b", "fail": True}, {"package": "c"}])
+        self.assertEqual(self.ran, [{"text": "x"}, {"text": "x"}], "read steps may repeat")
+        results = {event["id"]: event for event in self.events if event["type"] == "tool_result"}
+        self.assertFalse(results["3"]["ok"])
+        self.assertIn("already succeeded", results["3"]["text"])
+        self.assertTrue(results["7"]["ok"])
         self.assert_history_valid()
 
     def test_step_limit_stops_a_model_that_never_answers(self) -> None:

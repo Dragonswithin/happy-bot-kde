@@ -12,9 +12,11 @@ and no standard input, in the user's home directory unless
 read as it arrives: the latest line is reported as progress every second so
 the popup shows that the command is alive, and the turn's cancel event (the
 Stop button) kills the whole process group at once. A timeout does the same.
-When output is long, the beginning and the end are kept. A non-zero exit
-status is reported in the result rather than raised, because the output is
-usually what the model needs to recover.
+Output is cleaned and, when long, shortened to its beginning and end by
+``tools/terminal_text.py``. A command that did not finish with exit status 0
+(including a timeout or Stop) is reported as a failed step, with the same
+text, status and output, so the model can still recover from it; the agent
+loop relies on that to tell a completed step from one worth retrying.
 
 A command that would ask for a password (``shell_risk.needs_password``:
 sudo, package installs through yay or pacman, ...) is refused before it
@@ -29,10 +31,14 @@ real terminal (so password prompts work) while recording what is shown to a
 log in the runtime directory; when it ends, its exit status is written to a
 status file and the window stays open until the user presses a key. Meanwhile
 the tool reports "Waiting for you in the terminal window" and the latest
-output line as progress. It returns the exit status and the last lines of
-output. Closing the window early is reported as such. Stop (the turn's
-cancel event) stops waiting but leaves the terminal and its command running,
-because killing an install half-way can leave the system in a broken state.
+output line as progress. It returns the exit status and the start and end
+of the output, and says when a reboot is now needed (``pending_reboot``: the
+running kernel's modules were removed by an update, or the distribution's
+``/run/reboot-required`` flag is set), so the model cannot miss it. Anything
+but exit status 0 is a failed step. Closing the window early is reported as
+such. Stop (the turn's cancel event) stops waiting but leaves the terminal
+and its command running, because killing an install half-way can leave the
+system in a broken state.
 Waiting ends after ``TERMINAL_WAIT_SECONDS`` at most.
 
 Because tools run one at a time, nothing else can run (or kill the install)
@@ -42,7 +48,6 @@ while the user is busy in the terminal.
 from __future__ import annotations
 
 import os
-import re
 import secrets
 import shlex
 import shutil
@@ -56,6 +61,7 @@ from ..desktop_context import run_command as run_program
 from ..runtime_paths import ensure_runtime_root
 from ..shell_risk import classify_command, needs_password
 from .registry import RISK_CHANGE, Tool, ToolFailure, cancel_requested, object_schema, report_progress
+from .terminal_text import clean, keep_head_and_tail
 
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 1800
@@ -64,12 +70,13 @@ OUTPUT_TAIL_CHARS = 4500
 POLL_SECONDS = 0.2
 TERMINAL_FALLBACKS = ("konsole", "kgx", "gnome-terminal", "xterm")
 TERMINAL_WAIT_SECONDS = 4 * 3600
-TERMINAL_RESULT_CHARS = 4000
+TERMINAL_HEAD_CHARS = 1500
+TERMINAL_TAIL_CHARS = 3500
+REBOOT_REQUIRED_FLAG = "/run/reboot-required"
 # Terminal windows still open when the tool returned (they wait for a key
 # press, or were left running on Stop). Kept referenced so they are not
 # reported as leaked child processes; they belong to the user.
 _left_running: list[subprocess.Popen] = []
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\r")
 
 
 def _working_directory(arguments: dict[str, Any]) -> str:
@@ -116,7 +123,7 @@ def run_command(arguments: dict[str, Any]) -> str:
     try:
         process = subprocess.Popen(
             ["bash", "-c", command], cwd=directory, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, start_new_session=True, text=True, errors="replace", bufsize=1)
+            stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as error:
         raise ToolFailure(f"could not start the command: {error}") from error
 
@@ -124,11 +131,15 @@ def run_command(arguments: dict[str, Any]) -> str:
     latest = [""]
 
     def read_output() -> None:
+        # Read bytes: text mode would turn a progress bar's carriage returns
+        # into newlines before clean() could collapse the redraws.
         assert process.stdout is not None
-        for line in process.stdout:
+        for raw in process.stdout:
+            line = raw.decode("utf-8", errors="replace")
             chunks.append(line)
-            if line.strip():
-                latest[0] = line.strip()
+            shown = clean(line).strip()
+            if shown:
+                latest[0] = shown
 
     reader = threading.Thread(target=read_output, daemon=True)
     reader.start()
@@ -150,12 +161,12 @@ def run_command(arguments: dict[str, Any]) -> str:
     reader.join(timeout=2)
     if process.stdout is not None:
         process.stdout.close()
-    output = "".join(chunks)
-    if len(output) > OUTPUT_HEAD_CHARS + OUTPUT_TAIL_CHARS:
-        cut = len(output) - OUTPUT_HEAD_CHARS - OUTPUT_TAIL_CHARS
-        output = f"{output[:OUTPUT_HEAD_CHARS]}\n[... {cut} characters cut ...]\n{output[-OUTPUT_TAIL_CHARS:]}"
+    output = keep_head_and_tail(clean("".join(chunks)).strip(), OUTPUT_HEAD_CHARS, OUTPUT_TAIL_CHARS)
     status = stopped or f"exit status {process.returncode}"
-    return f"[{status}]\n{output.rstrip() or '(no output)'}"
+    result = f"[{status}]\n{output or '(no output)'}"
+    if stopped or process.returncode != 0:
+        raise ToolFailure(result)
+    return result
 
 
 def terminal_program() -> str:
@@ -194,17 +205,29 @@ def terminal_command(terminal: str, command: str, directory: str, log: str = "",
 
 
 def _read_log(path: str) -> str:
+    """The terminal log as cleaned text, without ``script``'s own start and end lines."""
     try:
-        with open(path, encoding="utf-8", errors="replace") as handle:
+        with open(path, encoding="utf-8", errors="replace", newline="") as handle:  # keep \r: clean() needs it
             text = handle.read()
     except OSError:
         return ""
-    return _ANSI.sub("", text)
+    return "\n".join(line for line in clean(text).split("\n")
+                     if not line.startswith(("Script started on ", "Script done on ")))
 
 
 def _last_line(text: str) -> str:
-    lines = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("Script ")]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     return lines[-1] if lines else ""
+
+
+def pending_reboot() -> str:
+    """Why a reboot is needed now, or "" when nothing says so."""
+    release = os.uname().release
+    if os.path.isdir("/usr/lib/modules") and not os.path.isdir(f"/usr/lib/modules/{release}"):
+        return f"the running kernel ({release}) was replaced by an update"
+    if os.path.exists(REBOOT_REQUIRED_FLAG):
+        return "the system reports that a reboot is required"
+    return ""
 
 
 def run_in_terminal(arguments: dict[str, Any]) -> str:
@@ -223,6 +246,7 @@ def run_in_terminal(arguments: dict[str, Any]) -> str:
         raise ToolFailure(f"could not open a terminal: {error}") from error
     started = time.monotonic()
     outcome = ""
+    succeeded = False
     try:
         while True:
             if os.path.exists(status_file):
@@ -233,6 +257,7 @@ def run_in_terminal(arguments: dict[str, Any]) -> str:
                 except OSError:
                     code = "?"
                 outcome = f"finished with exit status {code}"
+                succeeded = code == "0"
                 break
             if window.poll() is not None:
                 outcome = "the terminal window was closed before the command finished"
@@ -258,9 +283,13 @@ def run_in_terminal(arguments: dict[str, Any]) -> str:
                 os.unlink(path)
             except OSError:
                 pass
-    if len(output) > TERMINAL_RESULT_CHARS:
-        output = "[... earlier output cut ...]\n" + output[-TERMINAL_RESULT_CHARS:]
-    return f"[{outcome}]\n{output or '(no output recorded)'}"
+    result = f"[{outcome}]\n{keep_head_and_tail(output, TERMINAL_HEAD_CHARS, TERMINAL_TAIL_CHARS) or '(no output recorded)'}"
+    reboot = pending_reboot()
+    if reboot:
+        result += f"\n[A reboot is needed: {reboot}. Tell the user.]"
+    if not succeeded:
+        raise ToolFailure(result)
+    return result
 
 
 def shell_tools() -> list[Tool]:

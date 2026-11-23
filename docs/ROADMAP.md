@@ -671,6 +671,17 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
   update the session environment and restart the shell just after the
   request, since restarting mid-request would end it). The model may report
   an install as done only after verification.
+- "Update my system" ran `pacman -Syu` and `yay -Su` twice: after the
+  first pass the local model started the task again, then wrongly said no
+  reboot was needed after a kernel upgrade. The terminal log had been read
+  in Python text mode, which turns progress-bar carriage returns into
+  newlines, so the model got 4000 characters of progress-bar redraws with
+  the package list cut off (and systemd's OSC 3008 markers carrying the
+  host and machine id). Now `tools/terminal_text.py` collapses redraws and
+  strips escape sequences, results keep their start and end, a non-zero
+  exit is a failed step, a terminal result says when a reboot is needed,
+  and an approval-needing step that already succeeded in the same request
+  is not run again.
 - Verified with a real Konsole (a harmless command; nothing installed).
   Not verified: a real install, and whether the local model describes a
   declined action accurately (in one test it claimed to have opened the

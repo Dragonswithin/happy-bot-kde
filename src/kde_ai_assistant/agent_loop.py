@@ -31,6 +31,11 @@ cannot succeed fails without bothering the user, and, when a ``gate`` is
 given, passed to it before running. A call the gate refuses is not run and
 its refusal text becomes the tool result, so the model can respond to it.
 
+A ``danger`` call (one that needs approval) identical to one that already
+succeeded earlier in the same turn is not run and not put to the user: the
+model is told the step is done. Local models sometimes lose track after a
+long install and start the task again; a failed call can still be retried.
+
 Blocking: runs on the caller's thread for the whole turn; tools run
 sequentially in the model's order, and a turn waits while the user decides
 on an approval.
@@ -39,6 +44,7 @@ on an approval.
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import platform
 import threading
@@ -48,13 +54,15 @@ from typing import Any, Callable
 from .conversation import Message, TextDelta, ThinkingDelta, ToolCallReady, TurnEnd, trim_history
 from .permissions import PermissionGate
 from .providers.base import ModelProvider, ProviderError
-from .tools.registry import CallContext, ToolRegistry, call_context
+from .tools.registry import RISK_DANGER, CallContext, ToolRegistry, call_context
 
 # Operating an application's interface takes a snapshot, an action and a
 # check per step of the task, so a turn needs room for a few dozen requests.
 MAX_STEPS = 40
 PROGRESS_INTERVAL_SECONDS = 1.0
 EVENT_RESULT_CHARS = 2000
+ALREADY_DONE = ("Not run: this exact step already succeeded earlier in this request; its result is above. "
+                "Do not repeat finished steps. Continue with what is left, or answer the user.")
 Emit = Callable[[dict[str, Any]], None]
 
 
@@ -161,6 +169,7 @@ def run_turn(
 ) -> None:
     """Run the turn whose user message is the last entry of ``history`` (see module docstring)."""
     specs = registry.specs()
+    succeeded: set[tuple[str, str]] = set()  # danger calls that already succeeded this turn
     for _step in range(max_steps):
         if cancel.is_set():
             emit({"type": "done", "stop": "cancelled"})
@@ -202,7 +211,10 @@ def run_turn(
                 "type": "tool_call", "id": call.id, "name": call.name,
                 "arguments": call.arguments, "risk": risk, "summary": summary,
             })
-            if call.arguments_error:
+            key = (call.name, json.dumps(call.arguments, sort_keys=True))
+            if risk == RISK_DANGER and key in succeeded:
+                ok, text = False, ALREADY_DONE
+            elif call.arguments_error:
                 ok, text = False, f"The call was not run: {call.arguments_error}. Send the arguments as a JSON object."
             elif registry.get(call.name) is None:
                 ok, text = registry.run(call.name, call.arguments)
@@ -214,6 +226,8 @@ def run_turn(
                     allowed, refusal = (True, "") if gate is None else gate.check(
                         call.id, call.name, call.arguments, risk, summary, detail)
                     ok, text = _run_with_context(registry, call, emit, cancel) if allowed else (False, refusal)
+            if ok and risk == RISK_DANGER:
+                succeeded.add(key)
             history.append(Message("tool", text, tool_call_id=call.id))
             emit({"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]})
 

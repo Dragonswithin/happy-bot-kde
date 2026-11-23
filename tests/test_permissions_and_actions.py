@@ -312,7 +312,9 @@ class ShellToolTests(unittest.TestCase):
     def test_output_status_working_directory_and_classification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "note.txt").write_text("x", encoding="utf-8")
-            result = shell.run_command({"command": "pwd; ls; echo err >&2; exit 3", "working_directory": tmp})
+            with self.assertRaises(ToolFailure) as failed:
+                shell.run_command({"command": "pwd; ls; echo err >&2; exit 3", "working_directory": tmp})
+            result = str(failed.exception)
             self.assertTrue(result.startswith("[exit status 3]"))
             self.assertIn(tmp, result)
             self.assertIn("note.txt", result)
@@ -323,7 +325,9 @@ class ShellToolTests(unittest.TestCase):
 
     def test_timeout_kills_the_command_and_long_output_is_cut(self) -> None:
         started = time.monotonic()
-        result = shell.run_command({"command": "echo start; sleep 30", "timeout_seconds": 1})
+        with self.assertRaises(ToolFailure) as failed:
+            shell.run_command({"command": "echo start; sleep 30", "timeout_seconds": 1})
+        result = str(failed.exception)
         self.assertLess(time.monotonic() - started, 6)
         self.assertIn("timed out after 1 s", result)
         self.assertIn("start", result)
@@ -331,6 +335,10 @@ class ShellToolTests(unittest.TestCase):
         self.assertIn("characters cut", long)
         self.assertTrue(long.rstrip().endswith("20000"))
         self.assertLess(len(long), 8000)
+
+    def test_progress_redraws_are_collapsed(self) -> None:
+        result = shell.run_command({"command": "printf 'get 10%%\\rget 50%%\\rget 100%%\\nok\\n'"})
+        self.assertEqual(result, "[exit status 0]\nget 100%\nok")
 
     def test_bad_arguments(self) -> None:
         for arguments, message in (({}, "'command' is required"), ({"command": "ls", "working_directory": "/nope/x"}, "does not exist"),
@@ -351,7 +359,9 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
         token = call_context.set(CallContext(lines.append, cancel))
         started = time.monotonic()
         try:
-            result = shell.run_command(arguments)
+            result, self.last_ok = shell.run_command(arguments), True
+        except ToolFailure as failure:
+            result, self.last_ok = str(failure), False
         finally:
             call_context.reset(token)
         return result, lines, time.monotonic() - started
@@ -389,7 +399,8 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
         program.chmod(0o755)
         return str(program)
 
-    def run_terminal(self, command: str, cancel_after: float | None = None) -> tuple[str, list[str]]:
+    def run_terminal(self, command: str, cancel_after: float | None = None, reboot: str = "") -> tuple[str, list[str]]:
+        """Run ``command`` through ``run_in_terminal``; the result text either way, and ``self.last_ok``."""
         from unittest import mock
 
         from kde_ai_assistant.tools.registry import CallContext, call_context
@@ -400,10 +411,13 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
             threading.Timer(cancel_after, cancel.set).start()
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(shell, "terminal_program", return_value=self.fake_terminal(Path(tmp))), \
-                mock.patch.object(shell, "ensure_runtime_root", return_value=Path(tmp)):
+                mock.patch.object(shell, "ensure_runtime_root", return_value=Path(tmp)), \
+                mock.patch.object(shell, "pending_reboot", return_value=reboot):
             token = call_context.set(CallContext(lines.append, cancel))
             try:
-                result = shell.run_in_terminal({"command": command, "working_directory": tmp})
+                result, self.last_ok = shell.run_in_terminal({"command": command, "working_directory": tmp}), True
+            except ToolFailure as failure:
+                result, self.last_ok = str(failure), False
             finally:
                 call_context.reset(token)
             leftovers = [name for name in os.listdir(tmp) if name.startswith("terminal-")]
@@ -413,17 +427,39 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
     def test_terminal_waits_for_the_command_and_reports_status_and_output(self) -> None:
         result, lines = self.run_terminal("echo building; sleep 1; echo installed ok; exit 3")
         self.assertTrue(result.startswith("[finished with exit status 3]"), result)
+        self.assertFalse(self.last_ok, "a non-zero exit status is a failed step")
         self.assertIn("installed ok", result)
         self.assertTrue(any(line.startswith("Waiting for you in the terminal window") for line in lines), lines)
         ok, _ = self.run_terminal("true")
         self.assertTrue(ok.startswith("[finished with exit status 0]"), ok)
+        self.assertTrue(self.last_ok)
+        self.assertNotIn("reboot", ok)
+
+    def test_terminal_output_is_cleaned_and_a_needed_reboot_is_reported(self) -> None:
+        bars = "".join(f"\\r(1/2) upgrading kernel [{'#' * n}{'-' * (20 - n)}] {n * 5}%%" for n in range(21))
+        command = ("printf 'Packages (2) linux-7.3.6 kwin-6.8.3\\n'; "
+                   "printf '\\033]3008;start=abc;hostname=secret-host;machineid=123\\033\\\\:: Starting\\n'; "
+                   f"printf '{bars}\\n'; printf '\\033[1;32mdone\\033[0m\\n'")
+        result, _ = self.run_terminal(command, reboot="the running kernel (7.3.5) was replaced by an update")
+        self.assertTrue(self.last_ok, result)
+        self.assertIn("Packages (2) linux-7.3.6 kwin-6.8.3", result)
+        self.assertIn("(1/2) upgrading kernel [####################] 100%", result)
+        self.assertNotIn("0%\n", result.replace("100%", ""))
+        self.assertEqual(result.count("upgrading kernel"), 1, result)
+        self.assertNotIn("secret-host", result)
+        self.assertNotIn("\x1b", result)
+        self.assertIn("\ndone", result)
+        self.assertTrue(result.rstrip().endswith(
+            "[A reboot is needed: the running kernel (7.3.5) was replaced by an update. Tell the user.]"), result)
 
     def test_closing_the_window_early_and_stop_are_reported_without_killing(self) -> None:
         # The command's parent is `script`; its parent is the window's shell.
         closed, _ = self.run_terminal("kill -9 $(ps -o ppid= -p $PPID | tr -d ' '); sleep 5")
         self.assertIn("closed before the command finished", closed)
+        self.assertFalse(self.last_ok)
         stopped, _ = self.run_terminal("sleep 3", cancel_after=0.5)
         self.assertIn("stopped waiting at the user's request", stopped)
+        self.assertFalse(self.last_ok)
 
     def test_terminal_command_keeps_the_window_open_and_reports_the_status(self) -> None:
         konsole = shell.terminal_command("/usr/bin/konsole", "yay -S ladybird", "/home/x")
@@ -670,3 +706,32 @@ class AppVisibilityTests(unittest.TestCase):
     def test_refresh_fails_loudly_when_the_cache_still_lacks_the_app(self) -> None:
         with self.shell_sees([self.root]), self.cached(False), self.assertRaisesRegex(ToolFailure, "still does not list"):
             self.v.refresh_app_menu({"name": "Browser"})
+
+
+class TerminalTextTests(unittest.TestCase):
+    def test_clean_keeps_what_the_screen_finally_showed(self) -> None:
+        from kde_ai_assistant.tools.terminal_text import clean
+
+        self.assertEqual(clean("a\r\nb\r\n"), "a\nb\n")
+        self.assertEqual(clean("10%\r50%\r100%\rdone   \n"), "done\n")
+        self.assertEqual(clean("\x1b]0;title\x07\x1b]3008;host=h\x1b\\\x1b[1mbold\x1b[0m\x1b(B"), "bold")
+        self.assertEqual(clean("bell\x07 back\x08"), "bell back")
+
+    def test_head_and_tail(self) -> None:
+        from kde_ai_assistant.tools.terminal_text import keep_head_and_tail
+
+        self.assertEqual(keep_head_and_tail("short", 3, 3), "short")
+        self.assertEqual(keep_head_and_tail("abcdefghij", 3, 2), "abc\n[... 5 characters cut ...]\nij")
+
+    def test_pending_reboot(self) -> None:
+        from unittest import mock
+
+        release = os.uname().release
+        with mock.patch.object(shell.os.path, "isdir", side_effect=lambda path: path == "/usr/lib/modules"):
+            self.assertIn(f"running kernel ({release}) was replaced", shell.pending_reboot())
+        with mock.patch.object(shell.os.path, "isdir", return_value=True), \
+                mock.patch.object(shell.os.path, "exists", side_effect=lambda path: path == shell.REBOOT_REQUIRED_FLAG):
+            self.assertEqual(shell.pending_reboot(), "the system reports that a reboot is required")
+        with mock.patch.object(shell.os.path, "isdir", return_value=True), \
+                mock.patch.object(shell.os.path, "exists", return_value=False):
+            self.assertEqual(shell.pending_reboot(), "")
