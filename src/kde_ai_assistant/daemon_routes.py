@@ -17,7 +17,14 @@ Endpoints:
 - ``GET /tools/servers``: configured servers, their tools and role proposals.
   This starts the servers, so it can take seconds.
 - ``POST /open``: open a file, folder or link (``desktop_actions``).
-- ``POST /screenshot``, ``POST /ask``.
+- ``POST /models/probe``: list the models a service offers, to help setup.
+- ``POST /models/test``: check that a configured model answers and can call
+  tools. This sends one small request to the model.
+- ``POST /cancel``: stop a conversation's running turn.
+- ``POST /screenshot``.
+
+``POST /ask`` is not here: it streams, so ``daemon_http`` hands it to
+``ask_stream``.
 
 Errors the user can act on are returned as ``{"ok": false, "error": ...,
 "code": ...}`` with a 4xx/5xx status; ``code`` lets the applet choose a fix
@@ -26,10 +33,14 @@ to offer (``not_configured``, ``tool_failed``, ``invalid``).
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 from . import desktop_actions, desktop_context, instant_search, mcp_discovery, settings as settings_store
+from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .mcp_client import McpError
+from .providers import ProviderError, create_provider
+from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, propose_role
 
 if TYPE_CHECKING:
@@ -55,7 +66,7 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     payload["setup"] = {
         "file_search": "file_search" in roles,
         "web_search": "web_search" in roles,
-        "model": False,
+        "model": settings_store.active_model(server.settings) is not None,
     }
     payload["settings_error"] = server.settings_error
     return 200, payload
@@ -169,13 +180,56 @@ def screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dic
     return 200, desktop_context.take_screenshot(server.runtime_dir)
 
 
-def ask(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
-    message = str(body.get("message") or "").strip()
-    if not message:
-        return _error(400, "message is required", "invalid")
-    error = "No AI model is set up yet."
-    server.state.update(last_error=error, last_context_kind=str(body.get("contextKind") or "combined"))
-    return _error(503, error, "not_configured")
+def probe_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """List models at ``base_url``, also trying ``<base_url>/v1`` so a bare address works."""
+    base_url = str(body.get("base_url") or "").strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        return _error(400, "The address must start with http:// or https://", "invalid")
+    api_key = body.get("api_key")
+    if api_key is None and body.get("name"):
+        api_key = server.settings.get("models", {}).get(str(body["name"]), {}).get("api_key", "")
+    headers = body.get("headers") if isinstance(body.get("headers"), dict) else {}
+    headers = {str(key): str(value) for key, value in headers.items()}
+    candidates = [base_url] if base_url.endswith("/v1") else [base_url, f"{base_url}/v1"]
+    failure = ""
+    for candidate in candidates:
+        try:
+            models = list_models(candidate, str(api_key or ""), headers=headers)
+        except ProviderError as exc:
+            failure = failure or str(exc)
+            continue
+        return 200, {"ok": True, "base_url": candidate, "models": models}
+    return _error(502, failure, "unreachable")
+
+
+def test_model(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """Ask the named (or active) model to call a trivial tool; report whether it did."""
+    name = str(body.get("name") or server.settings.get("active_model") or "")
+    model = server.settings.get("models", {}).get(name)
+    if model is None:
+        return _error(404, f"no model named '{name}' is set up", "invalid")
+    probe_tool = ToolSpec("confirm_ready", "Call this to confirm you can use tools.",
+                          {"type": "object", "properties": {}, "required": []})
+    messages = [
+        Message("system", "You are being tested. Call the confirm_ready tool. Do not reply with text."),
+        Message("user", "Call confirm_ready now."),
+    ]
+    called, text = False, ""
+    try:
+        for event in create_provider(model).stream(messages, [probe_tool], threading.Event()):
+            if isinstance(event, ToolCallReady) and event.call.name == "confirm_ready":
+                called = True
+            elif isinstance(event, TextDelta):
+                text += event.text
+    except ProviderError as exc:
+        return _error(502, str(exc), "unreachable")
+    if not called:
+        return 200, {"ok": True, "name": name, "answers": True, "tools": False, "reply": text[:200]}
+    return 200, {"ok": True, "name": name, "answers": True, "tools": True}
+
+
+def cancel(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "cancelled": server.conversations.cancel(str(body.get("conversation_id") or ""))}
 
 
 ROUTES: dict[tuple[str, str], Route] = {
@@ -189,5 +243,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/tools/servers"): list_tool_servers,
     ("POST", "/open"): open_location,
     ("POST", "/screenshot"): screenshot,
-    ("POST", "/ask"): ask,
+    ("POST", "/models/probe"): probe_models,
+    ("POST", "/models/test"): test_model,
+    ("POST", "/cancel"): cancel,
 }

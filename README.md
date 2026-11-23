@@ -18,8 +18,30 @@ architecture and phase order are in `docs/ROADMAP.md`.
 - Desktop context capture: active window (KWin), clipboard (Klipper),
   explicit screenshots (Spectacle).
 
-No AI model is connected yet, so pressing Enter on a request reports that no
-model is set up. That is the next phase in `docs/ROADMAP.md`.
+- Requests typed into the bar are answered by the AI model you configure,
+  streamed into the popup. The model can look things up with read-only
+  tools: your file search, your web search, the focused window, open
+  windows, the clipboard, files and folders, disk usage, KDE settings.
+
+The assistant cannot change anything on the system yet; actions and the
+approval step are the next phase in `docs/ROADMAP.md`.
+
+## Setting Up A Model
+
+Any service with an OpenAI-compatible chat API works, local or hosted:
+
+```bash
+kde-ai-assistant model probe http://127.0.0.1:8080          # what does it offer?
+kde-ai-assistant model add NAME --url URL [--model ID]       # local, no key
+kde-ai-assistant model add NAME --url URL --model ID --key-stdin   # paste the key, Enter
+kde-ai-assistant model test                                  # answers? can call tools?
+kde-ai-assistant model use NAME
+kde-ai-assistant ask "what is on my clipboard?"
+```
+
+`--header NAME=VALUE` adds a request header for services that need one. With
+a hosted model, whatever the tools read (clipboard, file contents) is sent to
+that service.
 
 ## Setting Up Search
 
@@ -93,6 +115,7 @@ The CLI and the widget read the token themselves.
 ```bash
 python3 -m unittest discover -s tests
 python3 -m py_compile src/kde_ai_assistant/*.py
+python3 -m py_compile src/kde_ai_assistant/*/*.py
 bash -n scripts/install.sh
 systemd-analyze --user verify systemd/user/kde-ai-assistant-daemon.service
 systemctl --user status kde-ai-assistant-daemon.service
@@ -100,8 +123,15 @@ kde-ai-assistant status --pretty
 kde-ai-assistant context --kind window --pretty
 ```
 
+## Requirements
+
+Plasma 6 on Wayland, Python 3.11 or newer, and PyGObject (`python-gobject`
+or `python3-gi`), which the window tools use to talk to KWin. Everything else
+is the Python standard library.
+
 ## Notes
 
-This is a desktop-session assistant. Core model services should be managed by
-their own durable services; the KDE daemon exists only to bridge a logged-in KDE
-session to those backends.
+This is a desktop-session assistant: the daemon runs as a systemd user unit
+tied to the Plasma session and stops when you log out. Model services and
+tool servers that should outlive the session are managed by their own owners;
+the daemon only connects to them.

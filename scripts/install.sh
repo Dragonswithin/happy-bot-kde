@@ -12,6 +12,8 @@
 # upgrade never keeps serving old code. A running plasmashell keeps the
 # applet QML it already loaded; the script says so when it upgrades one.
 #
+# PyGObject is needed for the window tools; its absence is reported, not fatal.
+#
 # Options: --dry-run prints the plan and changes nothing; --no-start installs
 # without enabling or restarting the daemon.
 set -euo pipefail
@@ -53,6 +55,11 @@ require_command() {
 require_command python3
 require_command systemctl
 require_command kpackagetool6
+
+if ! python3 -c 'import gi; gi.require_version("Gio", "2.0")' >/dev/null 2>&1; then
+  printf 'Note: PyGObject is not installed (package python-gobject or python3-gi).\n' >&2
+  printf '      Window tools will be unavailable until it is; everything else works.\n' >&2
+fi
 
 applet_installed=0
 if kpackagetool6 --type Plasma/Applet --show "$PLASMOID_ID" >/dev/null 2>&1; then

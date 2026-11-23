@@ -11,11 +11,26 @@ import org.kde.plasma.plasma5support as P5Support
 /**
  * Non-visual owner of one conversation with the per-user daemon.
  *
- * Holds the transcript, busy flag, daemon status and the current instant
- * file-search hits that PanelBar.qml, CompactRepresentation.qml and
- * ResultsPopup.qml display, and is the only place in the applet that talks
- * HTTP to the daemon (`/health`, `/search`, `/open`, `/ask`, `/screenshot`).
- * main.qml creates exactly one instance and supplies `daemonUrl`.
+ * Holds everything PanelBar.qml, CompactRepresentation.qml and
+ * ResultsPopup.qml display: the conversation `entries`, the busy flag, the
+ * daemon status and the current instant file-search hits. It is the only
+ * place in the applet that talks HTTP to the daemon (`/health`, `/search`,
+ * `/open`, `/ask`, `/cancel`). main.qml creates exactly one instance and
+ * supplies `daemonUrl` and `tokenFile`.
+ *
+ * Conversation: `ask` posts to `/ask`, which answers with a server-sent
+ * event stream. XMLHttpRequest reports the growing response at readyState
+ * LOADING; `consumeStream` parses the new part into events and `applyEvent`
+ * turns them into `entries`. Each entry is `{kind, text, state, callId}`:
+ *
+ * - kind "user", "assistant" (Markdown, grows as text streams in), "notice"
+ *   and "error" use `text`.
+ * - kind "tool" is one tool call: `text` is its display name, `state` is
+ *   "running", "ok" or "failed", `callId` links the result to the call.
+ *
+ * The daemon keeps the history; `conversationId` (from the stream's first
+ * event) is sent with follow-ups and cleared by `newChat`. `cancel` aborts
+ * the request, which makes the daemon stop the turn.
  *
  * Instant search: `searchFiles` may be called on every keystroke. Replies
  * can arrive out of order, so each request carries a sequence number and a
@@ -31,22 +46,23 @@ import org.kde.plasma.plasma5support as P5Support
  * on first use and reloaded once when the daemon answers 401, which is what
  * a daemon restart looks like from here.
  *
- * Requests are asynchronous XMLHttpRequest calls on the GUI thread; nothing
- * here blocks. A failed or unreachable daemon sets `status` to "offline" and
- * appends the error to the transcript instead of throwing. `status` is one of
- * "starting", "idle", "thinking" or "offline".
+ * Nothing here blocks: all requests are asynchronous on the GUI thread. A
+ * failed or unreachable daemon sets `status` to "offline" and adds an error
+ * entry instead of throwing. `status` is one of "starting", "idle",
+ * "thinking" or "offline".
  */
 Item {
     id: session
 
     property string daemonUrl: ""
     property string tokenFile: ""
-    property string transcript: ""
     property string status: "starting"
     property string statusText: i18n("Starting")
     property bool busy: false
+    property string conversationId: ""
 
-    readonly property bool hasTranscript: transcript.length > 0
+    readonly property ListModel entries: ListModel {}
+    readonly property bool hasTranscript: entries.count > 0
 
     property var hits: []
     property string searchError: ""
@@ -57,6 +73,11 @@ Item {
     // `cat` is in flight, so concurrent requests share a single read.
     property string token: ""
     property var tokenWaiters: []
+
+    // The in-flight /ask request and how much of its response was parsed.
+    property var activeStream: null
+    property int streamOffset: 0
+    property string streamBuffer: ""
 
     visible: false
 
@@ -69,13 +90,13 @@ Item {
         onTriggered: session.refreshStatus()
     }
 
-    function appendLine(prefix, text) {
-        session.transcript += (session.transcript ? "\n\n" : "") + prefix + "\n" + text;
-    }
-
     function setStatus(status, summary) {
         session.status = status;
         session.statusText = summary;
+    }
+
+    function appendEntry(kind, text, state, callId) {
+        session.entries.append({ kind: kind, text: text || "", state: state || "", callId: callId || "" });
     }
 
     P5Support.DataSource {
@@ -105,12 +126,16 @@ Item {
         }
     }
 
-    function request(method, path, payload, onSuccess, onFailure) {
+    function withToken(then) {
         if (session.token) {
-            send(method, path, payload, onSuccess, onFailure, true);
+            then();
         } else {
-            loadToken(() => send(method, path, payload, onSuccess, onFailure, false));
+            loadToken(then);
         }
+    }
+
+    function request(method, path, payload, onSuccess, onFailure) {
+        withToken(() => send(method, path, payload, onSuccess, onFailure, true));
     }
 
     /** `mayReload`: retry once with a freshly read token if the daemon says 401. */
@@ -191,43 +216,152 @@ Item {
 
     function openLocation(location) {
         request("POST", "/open", { location: location }, function(data) {}, function(data) {
-            session.appendLine(i18n("Error"), data.error || i18n("Could not open %1", location));
+            session.appendEntry("error", data.error || i18n("Could not open %1", location));
         });
     }
 
     function newChat() {
-        session.transcript = "";
+        if (session.busy) {
+            cancel();
+        }
+        session.conversationId = "";
+        session.entries.clear();
         refreshStatus();
     }
 
-    /** Sends one request. `contextKind` is "combined", "clipboard" or "window". */
-    function ask(message, contextKind) {
+    /** Sends one request to the assistant. Returns false if it was not sent. */
+    function ask(message) {
         const text = (message || "").trim();
         if (!text || session.busy) {
             return false;
         }
         session.busy = true;
         setStatus("thinking", i18n("Thinking"));
-        appendLine(i18n("You"), text);
-        request("POST", "/ask", { message: text, contextKind: contextKind || "combined" }, function(data) {
-            session.busy = false;
-            session.setStatus("idle", i18n("Ready"));
-            session.appendLine(i18n("Assistant"), data.answer || i18n("No answer returned."));
-        }, function(data) {
-            session.busy = false;
-            session.appendLine(i18n("Error"), data.error || i18n("Request failed"));
-            session.refreshStatus();
-        });
+        appendEntry("user", text);
+        withToken(() => startStream(text, true));
         return true;
     }
 
-    function screenshotContext() {
-        request("POST", "/screenshot", {}, function(data) {
-            session.appendLine(i18n("Screenshot"), data.path
-                ? i18n("Saved transient context screenshot: %1", data.path)
-                : i18n("Screenshot captured."));
-        }, function(data) {
-            session.appendLine(i18n("Error"), data.error || i18n("Screenshot failed."));
-        });
+    function startStream(text, mayReload) {
+        const xhr = new XMLHttpRequest();
+        session.activeStream = xhr;
+        session.streamOffset = 0;
+        session.streamBuffer = "";
+        xhr.open("POST", session.daemonUrl + "/ask");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Authorization", "Bearer " + session.token);
+        xhr.onreadystatechange = function() {
+            if (session.activeStream !== xhr) {
+                return;
+            }
+            if (xhr.readyState === XMLHttpRequest.LOADING && xhr.status === 200) {
+                session.consumeStream(xhr);
+            } else if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 401 && mayReload) {
+                    session.loadToken(() => session.startStream(text, false));
+                    return;
+                }
+                if (xhr.status === 200) {
+                    session.consumeStream(xhr);
+                } else if (xhr.status === 0) {
+                    session.appendEntry("error", i18n("The assistant is not running"));
+                } else {
+                    session.appendEntry("error", i18n("The assistant could not take the request (%1)", xhr.status));
+                }
+                session.finishStream();
+            }
+        };
+        xhr.send(JSON.stringify({ message: text, conversation_id: session.conversationId }));
+    }
+
+    function consumeStream(xhr) {
+        const body = xhr.responseText;
+        session.streamBuffer += body.substring(session.streamOffset);
+        session.streamOffset = body.length;
+        let boundary = session.streamBuffer.indexOf("\n\n");
+        while (boundary !== -1) {
+            const block = session.streamBuffer.substring(0, boundary);
+            session.streamBuffer = session.streamBuffer.substring(boundary + 2);
+            if (block.startsWith("data:")) {
+                try {
+                    applyEvent(JSON.parse(block.substring(5)));
+                } catch (error) {
+                    // An unparsable block is skipped; the stream continues.
+                }
+            }
+            boundary = session.streamBuffer.indexOf("\n\n");
+        }
+    }
+
+    function finishStream() {
+        session.activeStream = null;
+        session.busy = false;
+        for (let index = 0; index < session.entries.count; index++) {
+            if (session.entries.get(index).state === "running") {
+                session.entries.setProperty(index, "state", "failed");
+            }
+        }
+        refreshStatus();
+    }
+
+    function toolLabel(name) {
+        return name.replace("__", ": ").replace(/_/g, " ");
+    }
+
+    function applyEvent(event) {
+        const last = session.entries.count - 1;
+        switch (event.type) {
+        case "start":
+            session.conversationId = event.conversation_id;
+            (event.warnings || []).forEach(warning => session.appendEntry("notice", warning));
+            break;
+        case "thinking":
+            setStatus("thinking", i18n("Thinking"));
+            break;
+        case "text_delta":
+            setStatus("thinking", i18n("Answering"));
+            if (last >= 0 && session.entries.get(last).kind === "assistant") {
+                session.entries.setProperty(last, "text", session.entries.get(last).text + event.text);
+            } else {
+                appendEntry("assistant", event.text);
+            }
+            break;
+        case "tool_call":
+            setStatus("thinking", i18n("Using %1", toolLabel(event.name)));
+            appendEntry("tool", toolLabel(event.name), "running", event.id);
+            break;
+        case "tool_result":
+            for (let index = last; index >= 0; index--) {
+                if (session.entries.get(index).callId === event.id) {
+                    session.entries.setProperty(index, "state", event.ok ? "ok" : "failed");
+                    break;
+                }
+            }
+            break;
+        case "done":
+            if (event.stop === "cancelled") {
+                appendEntry("notice", i18n("Stopped."));
+            } else if (event.stop === "step_limit") {
+                appendEntry("notice", i18n("Stopped after too many steps. Ask again to continue."));
+            }
+            break;
+        case "error":
+            appendEntry("error", event.message || i18n("Request failed"));
+            break;
+        }
+    }
+
+    function cancel() {
+        const xhr = session.activeStream;
+        if (!xhr) {
+            return;
+        }
+        session.activeStream = null;
+        xhr.abort();
+        if (session.conversationId) {
+            request("POST", "/cancel", { conversation_id: session.conversationId }, function(data) {}, function(data) {});
+        }
+        appendEntry("notice", i18n("Stopped."));
+        finishStream();
     }
 }

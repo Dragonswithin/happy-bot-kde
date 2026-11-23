@@ -21,6 +21,18 @@ Schema (version 1)::
           "tools": null                       # default null = every tool; or a list of tool names to allow
         }
       },
+      "models": {
+        "<name>": {
+          "provider": "openai_compatible",    # required; the only kind so far
+          "base_url": "http://host:port/v1",  # required; the API root above /chat/completions
+          "model": "<model id>",              # required; as the service names it
+          "api_key": "",                      # default ""; sent as a bearer token when set
+          "headers": {"Name": "value"},       # default {}; extra request headers some services need
+          "context_window": 32768,            # default 32768; tokens, used to trim long conversations
+          "vision": false                     # default false; whether the model accepts images
+        }
+      },
+      "active_model": "<name>",               # default ""; which model answers requests
       "roles": {
         "file_search": {                      # optional; the tool the search bar queries while typing
           "server": "<name>", "tool": "<tool name>",
@@ -32,13 +44,14 @@ Schema (version 1)::
     }
 
 Server names are 1 to 64 characters of letters, digits, ``_``, ``.`` or
-``-``. A role must point at a configured server. Unknown top-level keys are
-rejected so a typo is reported instead of silently ignored.
+``-``; model names follow the same rule. A role must point at a configured
+server and ``active_model`` at a configured model. Unknown keys are rejected
+so a typo is reported instead of silently ignored.
 
-``redacted`` is the form sent to clients: environment values are replaced by
-``None``. ``merge_redacted`` is its inverse on update: a ``None`` value means
-"keep what is stored", so a client can round-trip settings without ever
-holding a secret.
+``redacted`` is the form sent to clients: tool-server environment values,
+model header values and non-empty model API keys are replaced by ``None``. ``merge_redacted`` is its
+inverse on update: a ``None`` value means "keep what is stored", so a client
+can round-trip settings without ever holding a secret.
 """
 
 from __future__ import annotations
@@ -54,6 +67,8 @@ from .mcp_client import McpServerSpec
 from .runtime_paths import APP_DIR_NAME, write_private_file
 
 SETTINGS_VERSION = 1
+PROVIDER_KINDS = ("openai_compatible",)
+DEFAULT_CONTEXT_WINDOW = 32768
 ROLE_NAMES = ("file_search", "web_search")
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
@@ -72,7 +87,7 @@ def config_path() -> Path:
 
 
 def default_settings() -> dict[str, Any]:
-    return {"version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}}
+    return {"version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": ""}
 
 
 def _require(condition: bool, message: str) -> None:
@@ -137,19 +152,67 @@ def _validate_role(role: str, raw: Any, servers: dict[str, Any]) -> dict[str, An
     }
 
 
+def _validate_model(name: str, raw: Any) -> dict[str, Any]:
+    where = f"model '{name}'"
+    _require(bool(_NAME_PATTERN.match(name)), f"{where}: names use letters, digits, '_', '.' or '-' (max 64)")
+    _require(isinstance(raw, dict), f"{where} must be an object")
+    _reject_unknown(set(raw) - {"provider", "base_url", "model", "api_key", "headers", "context_window", "vision"}, f"{where}: ")
+    _require(raw.get("provider") in PROVIDER_KINDS, f"{where}: 'provider' must be one of {', '.join(PROVIDER_KINDS)}")
+    base_url = raw.get("base_url")
+    _require(
+        isinstance(base_url, str) and base_url.startswith(("http://", "https://")),
+        f"{where}: 'base_url' must start with http:// or https://",
+    )
+    _require(isinstance(raw.get("model"), str) and bool(raw["model"].strip()), f"{where}: 'model' is required")
+    api_key = raw.get("api_key", "")
+    _require(isinstance(api_key, str), f"{where}: 'api_key' must be text")
+    headers = raw.get("headers", {})
+    _require(
+        isinstance(headers, dict)
+        and all(isinstance(k, str) and k.strip() and isinstance(v, str) for k, v in headers.items()),
+        f"{where}: 'headers' must map header names to text values",
+    )
+    window = raw.get("context_window", DEFAULT_CONTEXT_WINDOW)
+    _require(
+        isinstance(window, int) and not isinstance(window, bool) and 1024 <= window <= 10_000_000,
+        f"{where}: 'context_window' must be a whole number of tokens, at least 1024",
+    )
+    _require(isinstance(raw.get("vision", False), bool), f"{where}: 'vision' must be true or false")
+    return {
+        "provider": raw["provider"],
+        "base_url": base_url.rstrip("/"),
+        "model": raw["model"].strip(),
+        "api_key": api_key.strip(),
+        "headers": {key.strip(): value for key, value in headers.items()},
+        "context_window": window,
+        "vision": raw.get("vision", False),
+    }
+
+
 def validate_settings(raw: Any) -> dict[str, Any]:
     """Return a normalised copy of ``raw`` with defaults filled in, or raise ``SettingsError``."""
     _require(isinstance(raw, dict), "settings must be an object")
-    unknown = set(raw) - {"version", "tool_servers", "roles"}
-    _reject_unknown(unknown, "")
+    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
     raw_roles = raw.get("roles", {})
+    raw_models = raw.get("models", {})
+    active_model = raw.get("active_model", "")
     _require(isinstance(raw_servers, dict), "'tool_servers' must be an object")
     _require(isinstance(raw_roles, dict), "'roles' must be an object")
+    _require(isinstance(raw_models, dict), "'models' must be an object")
     servers = {name: _validate_server(name, value) for name, value in raw_servers.items()}
     roles = {role: _validate_role(role, value, servers) for role, value in raw_roles.items()}
-    return {"version": SETTINGS_VERSION, "tool_servers": servers, "roles": roles}
+    models = {name: _validate_model(name, value) for name, value in raw_models.items()}
+    _require(isinstance(active_model, str), "'active_model' must be a model name")
+    _require(not active_model or active_model in models, f"'active_model': model '{active_model}' is not set up")
+    return {
+        "version": SETTINGS_VERSION,
+        "tool_servers": servers,
+        "roles": roles,
+        "models": models,
+        "active_model": active_model,
+    }
 
 
 def load_settings(path: Path | None = None) -> dict[str, Any]:
@@ -174,19 +237,24 @@ def save_settings(settings: dict[str, Any], path: Path | None = None) -> dict[st
 
 
 def redacted(settings: dict[str, Any]) -> dict[str, Any]:
-    """Copy for clients: every tool-server environment value becomes ``None``."""
+    """Copy for clients: environment values and non-empty API keys become ``None``."""
     view = copy.deepcopy(settings)
     for server in view.get("tool_servers", {}).values():
         server["env"] = {name: None for name in server.get("env", {})}
+    for model in view.get("models", {}).values():
+        if model.get("api_key"):
+            model["api_key"] = None
+        model["headers"] = {name: None for name in model.get("headers", {})}
     return view
 
 
 def merge_redacted(incoming: Any, stored: dict[str, Any]) -> Any:
-    """Fill ``None`` environment values in ``incoming`` from ``stored`` (see ``redacted``)."""
-    if not isinstance(incoming, dict) or not isinstance(incoming.get("tool_servers"), dict):
+    """Fill ``None`` secrets in ``incoming`` from ``stored`` (see ``redacted``)."""
+    if not isinstance(incoming, dict):
         return incoming
     merged = copy.deepcopy(incoming)
-    for name, server in merged["tool_servers"].items():
+    servers = merged.get("tool_servers")
+    for name, server in (servers.items() if isinstance(servers, dict) else ()):
         if not isinstance(server, dict) or not isinstance(server.get("env"), dict):
             continue
         previous = stored.get("tool_servers", {}).get(name, {}).get("env", {})
@@ -198,7 +266,26 @@ def merge_redacted(incoming: Any, stored: dict[str, Any]) -> Any:
             else:
                 kept[key] = value
         server["env"] = kept
+    models = merged.get("models")
+    for name, model in (models.items() if isinstance(models, dict) else ()):
+        if not isinstance(model, dict):
+            continue
+        previous_model = stored.get("models", {}).get(name, {})
+        if "api_key" in model and model["api_key"] is None:
+            model["api_key"] = previous_model.get("api_key", "")
+        if isinstance(model.get("headers"), dict):
+            old_headers = previous_model.get("headers", {})
+            model["headers"] = {
+                key: (old_headers[key] if value is None else value)
+                for key, value in model["headers"].items()
+                if value is not None or key in old_headers
+            }
     return merged
+
+
+def active_model(settings: dict[str, Any]) -> dict[str, Any] | None:
+    """The configured model that answers requests, or None if none is chosen."""
+    return settings.get("models", {}).get(settings.get("active_model") or "")
 
 
 def server_specs(settings: dict[str, Any]) -> list[McpServerSpec]:

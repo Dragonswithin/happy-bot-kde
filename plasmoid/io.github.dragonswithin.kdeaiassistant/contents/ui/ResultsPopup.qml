@@ -16,8 +16,11 @@ import org.kde.plasma.extras as PlasmaExtras
 /**
  * The one window that shows what the assistant found and is doing. From top
  * to bottom: instant file-search hits from AssistantSession.qml, a search
- * error line when the last search failed, and the conversation (status,
- * transcript, context actions) when `showConversation` is set. main.qml owns
+ * error line when the last search failed, and the conversation when
+ * `showConversation` is set: a status line with Stop and New, the entries
+ * (the user's requests, the assistant's Markdown answers as they stream in,
+ * one line per tool call with its state, notices and errors), and two quick
+ * requests. main.qml owns
  * its visibility, which hit is selected, and anchors it to the applet.
  *
  * It runs in one of two modes, chosen by `inputInPopup`:
@@ -30,8 +33,9 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * The embedded field reports exactly what PanelBar.qml reports
  * (`queryEdited`, `accepted`, `selectionMove`) so main.qml treats both the
- * same. `hitActivated(location)` is a clicked result; `contextRequested`
- * carries a canned request from the Clipboard and Window buttons.
+ * same. `hitActivated(location)` is a clicked result or a link clicked in
+ * an answer; `quickRequest(text)` is a canned request from the Clipboard
+ * and Window buttons; `closeRequested` is the close button.
  *
  * Height follows content: with only hits showing the window is as tall as
  * the rows need; with the conversation showing it uses the configured
@@ -54,7 +58,8 @@ PlasmaCore.Dialog {
     signal accepted(string text)
     signal selectionMove(int delta)
     signal hitActivated(string location)
-    signal contextRequested(string text, string contextKind)
+    signal quickRequest(string text)
+    signal closeRequested()
     signal dismissed()
 
     type: inputInPopup ? PlasmaCore.Dialog.AppletPopup : PlasmaCore.Dialog.Tooltip
@@ -208,12 +213,28 @@ PlasmaCore.Dialog {
                 }
 
                 PlasmaComponents3.ToolButton {
+                    icon.name: "process-stop"
+                    text: i18n("Stop")
+                    visible: popup.session.busy
+                    onClicked: popup.session.cancel()
+                }
+
+                PlasmaComponents3.ToolButton {
                     icon.name: "document-new"
                     text: i18n("New")
                     display: QQC2.AbstractButton.IconOnly
                     PlasmaComponents3.ToolTip.text: i18n("Start a new conversation")
                     PlasmaComponents3.ToolTip.visible: hovered
                     onClicked: popup.session.newChat()
+                }
+
+                PlasmaComponents3.ToolButton {
+                    icon.name: "window-close"
+                    text: i18n("Close")
+                    display: QQC2.AbstractButton.IconOnly
+                    PlasmaComponents3.ToolTip.text: i18n("Close (Esc)")
+                    PlasmaComponents3.ToolTip.visible: hovered
+                    onClicked: popup.closeRequested()
                 }
             }
 
@@ -222,14 +243,109 @@ PlasmaCore.Dialog {
                 Layout.fillHeight: true
                 visible: content.conversationVisible
 
-                QQC2.TextArea {
-                    text: popup.session.hasTranscript
-                        ? popup.session.transcript
-                        : i18n("Type a request and press Enter.")
-                    readOnly: true
-                    wrapMode: Text.Wrap
-                    selectByMouse: true
-                    activeFocusOnPress: popup.inputInPopup
+                ListView {
+                    id: transcript
+
+                    model: popup.session.entries
+                    spacing: Kirigami.Units.smallSpacing
+                    clip: true
+
+                    function followEnd() {
+                        Qt.callLater(transcript.positionViewAtEnd);
+                    }
+                    onCountChanged: followEnd()
+                    onContentHeightChanged: {
+                        if (popup.session.busy) {
+                            followEnd();
+                        }
+                    }
+
+                    PlasmaExtras.PlaceholderMessage {
+                        anchors.centerIn: parent
+                        width: parent.width - Kirigami.Units.gridUnit * 2
+                        visible: transcript.count === 0
+                        text: i18n("Type a request and press Enter.")
+                    }
+
+                    delegate: Item {
+                        id: entry
+
+                        required property string kind
+                        required property string text
+                        required property string state
+
+                        width: transcript.width
+                        implicitHeight: body.implicitHeight
+
+                        ColumnLayout {
+                            id: body
+                            width: parent.width
+                            spacing: 0
+
+                            PlasmaComponents3.Label {
+                                Layout.fillWidth: true
+                                visible: entry.kind === "user"
+                                text: entry.text
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                font.bold: true
+                                topPadding: Kirigami.Units.smallSpacing
+                            }
+
+                            TextEdit {
+                                Layout.fillWidth: true
+                                visible: entry.kind === "assistant"
+                                text: entry.text
+                                textFormat: TextEdit.MarkdownText
+                                wrapMode: TextEdit.Wrap
+                                readOnly: true
+                                selectByMouse: true
+                                activeFocusOnPress: popup.inputInPopup
+                                color: Kirigami.Theme.textColor
+                                selectionColor: Kirigami.Theme.highlightColor
+                                selectedTextColor: Kirigami.Theme.highlightedTextColor
+                                font: Kirigami.Theme.defaultFont
+                                onLinkActivated: link => popup.hitActivated(link)
+
+                                HoverHandler {
+                                    cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: entry.kind === "tool"
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Kirigami.Icon {
+                                    source: entry.state === "failed" ? "dialog-warning"
+                                        : entry.state === "ok" ? "dialog-ok" : "system-run"
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                    opacity: 0.7
+                                }
+
+                                PlasmaComponents3.Label {
+                                    Layout.fillWidth: true
+                                    text: entry.state === "failed" ? i18n("%1 (failed)", entry.text) : entry.text
+                                    textFormat: Text.PlainText
+                                    elide: Text.ElideRight
+                                    font: Kirigami.Theme.smallFont
+                                    opacity: 0.7
+                                }
+                            }
+
+                            PlasmaComponents3.Label {
+                                Layout.fillWidth: true
+                                visible: entry.kind === "error" || entry.kind === "notice"
+                                text: entry.text
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                font: entry.kind === "notice" ? Kirigami.Theme.smallFont : Kirigami.Theme.defaultFont
+                                color: entry.kind === "error" ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
+                            }
+                        }
+                    }
                 }
             }
 
@@ -241,20 +357,14 @@ PlasmaCore.Dialog {
                     text: i18n("Clipboard")
                     icon.name: "edit-paste"
                     enabled: !popup.session.busy
-                    onClicked: popup.contextRequested(i18n("Use my clipboard as context and help me with it."), "clipboard")
+                    onClicked: popup.quickRequest(i18n("Look at what is on my clipboard and help me with it."))
                 }
 
                 PlasmaComponents3.Button {
                     text: i18n("Window")
                     icon.name: "window"
                     enabled: !popup.session.busy
-                    onClicked: popup.contextRequested(i18n("Use my active window as context and help me with it."), "window")
-                }
-
-                PlasmaComponents3.Button {
-                    text: i18n("Screenshot")
-                    icon.name: "spectacle"
-                    onClicked: popup.session.screenshotContext()
+                    onClicked: popup.quickRequest(i18n("Look at my active window and tell me what you can help with."))
                 }
             }
         }

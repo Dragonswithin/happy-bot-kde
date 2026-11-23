@@ -24,7 +24,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
  * - `selectionMove(delta)`: Down (+1) or Up (-1), to move through results.
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
- * - `inputFocusedChanged`: so the results popup can close when focus leaves.
+ * - `inputFocusedChanged`: so the results popup can close when focus leaves,
+ *   including when the user clicks anywhere outside the panel.
  *
  * Its width is fixed at `widthInGridUnits` (the applet's `barWidth`
  * setting): minimum, preferred and maximum are the same so the panel neither
@@ -43,7 +44,17 @@ Item {
     property string statusText: ""
     property bool offline: false
     property int widthInGridUnits: 18
-    readonly property bool inputFocused: field.activeFocus
+    // Focused means the field has focus AND its panel window is the active
+    // window. A click anywhere outside deactivates the panel; focus is then
+    // dropped explicitly so the results popup closes and the next click on
+    // the field goes through `focusRequested` again.
+    readonly property bool windowActive: Window.active
+    readonly property bool inputFocused: field.activeFocus && windowActive
+    onWindowActiveChanged: {
+        if (!windowActive) {
+            field.focus = false;
+        }
+    }
     readonly property alias text: field.text
 
     signal focusRequested()

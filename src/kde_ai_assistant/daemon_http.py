@@ -25,7 +25,10 @@ it runs with defaults and reports ``settings_error`` in ``/health``.
 
 Requests are served on one thread each (``ThreadingHTTPServer``). What each
 endpoint does lives in ``daemon_routes``; this module only authenticates,
-parses and dispatches. On shutdown the state file and token are removed and
+parses and dispatches. The one exception in shape is ``POST /ask``, which
+answers with a server-sent event stream (``text/event-stream``, one
+``data: <json>`` block per event, connection closed at the end) produced by
+``ask_stream``. On shutdown the state file and token are removed and
 every tool server is stopped.
 """
 
@@ -48,6 +51,8 @@ from urllib.parse import parse_qs, urlparse
 
 from . import desktop_context
 from . import settings as settings_store
+from .ask_stream import ClientGone, stream_ask
+from .conversations import ConversationStore
 from .daemon_routes import ROUTES
 from .mcp_client import McpManager
 from .runtime_paths import (
@@ -154,6 +159,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.state = DaemonState(host=host, port=bound_port, runtime_dir=self.runtime_dir)
         self.config_file = config_file or settings_store.config_path()
         self.mcp = McpManager()
+        self.conversations = ConversationStore()
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:
@@ -224,7 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         route = ROUTES.get((method, parsed.path))
-        if route is None:
+        streaming = (method, parsed.path) == ("POST", "/ask")
+        if route is None and not streaming:
             self._json(404, {"ok": False, "error": "unknown endpoint"})
             return
         body: dict[str, Any] = {}
@@ -234,8 +241,29 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 self._json(400, {"ok": False, "error": str(exc)})
                 return
+        if streaming:
+            self._stream_events(body)
+            return
         status, payload = route(self.server, parse_qs(parsed.query), body)
         self._json(status, payload)
+
+    def _stream_events(self, body: dict[str, Any]) -> None:
+        """Answer ``POST /ask`` with an event stream that ends when the turn does."""
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def send(event: dict[str, Any]) -> None:
+            try:
+                self.wfile.write(b"data: " + json.dumps(event, ensure_ascii=False).encode("utf-8") + b"\n\n")
+                self.wfile.flush()
+            except OSError as error:
+                raise ClientGone(str(error)) from error
+
+        stream_ask(self.server, body, send)
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler name
         self._dispatch("GET")

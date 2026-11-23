@@ -162,6 +162,9 @@ tool calls.
 - Later: native providers where the compatible route loses features (for
   example Anthropic, Gemini). Check the vendor's current API documentation
   when writing each one; do not write wire formats from memory.
+- A model entry may carry extra request headers, and a model can be added
+  when the service cannot list its models as long as the model id is given.
+  Both were needed for the first hosted service tried.
 - Each configured model carries capability flags: `tools`, `vision`,
   `context_window`. A model without `tools` is rejected for agent use with a
   clear message rather than silently degrading to chat.
@@ -194,9 +197,9 @@ Built-in tiers:
 3. **Act, GUI:** read an application's accessibility tree and invoke its
    actions (AT-SPI); synthetic keyboard and pointer input through the
    `RemoteDesktop` portal; screenshot + coordinates only for vision models.
-   Existing MCP servers already do this on KDE (`computer-use-linux`,
-   `kwin-mcp`). Evaluate bundling one behind the MCP client before writing
-   this tier; a bundled server must install with the app, not separately.
+   Built natively (see Phase 3 findings): `gi.repository.Atspi` for the tree
+   and actions, KWin's EIS connection with `libei` for input. Accessibility
+   is switched on for the session when this tier is first used.
 4. **Privileged:** root actions only through the external broker named in
    `AGENTS.md`. No root helper in this repo.
 
@@ -247,9 +250,17 @@ The daemon will execute actions, so the current open surface must close
 - Require a per-session bearer token stored `0600` under
   `$XDG_RUNTIME_DIR/kde-ai-assistant`. Other local users can reach loopback.
 - Keep the bind loopback-only.
-- API keys: KWallet through the Secret Service when available, else a `0600`
-  file under `~/.config/kde-ai-assistant`. Never in Plasma applet config, never
-  returned by an endpoint, never logged.
+- API keys and other secrets (tool-server environment values, model request
+  headers) live in the one settings file, `0600`, under
+  `~/.config/kde-ai-assistant`. They are never in Plasma applet config, never
+  returned by an endpoint (clients see `null` and send `null` back to keep
+  the stored value), and never logged. KWallet was the original first choice
+  and was dropped: a wallet may be locked or absent when the daemon starts,
+  it would add a second place settings live, and a fresh account has none.
+- Read tools run without asking, and what they return goes to the model. With
+  a hosted model that means clipboard text and file contents leave the
+  computer. The settings page must say so plainly for any model whose address
+  is not loopback (Phase 6).
 - An audit trail of executed tool calls stays in the runtime directory
   (transient), per `AGENTS.md`.
 
@@ -269,8 +280,11 @@ src/kde_ai_assistant/
     daemon_http.py      request routing, auth, event stream
     agent_loop.py       turn execution, step limit, cancel
     conversation.py     neutral message / tool-call types
+    ask_stream.py       one streamed turn for POST /ask
+    conversations.py    in-memory conversation histories
+    kwin_bridge.py      runs snippets inside KWin, returns their result
     providers/          base contract, openai_compatible
-    tools/              registry, one module per domain (windows, files, ...)
+    tools/              registry, observe (read tools), mcp_bridge
     daemon_routes.py    what each endpoint does
     mcp_client.py       stdio MCP sessions, child-process supervision
     mcp_discovery.py    finds tool servers in other programs' configs
@@ -334,7 +348,7 @@ cards in the popup and CLI, tier 2 tools.
 *Exit:* the window, volume, disk, Wi-Fi/monitor, rename and clipboard
 scenarios pass from the bar.
 
-**Phase 5: GUI control.** Tier 3, built in or through a bundled MCP server.
+**Phase 5: GUI control.** Tier 3, built natively.
 *Exit:* "click Save in the focused dialog" and typing into a focused field
 work in a Qt and a GTK app on a text-only local model.
 
@@ -422,6 +436,54 @@ first usable release: Phases 0 to 6.**
   objects with a location under a common key count, which keeps a tool's
   bookkeeping paths (index database, scan roots) out of the results.
 
+**Phase 3 (passed 2026-11-22).**
+
+- Exit check, run from the CLI on both models with the real index and web
+  search tools:
+
+  | Scenario | Local GPU model | Hosted model |
+  |---|---|---|
+  | Focused window and clipboard | passed, 6.6 s | passed, 2.7 s |
+  | Find the roadmap document | passed, 5.8 s | passed, 2.3 s |
+  | Today's news with links | passed, 19 s | passed, 5.2 s |
+
+  The maintainer confirmed in the panel that answers stream in, tool lines appear, and
+  the popup closes on Esc, the close button and any click outside.
+- The hosted model was Anthropic's OpenAI-compatible endpoint. Its chat
+  endpoint works with the plain bearer key, streaming and tools. Its model
+  list does not (it needs a vendor header), which is why adding a model no
+  longer depends on listing.
+- QML `XMLHttpRequest` does deliver a streamed response incrementally at
+  `readyState` LOADING (19 partial updates in a 1.3 s reply). No WebSocket
+  is needed.
+- `org.kde.KWin.queryWindowInfo`, which the original scaffold used for the
+  active window, is an interactive click-to-pick call and hangs. Window state
+  now comes from `kwin_bridge`, which loads a one-off KWin script that calls
+  back over DBus. First call about 80 ms, then a few ms.
+- New dependency: **PyGObject** (`gi`), for `Gio` DBus in `kwin_bridge`. It
+  is the only way found to receive a result from a KWin script without
+  owning a helper binary. It is imported lazily; without it the window tools
+  report why and everything else works. Phase 5 needs it too (AT-SPI).
+- The local model emits hidden reasoning before every answer and needs room
+  for it, so requests set no output-token cap.
+- Only `read` tools are offered to the model until the permission gate
+  exists. Tools of a server the user did not mark read-only are withheld,
+  except the ones assigned to a role.
+- GUI-control spike (throwaway, nothing kept):
+  - Setting `org.a11y.Status.IsEnabled` to true on the session bus made
+    already-running Qt apps (Konsole, KWrite, plasmashell) and Firefox expose
+    their accessibility trees at once, with `Press`/`click` actions on menus
+    and buttons, readable through `gi.repository.Atspi` in about 10 ms per
+    app. Before that, only helper processes were visible. GTK apps were not
+    tested because none with a window was running. The flag was restored.
+  - `org.kde.KWin.EIS.RemoteDesktop.connectToEIS` returned an input
+    connection to an ordinary session process with no consent dialog, and
+    `libei` is installed. Synthetic keyboard and pointer input can therefore
+    be done natively; no key was actually sent.
+  - The candidate MCP servers were not installed. With both native paths
+    proven, bundling a third-party server would add a Rust or `uv` runtime to
+    a project that must install in one go. Phase 5 builds tier 3 natively.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
@@ -434,6 +496,10 @@ first usable release: Phases 0 to 6.**
 - File search and web search use the user's existing index and search tools
   through MCP; this project does not build its own index or search engine.
 - It must install and configure in one go and behave as one app.
+- LocalContext was changed for this project (the maintainer, 2026-11-22: "the point of
+  the index was to support this project"). It now embeds local document
+  chunks in the background and offers `machine_context_hybrid_search`. The
+  as-you-type role stays on the lexical `machine_context_search`; the hybrid
+  tool takes seconds and is for the model to call.
 - Existing projects were surveyed on 2026-11-22 (PlasmaLLM, KDE Assistant,
-  kde-ai, computer-use-linux, kwin-mcp). None is this product; the last two
-  are candidates to bundle for tier 3.
+  kde-ai, computer-use-linux, kwin-mcp). None is this product.

@@ -77,6 +77,7 @@ PlasmoidItem {
     // Button mode: true while the button has the popup toggled open.
     property bool popupToggled: false
     readonly property bool barFocused: fullRepresentationItem ? fullRepresentationItem.inputFocused : false
+    onBarFocusedChanged: updatePopup()
     property string pendingQuery: ""
 
     AssistantSession {
@@ -109,11 +110,12 @@ PlasmoidItem {
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
         onHitActivated: location => root.openHit(location)
-        onContextRequested: (text, contextKind) => {
+        onQuickRequest: text => {
             root.conversationOpen = true;
-            session.ask(text, contextKind);
+            session.ask(text);
         }
         onDismissed: root.popupToggled = false
+        onCloseRequested: root.closePopup()
     }
 
     compactRepresentation: CompactRepresentation {
@@ -135,10 +137,7 @@ PlasmoidItem {
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
-        onDismissed: {
-            root.conversationOpen = false;
-            root.updatePopup();
-        }
+        onDismissed: root.closePopup()
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
@@ -155,7 +154,21 @@ PlasmoidItem {
         const somethingToShow = root.conversationOpen
             || session.hits.length > 0
             || session.searchErrorCode === "tool_failed";
-        popup.visible = root.barFocused && somethingToShow;
+        // Read the field directly: this runs from the field's own change
+        // handler, before the `barFocused` binding above has re-evaluated.
+        const focused = root.fullRepresentationItem ? root.fullRepresentationItem.inputFocused : false;
+        popup.visible = focused && somethingToShow;
+    }
+
+    /** Closes the popup on request (Escape, the close button): hides the
+     *  conversation and drops the current file hits. The conversation itself
+     *  is kept and reopens with Enter in the empty field. */
+    function closePopup() {
+        root.conversationOpen = false;
+        root.popupToggled = false;
+        searchDelay.stop();
+        session.clearSearch();
+        root.updatePopup();
     }
 
     function clearInput() {
@@ -198,7 +211,7 @@ PlasmoidItem {
         }
         if (text.length === 0) {
             root.conversationOpen = session.hasTranscript;
-        } else if (session.ask(text, "combined")) {
+        } else if (session.ask(text)) {
             root.conversationOpen = true;
             root.clearInput();
         }

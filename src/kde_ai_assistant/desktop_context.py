@@ -2,10 +2,11 @@
 
 Collects what the user is looking at so a request can be answered in context:
 the active window's metadata from KWin, clipboard text from Klipper, basic
-session facts, and an explicit screenshot through Spectacle. Each source is
-reached by running ``qdbus6`` or ``spectacle`` as a short child process with a
-timeout, so every call here blocks for up to a few seconds and must not run
-on a thread that has to stay responsive.
+session facts, and an explicit screenshot through Spectacle. The window comes
+from ``kwin_bridge`` (KWin has no non-interactive DBus query for it); the
+clipboard and screenshot are reached by running ``qdbus6`` or ``spectacle`` as
+a short child process with a timeout. Every call here can block for a few
+seconds and must not run on a thread that has to stay responsive.
 
 Nothing here changes desktop state except ``take_screenshot``, which writes a
 PNG into the daemon's runtime directory. A missing tool, a DBus failure or a
@@ -87,48 +88,17 @@ def clipboard_context() -> dict[str, Any]:
     }
 
 
-def parse_qdbus_key_values(text: str) -> dict[str, str]:
-    """Parse the ``key: value`` lines qdbus6 prints for a QVariantMap."""
-    parsed: dict[str, str] = {}
-    for line in text.splitlines():
-        if ": " not in line:
-            continue
-        key, value = line.split(": ", 1)
-        key = key.strip()
-        if key:
-            parsed[key] = value.strip()
-    return parsed
-
-
 def active_window_context() -> dict[str, Any]:
-    result = qdbus_call(["org.kde.KWin", "/KWin", "org.kde.KWin.queryWindowInfo"], timeout=5.0)
-    if not result["ok"]:
-        return {
-            "available": False,
-            "source": "kwin",
-            "error": result["stderr"].strip() or "KWin DBus call failed",
-        }
-    parsed = parse_qdbus_key_values(result["stdout"])
-    interesting = {
-        key: parsed.get(key, "")
-        for key in (
-            "caption",
-            "desktopFile",
-            "resourceClass",
-            "resourceName",
-            "pid",
-            "uuid",
-            "fullscreen",
-            "minimized",
-        )
-    }
-    available = any(value for key, value in interesting.items() if key not in {"fullscreen", "minimized"})
-    return {
-        "available": available,
-        "source": "kwin",
-        "window": interesting,
-        "error": "" if available else "KWin returned no active window details",
-    }
+    """Describe the focused window through the KWin script bridge."""
+    from . import kwin_bridge
+
+    try:
+        window = kwin_bridge.shared().run(kwin_bridge.ACTIVE_WINDOW_JS)
+    except (kwin_bridge.KWinUnavailable, kwin_bridge.KWinScriptError) as error:
+        return {"available": False, "source": "kwin", "error": str(error)}
+    if not window:
+        return {"available": False, "source": "kwin", "error": "no window is focused"}
+    return {"available": True, "source": "kwin", "window": window, "error": ""}
 
 
 def session_context() -> dict[str, Any]:

@@ -106,10 +106,16 @@ class AccessControlTests(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(self.server.state.last_error, "")
 
-    def test_authenticated_ask_reports_no_model(self) -> None:
-        status, payload, _ = self.call("POST", "/ask", body=b'{"message": "hi"}')
-        self.assertEqual(status, 503)
-        self.assertFalse(payload["ok"])
+    def test_authenticated_ask_streams_a_not_configured_error(self) -> None:
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        connection.request("POST", "/ask", body=b'{"message": "hi"}', headers={
+            "Authorization": f"Bearer {self.token}", "Content-Type": "application/json"})
+        response = connection.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertTrue(response.getheader("Content-Type").startswith("text/event-stream"))
+        events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
+        connection.close()
+        self.assertEqual([(event["type"], event.get("code")) for event in events], [("error", "not_configured")])
 
     def test_oversized_and_malformed_bodies_are_rejected(self) -> None:
         self.assertEqual(self.call("POST", "/ask", body=b"{not json")[0], 400)
