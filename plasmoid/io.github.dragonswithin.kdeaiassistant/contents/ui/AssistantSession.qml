@@ -9,7 +9,7 @@ import QtQuick
 /**
  * Non-visual owner of one conversation with the per-user daemon.
  *
- * Holds everything PanelBar.qml, CompactRepresentation.qml and
+ * Holds everything CompactRepresentation.qml and
  * ResultsPopup.qml display: the conversation `entries`, the busy flag, the
  * daemon status and the current instant file-search hits. It talks to the
  * daemon (`/health`, `/search`, `/open`, `/ask`, `/cancel`, `/approve`)
@@ -20,23 +20,37 @@ import QtQuick
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
  * LOADING; `consumeStream` parses the new part into events and `applyEvent`
- * turns them into `entries`. Each entry is `{kind, text, stage, callId, detail,
- * canRemember}` (`stage`, not `state`, because every QML item already has a
- * `state` property):
+ * turns them into `entries`. Each entry is `{kind, text, stage, callId,
+ * approvalId, detail, canRemember, started, progress}` (`stage`, not `state`, because every QML
+ * item already has a `state` property):
  *
  * - kind "user", "assistant" (Markdown, grows as text streams in), "notice"
  *   and "error" use `text`.
  * - kind "tool" is one tool call: `text` is its display name, `stage` is
- *   "running", "ok" or "failed", `callId` links the result to the call.
- * - kind "approval" is an action waiting for the user: `text` says what will
- *   run, `detail` why it needs approval, `callId` is the approval id,
- *   `canRemember` whether "allow for this session" may be offered, and
- *   `stage` is "waiting" until `answerApproval` or the daemon resolves it
- *   ("allow", "deny", "timeout", "cancelled"). `pendingApprovals` counts the
- *   waiting ones so the panel can draw attention.
+ *   "running", "ok" or "failed", `callId` links the result to the call,
+ *   `started` is when it began (ms since the epoch, for the elapsed-time
+ *   display) and `progress` the latest status line it reported.
+ * - kind "approval" is a tool call waiting for the user. The call's own
+ *   "tool" entry turns into it in place, so one action is one row: `text`
+ *   says what will run, `detail` why it needs approval, `approvalId` is what
+ *   `answerApproval` sends back, `canRemember` whether "allow for this
+ *   session" may be offered, and `stage` is "waiting". When the user allows
+ *   it the row becomes a running "tool" again and finishes like any other
+ *   step; any other answer leaves the card showing that outcome ("deny",
+ *   "timeout", "cancelled"). `pendingApprovals` counts the waiting ones so
+ *   the panel can draw attention.
  *
  * The daemon keeps the history; `conversationId` (from the stream's first
- * event) is sent with follow-ups and cleared by `newChat`. `cancel` aborts
+ * event) is sent with follow-ups and cleared by `newChat`.
+ *
+ * Saved conversations: `history` is the daemon's list of saved
+ * conversations (`{id, title, updated, requests}`, newest first), refreshed
+ * by `refreshHistory` after every request and when the popup opens.
+ * `openConversation(id)` loads one and redraws it by replaying its saved
+ * events through `applyEvent` (`replay`), so a reopened conversation looks
+ * exactly as it did and the next request continues it. Anything that was
+ * still waiting when it was saved is shown as not completed.
+ * `deleteConversation` removes one; deleting the open one starts a new one. `cancel` aborts
  * the request, which makes the daemon stop the turn.
  *
  * Instant search: `searchFiles` may be called on every keystroke. Replies
@@ -62,6 +76,7 @@ Item {
     property string conversationId: ""
 
     readonly property ListModel entries: ListModel {}
+    property var history: []
     readonly property bool hasTranscript: entries.count > 0
     property int pendingApprovals: 0
 
@@ -77,7 +92,10 @@ Item {
 
     visible: false
 
-    Component.onCompleted: refreshStatus()
+    Component.onCompleted: {
+        refreshStatus();
+        refreshHistory();
+    }
 
     Timer {
         interval: 12000
@@ -91,19 +109,29 @@ Item {
         session.statusText = summary;
     }
 
-    function appendEntry(kind, text, stage, callId, detail, canRemember) {
+    function appendEntry(kind, text, stage, callId, detail, canRemember, approvalId) {
         session.entries.append({
             kind: kind, text: text || "", stage: stage || "", callId: callId || "",
-            detail: detail || "", canRemember: canRemember === true
+            approvalId: approvalId || "", detail: detail || "", canRemember: canRemember === true,
+            started: Date.now(), progress: ""
         });
     }
 
-    function setEntryStage(callId, stage) {
+    /** Index of the newest entry whose `role` equals `value`, or -1. */
+    function findEntry(role, value) {
         for (let index = session.entries.count - 1; index >= 0; index--) {
-            if (session.entries.get(index).callId === callId) {
-                session.entries.setProperty(index, "stage", stage);
-                return;
+            if (value && session.entries.get(index)[role] === value) {
+                return index;
             }
+        }
+        return -1;
+    }
+
+    /** Records a tool result. An approval card keeps the user's answer as its outcome. */
+    function setEntryStage(callId, stage) {
+        const index = findEntry("callId", callId);
+        if (index >= 0 && session.entries.get(index).kind === "tool") {
+            session.entries.setProperty(index, "stage", stage);
         }
     }
 
@@ -170,6 +198,52 @@ Item {
     function openLocation(location) {
         request("POST", "/open", { location: location }, function(data) {}, function(data) {
             session.appendEntry("error", data.error || i18n("Could not open %1", location));
+        });
+    }
+
+    function refreshHistory() {
+        request("GET", "/conversations", null, function(data) {
+            session.history = data.conversations || [];
+        }, function(data) {});
+    }
+
+    /** Redraws a saved conversation from its events, without network or side effects. */
+    function replay(events) {
+        session.entries.clear();
+        events.forEach(event => applyEvent(event));
+        for (let index = 0; index < session.entries.count; index++) {
+            const stage = session.entries.get(index).stage;
+            if (stage === "running") {
+                session.entries.setProperty(index, "stage", "failed");
+            } else if (stage === "waiting") {
+                session.entries.setProperty(index, "stage", "cancelled");
+            }
+        }
+        session.pendingApprovals = 0;
+        setStatus("idle", i18n("Ready"));
+    }
+
+    function openConversation(conversationId) {
+        if (session.busy || conversationId === session.conversationId) {
+            return;
+        }
+        request("GET", "/conversation?id=" + encodeURIComponent(conversationId), null, function(data) {
+            session.conversationId = data.id;
+            session.replay(data.events || []);
+        }, function(data) {
+            session.appendEntry("error", data.error || i18n("That conversation could not be opened"));
+            session.refreshHistory();
+        });
+    }
+
+    function deleteConversation(conversationId) {
+        request("POST", "/conversations/delete", { id: conversationId }, function(data) {
+            if (conversationId === session.conversationId) {
+                session.newChat();
+            }
+            session.refreshHistory();
+        }, function(data) {
+            session.refreshHistory();
         });
     }
 
@@ -259,6 +333,7 @@ Item {
             }
         }
         refreshStatus();
+        refreshHistory();
     }
 
     function toolLabel(name) {
@@ -268,6 +343,9 @@ Item {
     function applyEvent(event) {
         const last = session.entries.count - 1;
         switch (event.type) {
+        case "user":
+            appendEntry("user", event.text);
+            break;
         case "start":
             session.conversationId = event.conversation_id;
             (event.warnings || []).forEach(warning => session.appendEntry("notice", warning));
@@ -288,22 +366,46 @@ Item {
             appendEntry("tool", event.summary && event.summary !== event.name
                 ? event.summary : toolLabel(event.name), "running", event.id);
             break;
+        case "tool_progress": {
+            const step = findEntry("callId", event.id);
+            if (step >= 0) {
+                session.entries.setProperty(step, "progress", event.text || "");
+            }
+            break;
+        }
         case "tool_result":
             setEntryStage(event.id, event.ok ? "ok" : "failed");
             break;
-        case "approval_required":
+        case "approval_required": {
             setStatus("thinking", i18n("Waiting for your approval"));
             session.pendingApprovals += 1;
-            appendEntry("approval", event.summary, "waiting", event.id, event.detail, event.can_remember);
+            const step = findEntry("callId", event.call_id);
+            if (step >= 0) {
+                session.entries.set(step, {
+                    kind: "approval", text: event.summary, stage: "waiting", approvalId: event.id,
+                    detail: event.detail || "", canRemember: event.can_remember === true
+                });
+            } else {
+                appendEntry("approval", event.summary, "waiting", event.call_id, event.detail, event.can_remember, event.id);
+            }
             break;
-        case "approval_resolved":
+        }
+        case "approval_resolved": {
             session.pendingApprovals = Math.max(0, session.pendingApprovals - 1);
-            setEntryStage(event.id, event.decision);
+            const card = findEntry("approvalId", event.id);
+            if (card >= 0) {
+                if (event.decision === "allow") {
+                    session.entries.set(card, { kind: "tool", stage: "running", started: Date.now(), progress: "" });
+                } else {
+                    session.entries.setProperty(card, "stage", event.decision);
+                }
+            }
             setStatus("thinking", i18n("Working"));
             break;
+        }
         case "done":
             if (event.stop === "cancelled") {
-                appendEntry("notice", i18n("Stopped."));
+                appendEntry("notice", i18n("Stopped"));
             } else if (event.stop === "step_limit") {
                 appendEntry("notice", i18n("Stopped after too many steps. Ask again to continue."));
             }
@@ -325,7 +427,7 @@ Item {
         if (session.conversationId) {
             request("POST", "/cancel", { conversation_id: session.conversationId }, function(data) {}, function(data) {});
         }
-        appendEntry("notice", i18n("Stopped."));
+        appendEntry("notice", i18n("Stopped"));
         finishStream();
     }
 }

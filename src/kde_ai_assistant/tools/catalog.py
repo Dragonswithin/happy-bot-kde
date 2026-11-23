@@ -20,13 +20,14 @@ from .mcp_bridge import mcp_tools
 from .observe import observe_tools
 from .registry import Tool, ToolRegistry
 from .shell import shell_tools
+from .summaries import with_read_summaries
 from .system import system_tools
 from .windows import window_tools
 
 
 def builtin_tools() -> list[Tool]:
-    return [*observe_tools(), *window_tools(), *gui_tools(), *app_tools(), *system_tools(), *file_tools(),
-            *shell_tools()]
+    return with_read_summaries([*observe_tools(), *window_tools(), *gui_tools(), *app_tools(), *system_tools(),
+                                *file_tools(), *shell_tools()])
 
 
 def build_registry(manager: McpManager, settings: dict[str, Any]) -> tuple[ToolRegistry, list[str]]:

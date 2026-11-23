@@ -623,6 +623,41 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
   the action log recorded it. `kde-ai-assistant policy changes` prevents
   this class of surprise at the price of more prompts.
 
+**After Phase 6: look and behaviour changes (2026-11-23, from the maintainer's use).**
+
+- The panel shows only the assistant's icon; typing happens in a popup
+  above it (Meta+Space or a click). Typing inside the panel made Plasma draw
+  its own blue panel focus indicator, which a widget cannot switch off.
+- File matches and the conversation take turns in the popup instead of
+  sharing it; saved conversations are listed in a sidebar and kept for
+  `history_days` (default 30) in `$XDG_DATA_HOME/kde-ai-assistant`.
+- The popup sizes to its content from exact column heights. Sizing it from a
+  ListView's estimated `contentHeight` made the window resize itself in a
+  loop (it "jumped up and down").
+- The maintainer asked it to install Ladybird and could not tell whether anything was
+  happening. It was building from the AUR with a 10-minute limit and a final
+  `sudo` step it could not answer, and it retried after being stopped.
+  Now: running steps report progress every second, Stop kills the command,
+  long requests end with a notification, commands that need a password are
+  refused in the background and go to `run_in_terminal` instead, and
+  installing system software is classed as `danger` (it was only removals).
+- A second Ladybird attempt went wrong differently: `run_in_terminal`
+  returned as soon as the window opened, so the model polled `ps` (18 times
+  in 70 s), judged installs waiting for the maintainer's password "stuck", and killed
+  them twice. `run_in_terminal` now waits for the command (run under
+  `script` so prompts still work, with a status file for the exit code),
+  reports "Waiting for you in the terminal window" as progress, and returns
+  the exit status and output. Stop leaves the terminal running. The maintainer kept the
+  approval rule as is: with tools running one at a time, nothing can kill
+  the install while it runs.
+- The maintainer's standing preference, now in the system prompt: install from a
+  pre-built package (repositories, `-bin`, Flatpak) before building from
+  source, and never kill a program started for him unless asked.
+- Verified with a real Konsole (a harmless command; nothing installed).
+  Not verified: a real install, and whether the local model describes a
+  declined action accurately (in one test it claimed to have opened the
+  terminal after the user declined).
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that

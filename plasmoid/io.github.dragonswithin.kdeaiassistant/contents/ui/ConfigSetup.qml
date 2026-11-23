@@ -26,7 +26,9 @@ import org.kde.plasma.plasmoid
  * which the daemon treats as "keep what is stored".
  *
  * The three sections (SetupModels.qml, SetupTools.qml, SetupBehavior.qml)
- * receive this page as their `page` property and use its `client`,
+ * are Kirigami.FormLayouts linked with `twinFormLayouts`, so all their labels
+ * share one column like a System Settings page. They receive this page as
+ * their `page` property and use its `client`,
  * `settings`, `save` and `report`. `save(mutate, then)` copies the settings, lets `mutate` change
  * the copy, and sends it; on refusal the daemon's message is shown and the
  * local copy is left as it was.
@@ -102,31 +104,27 @@ KCM.SimpleKCM {
         }
 
         SetupModels {
+            id: modelsSection
             Layout.fillWidth: true
             visible: setupPage.settings !== null
             page: setupPage
-        }
-
-        Kirigami.Separator {
-            Layout.fillWidth: true
-            visible: setupPage.settings !== null
+            twinFormLayouts: [toolsSection, behaviorSection]
         }
 
         SetupTools {
+            id: toolsSection
             Layout.fillWidth: true
             visible: setupPage.settings !== null
             page: setupPage
-        }
-
-        Kirigami.Separator {
-            Layout.fillWidth: true
-            visible: setupPage.settings !== null
+            twinFormLayouts: [modelsSection, behaviorSection]
         }
 
         SetupBehavior {
+            id: behaviorSection
             Layout.fillWidth: true
             visible: setupPage.settings !== null
             page: setupPage
+            twinFormLayouts: [modelsSection, toolsSection]
         }
     }
 }

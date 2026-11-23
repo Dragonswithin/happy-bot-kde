@@ -9,7 +9,7 @@
     "Category": "Utilities",
     "Description": "Panel search bar that finds, answers and acts using any AI model you configure.",
     "EnabledByDefault": false,
-    "Icon": "search",
+    "Icon": "tools-wizard",
     "Id": "io.github.dragonswithin.kdeaiassistant",
     "License": "MIT",
     "Name": "AI Assistant",

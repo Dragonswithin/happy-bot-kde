@@ -11,7 +11,8 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * "Approvals" and "Folders" section of ConfigSetup.qml.
+ * "Approvals" and "Folders" section of ConfigSetup.qml, as a
+ * Kirigami.FormLayout aligned with the other sections.
  *
  * Approvals chooses the daemon's `approval_policy`: which actions pause for
  * the user. The wording mirrors the definition in docs/ROADMAP.md.
@@ -24,15 +25,13 @@ import org.kde.kirigami as Kirigami
  *
  * Holds no state of its own; every change goes through `page.save`.
  */
-ColumnLayout {
+Kirigami.FormLayout {
     id: section
 
     required property var page
 
     readonly property string policy: page.settings ? page.settings.approval_policy : "danger"
     readonly property var overrides: page.settings ? page.settings.folders : ({})
-
-    spacing: Kirigami.Units.smallSpacing
 
     function setPolicy(value) {
         if (value !== section.policy) {
@@ -54,20 +53,14 @@ ColumnLayout {
         });
     }
 
-    Kirigami.Heading {
-        level: 3
-        text: i18n("Approvals")
-    }
-
-    QQC2.Label {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        opacity: 0.8
-        text: i18n("The assistant pauses and asks before it:")
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Approvals")
     }
 
     QQC2.RadioButton {
-        text: i18n("Deletes something or changes the operating system (recommended)")
+        Kirigami.FormData.label: i18n("Ask before it:")
+        text: i18n("Deletes something or changes the operating system")
         checked: section.policy === "danger"
         onToggled: if (checked) section.setPolicy("danger")
     }
@@ -84,34 +77,48 @@ ColumnLayout {
         onToggled: if (checked) section.setPolicy("everything")
     }
 
-    Kirigami.Heading {
-        level: 3
-        text: i18n("Folders")
-        topPadding: Kirigami.Units.largeSpacing
+    QQC2.Label {
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18n("The first choice is recommended: everything else happens at once and is listed in the conversation as it runs.")
+    }
+
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Folders")
+    }
+
+    component FolderField: QQC2.TextField {
+        required property string folder
+
+        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+        text: section.overrides[folder] || ""
+        placeholderText: section.page.effectiveFolders[folder] || ""
+        onEditingFinished: section.setFolder(folder, text)
+    }
+
+    FolderField {
+        Kirigami.FormData.label: i18n("Desktop:")
+        folder: "Desktop"
+    }
+
+    FolderField {
+        Kirigami.FormData.label: i18n("Documents:")
+        folder: "Documents"
+    }
+
+    FolderField {
+        Kirigami.FormData.label: i18n("Downloads:")
+        folder: "Downloads"
     }
 
     QQC2.Label {
-        Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         wrapMode: Text.Wrap
-        opacity: 0.8
-        text: i18n("Where the assistant looks when you say Desktop, Documents or Downloads. Leave a field empty to follow the system's setting.")
-    }
-
-    Kirigami.FormLayout {
-        Layout.fillWidth: true
-
-        Repeater {
-            model: ["Desktop", "Documents", "Downloads"]
-
-            QQC2.TextField {
-                required property string modelData
-
-                Kirigami.FormData.label: i18n("%1:", modelData)
-                Layout.minimumWidth: Kirigami.Units.gridUnit * 18
-                text: section.overrides[modelData] || ""
-                placeholderText: section.page.effectiveFolders[modelData] || ""
-                onEditingFinished: section.setFolder(modelData, text)
-            }
-        }
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18n("Leave a field empty to follow the system's setting, shown in grey.")
     }
 }

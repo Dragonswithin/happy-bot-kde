@@ -288,6 +288,21 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(self.events, [{"type": "done", "stop": "cancelled"}])
         self.assertEqual(len(self.history), 2)
 
+    def test_tools_can_report_progress_and_it_is_throttled(self) -> None:
+        from kde_ai_assistant.tools.registry import report_progress
+
+        def chatty(arguments: dict) -> str:
+            for index in range(50):
+                report_progress(f"line {index}")
+            return "done"
+
+        self.registry = ToolRegistry([Tool("chatty", "x", object_schema(), RISK_READ, chatty)])
+        self.run_loop(ScriptedProvider([call("1", "chatty")], [TextDelta("ok")]))
+        progress = [event for event in self.events if event["type"] == "tool_progress"]
+        self.assertEqual(len(progress), 1)
+        self.assertEqual(progress[0], {"type": "tool_progress", "id": "1", "text": "line 0"})
+        report_progress("outside a call is ignored")
+
     def test_tool_bugs_do_not_end_the_turn_and_long_results_are_cut(self) -> None:
         registry = ToolRegistry([
             Tool("crash", "x", object_schema(), RISK_READ, lambda a: 1 / 0),

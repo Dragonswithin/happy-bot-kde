@@ -29,7 +29,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from .providers.base import ProviderError
@@ -74,6 +74,9 @@ def loaded_model_names(root_url: str) -> set[str] | None:
     try:
         with urlopen(f"{root_url}/api/ps", timeout=PROBE_TIMEOUT_SECONDS) as response:
             document = json.loads(response.read().decode("utf-8", errors="replace"))
+    except HTTPError as error:
+        error.close()
+        return None
     except (URLError, TimeoutError, OSError, ValueError, http.client.HTTPException):
         return None
     entries = document.get("models") if isinstance(document, dict) else None

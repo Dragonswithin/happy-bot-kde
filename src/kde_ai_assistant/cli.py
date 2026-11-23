@@ -118,6 +118,8 @@ def stream_ask(message: str, conversation_id: str = "") -> int:
                 print(f"[tool] {event['name']} {json.dumps(event['arguments'], ensure_ascii=False)}", file=sys.stderr)
             elif kind == "approval_required":
                 answer_approval(event)
+            elif kind == "tool_progress":
+                print(f"[progress] {event['text'][:160]}", file=sys.stderr)
             elif kind == "tool_result" and not event["ok"]:
                 print(f"[tool failed] {event['name']}: {event['text'][:200]}", file=sys.stderr)
             elif kind == "error":

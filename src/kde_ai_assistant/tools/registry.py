@@ -20,6 +20,13 @@ Risk classes (see docs/ROADMAP.md, Permission Gate):
 - ``danger``: deletion, or an OS-level change that could crash the system or
   stop it booting.
 
+While a tool runs, ``call_context`` holds what the agent loop gave this
+call: a ``progress(text)`` function that shows a status line under the step
+in the popup, and the turn's ``cancel`` event. Long-running handlers (the
+shell tool) use them to report output as it arrives and to stop at once
+when the user presses Stop; ``report_progress`` and ``cancel_requested`` are
+safe to call when nothing is set.
+
 ``ToolRegistry.run`` never raises for a tool's own failure: a handler signals
 an expected failure with ``ToolFailure`` and anything else is caught, and both
 come back as ``(False, message)`` so the model can react. Results longer than
@@ -30,6 +37,8 @@ context window. Handlers run on the calling thread and may block.
 from __future__ import annotations
 
 import re
+import threading
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -40,6 +49,26 @@ RISK_CHANGE = "change"
 RISK_DANGER = "danger"
 MAX_RESULT_CHARS = 8000
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@dataclass(frozen=True)
+class CallContext:
+    progress: Callable[[str], None]
+    cancel: threading.Event
+
+
+call_context: ContextVar[CallContext | None] = ContextVar("call_context", default=None)
+
+
+def report_progress(text: str) -> None:
+    context = call_context.get()
+    if context is not None:
+        context.progress(text)
+
+
+def cancel_requested() -> bool:
+    context = call_context.get()
+    return context is not None and context.cancel.is_set()
 
 
 class ToolFailure(RuntimeError):

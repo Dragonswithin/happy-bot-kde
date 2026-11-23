@@ -17,7 +17,10 @@ How it looks at a command:
   wrappers (``env``, ``nice``, ``nohup``, ``time``, ``timeout``, ...) are
   skipped to find the real program.
 - Each program is checked against the lists below; some need a matching
-  argument (``git clean``, ``pacman -R``, ``find -delete``).
+  argument (``git clean``, ``pacman -R``, ``find -delete``). Installing or
+  upgrading system software (``pacman -S``, ``yay -S``, ``apt install``,
+  system-wide ``flatpak install``) is an OS-level change and counts too;
+  searching and querying (``pacman -Ss``, ``-Q``) do not.
 - Commands passed as strings (``sh -c``, ``bash -c``, ``xargs``, ``eval``,
   command substitution) are classified recursively.
 - Inline interpreter code (``python -c``, ``perl -e``, ``node -e``) cannot be
@@ -219,6 +222,9 @@ def _classify_simple(command: str, cwd: str, depth: int) -> str:
             if argument in PACKAGE_REMOVERS[program] or (
                     program in ("pacman", "yay", "paru") and re.match(r"^-[A-Za-z]*R", argument)):
                 return f"removes installed software ({program} {argument})"
+        installing = _installs_software(program, arguments)
+        if installing:
+            return installing
         return ""
     if program == "find":
         if "-delete" in arguments:
@@ -284,6 +290,57 @@ def _classify_line(line: str, cwd: str, depth: int) -> str:
         reason = _classify_simple(command.strip("(){} \t"), cwd, depth)
         if reason:
             return reason
+    return ""
+
+
+def _installs_software(program: str, arguments: list[str]) -> str:
+    """A reason when a package-manager call installs or upgrades system software, else ''."""
+    if program in ("pacman", "yay", "paru"):
+        for argument in arguments:
+            # -S with anything but search/info/print/list, or -U; never -Q or -F.
+            if re.match(r"^-[A-Za-z]*U", argument) or (
+                    re.match(r"^-[A-Za-z]*S", argument) and not re.search(r"[sicpgl]", argument.lstrip("-")[1:])):
+                return f"installs or upgrades system software ({program} {argument})"
+        if program in ("yay", "paru") and not arguments:
+            return f"upgrades all system software ({program})"
+        return ""
+    verbs = {"apt": ("install", "upgrade", "full-upgrade", "dist-upgrade", "reinstall"),
+             "apt-get": ("install", "upgrade", "dist-upgrade", "reinstall"),
+             "dnf": ("install", "upgrade", "update", "reinstall", "distro-sync"),
+             "zypper": ("install", "in", "update", "up", "dist-upgrade", "dup"),
+             "snap": ("install", "refresh"), "flatpak": ("install", "update", "upgrade")}
+    words = [argument for argument in arguments if not argument.startswith("-")]
+    if program in verbs and words[:1] and words[0] in verbs[program]:
+        if program == "flatpak" and "--user" in arguments:
+            return ""
+        return f"installs or upgrades system software ({program} {words[0]})"
+    return ""
+
+
+# Programs that would stop to ask for a password on a terminal. Without one
+# they fail or hang, so such commands must run where the user can answer.
+_PASSWORD_PROGRAMS = {"sudo", "su", "doas", "run0", "passwd", "kdesu", "kdesudo"}
+
+
+def needs_password(command: str) -> str:
+    """A reason when the command would ask for a password on a terminal, else ''."""
+    for part in _split_commands(command):
+        try:
+            tokens = shlex.split(part.strip("(){} \t"), posix=True)
+        except ValueError:
+            continue
+        while tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
+            tokens = tokens[1:]
+        if not tokens:
+            continue
+        program, arguments = os.path.basename(tokens[0]), tokens[1:]
+        if program in _PASSWORD_PROGRAMS:
+            return f"{program} asks for your password"
+        if program in ("yay", "paru") and _installs_software(program, arguments):
+            return f"{program} asks for your password to install"
+        if program in ("pacman", "apt", "apt-get", "dnf", "zypper") and (
+                _installs_software(program, arguments) or any(a.startswith("-R") or a in ("remove", "purge") for a in arguments)):
+            return f"{program} must run as root"
     return ""
 
 

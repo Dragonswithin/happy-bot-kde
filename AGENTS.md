@@ -22,7 +22,10 @@
   it a durable boot-level service unless the feature being added is no longer
   desktop-interactive.
 - Do not store screenshots, logs, transcripts, or command output in the repo.
-  Runtime state belongs under `$XDG_RUNTIME_DIR/kde-ai-assistant`.
+  Runtime state belongs under `$XDG_RUNTIME_DIR/kde-ai-assistant`. The one
+  exception, chosen by the maintainer, is the user's conversation history: saved 0600
+  under `$XDG_DATA_HOME/kde-ai-assistant/conversations` and deleted after
+  `history_days` (default 30) without use.
 - Keep root/system actions behind an explicit external broker. This project can
   report broker availability, but it should not grow an unbounded root helper.
 - Before closeout, run focused checks: Python syntax, shell syntax, service

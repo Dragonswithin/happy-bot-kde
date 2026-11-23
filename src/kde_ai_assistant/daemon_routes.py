@@ -25,6 +25,11 @@ Endpoints:
 - ``POST /models/test``: check that a configured model answers and can call
   tools. This sends one small request to the model.
 - ``POST /cancel``: stop a conversation's running turn.
+- ``GET /conversations``: saved conversations, newest first
+  (``{id, title, created, updated, requests}``).
+- ``GET /conversation?id=...``: one conversation's display events, for the
+  popup to redraw it.
+- ``POST /conversations/delete``: ``{"id": ...}`` or ``{"all": true}``.
 - ``POST /approve``: the user's answer to an approval request
   (``{"id", "decision": "allow"|"deny", "remember": bool}``).
 - ``POST /screenshot``.
@@ -293,6 +298,25 @@ def cancel(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     return 200, {"ok": True, "cancelled": server.conversations.cancel(str(body.get("conversation_id") or ""))}
 
 
+def list_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "conversations": server.conversations.list()}
+
+
+def get_conversation(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    conversation = server.conversations.get(_first(query, "id"))
+    if conversation is None:
+        return _error(404, "That conversation is no longer saved.", "invalid")
+    return 200, {"ok": True, "id": conversation.id, "title": conversation.title, "events": conversation.events}
+
+
+def delete_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    if body.get("all") is True:
+        return 200, {"ok": True, "deleted": server.conversations.delete_all()}
+    if not server.conversations.delete(str(body.get("id") or "")):
+        return _error(404, "That conversation is no longer saved.", "invalid")
+    return 200, {"ok": True, "deleted": 1}
+
+
 def approve(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     accepted = server.approvals.resolve(
         str(body.get("id") or ""), str(body.get("decision") or ""), bool(body.get("remember", False)))
@@ -318,4 +342,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/models/test"): test_model,
     ("POST", "/cancel"): cancel,
     ("POST", "/approve"): approve,
+    ("GET", "/conversations"): list_conversations,
+    ("GET", "/conversation"): get_conversation,
+    ("POST", "/conversations/delete"): delete_conversations,
 }

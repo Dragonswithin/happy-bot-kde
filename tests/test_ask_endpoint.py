@@ -40,7 +40,7 @@ class AskEndpointTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
         self.model = FakeModelService()
-        self.server = AssistantServer("127.0.0.1", 0, root / "runtime", root / "config.json")
+        self.server = AssistantServer("127.0.0.1", 0, root / "runtime", root / "config.json", root / "history")
         self.port = self.server.server_address[1]
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self._thread.start()
@@ -268,3 +268,129 @@ class ConversationStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConversationHistoryTests(unittest.TestCase):
+    """Saving, reopening, continuing, listing, deleting and pruning conversations."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.model = FakeModelService()
+        self.server = self.start_server()
+
+    def start_server(self) -> AssistantServer:
+        server = AssistantServer("127.0.0.1", 0, self.root / "runtime", self.root / "config.json", self.root / "history")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def tearDown(self) -> None:
+        self.model.close()
+        self._tmp.cleanup()
+
+    def call(self, server, method: str, path: str, body: dict | None = None) -> dict:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=20)
+        connection.request(method, path, body=None if body is None else json.dumps(body), headers={
+            "Authorization": f"Bearer {server.auth_token}", "Content-Type": "application/json"})
+        response = connection.getresponse()
+        raw = response.read().decode()
+        connection.close()
+        if path == "/ask":
+            return [json.loads(line[5:]) for line in raw.splitlines() if line.startswith("data:")]
+        return json.loads(raw)
+
+    def configure(self, server, days: int = 30) -> None:
+        reply = self.call(server, "PUT", "/settings", {"settings": {
+            "models": {"m": {"provider": "openai_compatible", "base_url": self.model.base_url, "model": "fake-model"}},
+            "active_model": "m", "history_days": days}})
+        self.assertTrue(reply["ok"], reply)
+
+    def test_conversation_is_saved_privately_and_reopens_after_a_restart(self) -> None:
+        import stat
+
+        self.configure(self.server)
+        self.model.replies += [chunks_for("It is sunny."), chunks_for("Still sunny.")]
+        first = self.call(self.server, "POST", "/ask", {"message": "what is the weather like today"})
+        conversation_id = first[0]["conversation_id"]
+        saved = self.root / "history" / f"{conversation_id}.json"
+        self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(saved.parent.stat().st_mode), 0o700)
+
+        self.server.shutdown()
+        restarted = self.start_server()
+        listed = self.call(restarted, "GET", "/conversations")["conversations"]
+        self.assertEqual([(item["id"], item["title"], item["requests"]) for item in listed],
+                         [(conversation_id, "what is the weather like today", 1)])
+        opened = self.call(restarted, "GET", f"/conversation?id={conversation_id}")
+        self.assertEqual([event["type"] for event in opened["events"]], ["user", "text_delta", "done"])
+        self.assertEqual(opened["events"][1]["text"], "It is sunny.")
+
+        follow_up = self.call(restarted, "POST", "/ask", {"message": "and tomorrow?", "conversation_id": conversation_id})
+        self.assertEqual(follow_up[0]["conversation_id"], conversation_id)
+        sent = [message["role"] for message in self.model.requests[-1]["messages"]]
+        self.assertEqual(sent, ["system", "user", "assistant", "user"])
+        self.assertEqual(self.call(restarted, "GET", "/conversations")["conversations"][0]["requests"], 2)
+
+    def test_new_conversations_keep_the_old_ones_and_delete_works(self) -> None:
+        self.configure(self.server)
+        self.model.replies += [chunks_for("one"), chunks_for("two"), chunks_for("three")]
+        ids = [self.call(self.server, "POST", "/ask", {"message": text})[0]["conversation_id"] for text in ("a1", "b2", "c3")]
+        listed = [item["id"] for item in self.call(self.server, "GET", "/conversations")["conversations"]]
+        self.assertEqual(listed, list(reversed(ids)))
+        self.assertTrue(self.call(self.server, "POST", "/conversations/delete", {"id": ids[0]})["ok"])
+        self.assertFalse(self.call(self.server, "POST", "/conversations/delete", {"id": ids[0]})["ok"])
+        self.assertFalse(self.call(self.server, "GET", f"/conversation?id={ids[0]}")["ok"])
+        self.assertEqual(self.call(self.server, "POST", "/conversations/delete", {"all": True})["deleted"], 2)
+        self.assertEqual(self.call(self.server, "GET", "/conversations")["conversations"], [])
+
+    def test_old_conversations_are_pruned_and_zero_days_keeps_nothing(self) -> None:
+        import os
+        import time as time_module
+
+        self.configure(self.server, days=30)
+        self.model.replies += [chunks_for("x"), chunks_for("y")]
+        old = self.call(self.server, "POST", "/ask", {"message": "old one"})[0]["conversation_id"]
+        record_path = self.root / "history" / f"{old}.json"
+        record = json.loads(record_path.read_text())
+        record["updated"] = time_module.time() - 31 * 86400
+        record_path.write_text(json.dumps(record))
+        self.call(self.server, "POST", "/ask", {"message": "new one"})
+        self.assertFalse(record_path.exists())
+        self.configure(self.server, days=0)
+        self.assertEqual(os.listdir(self.root / "history"), [])
+        self.model.replies.append(chunks_for("z"))
+        self.call(self.server, "POST", "/ask", {"message": "not saved"})
+        self.assertEqual(os.listdir(self.root / "history"), [])
+
+    def test_ids_cannot_escape_the_history_folder(self) -> None:
+        from kde_ai_assistant.conversation_archive import ConversationArchive
+
+        archive = ConversationArchive(self.root / "history", days=30)
+        for bad in ("../config", "a/b", "", "x" * 100, "../../etc/passwd"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(archive.load(bad))
+                self.assertFalse(archive.delete(bad))
+        archive.save({"id": "../escape", "events": []})
+        self.assertFalse((self.root / "escape.json").exists())
+
+    def test_text_pieces_are_joined_and_liveness_events_dropped(self) -> None:
+        from kde_ai_assistant.conversations import Conversation
+
+        conversation = Conversation(id="abcd")
+        for event in ({"type": "start"}, {"type": "thinking"}, {"type": "text_delta", "text": "Hel"},
+                      {"type": "text_delta", "text": "lo"}, {"type": "tool_call", "id": "1", "name": "t"},
+                      {"type": "text_delta", "text": "!"}):
+            conversation.record(event)
+        self.assertEqual(conversation.events, [
+            {"type": "text_delta", "text": "Hello"}, {"type": "tool_call", "id": "1", "name": "t"},
+            {"type": "text_delta", "text": "!"}])
+
+    def test_history_days_is_validated(self) -> None:
+        self.assertEqual(validate_settings({})["history_days"], 30)
+        for bad in (-1, 4000, "30", True):
+            with self.subTest(bad=bad), self.assertRaisesRegex(SettingsError, "history_days"):
+                validate_settings({"history_days": bad})

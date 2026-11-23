@@ -14,6 +14,8 @@ Progress is reported through ``emit`` as JSON-serialisable events, in order:
 - ``{"type": "tool_call", "id", "name", "arguments", "risk", "summary"}``
 - approval events from the permission gate, when the call needs the user
   (see ``permissions``)
+- ``{"type": "tool_progress", "id", "text"}`` while a long tool runs (at most
+  one per ``PROGRESS_INTERVAL_SECONDS``; see ``tools.registry.call_context``)
 - ``{"type": "tool_result", "id", "name", "ok", "text"}``
 - then exactly one of ``{"type": "done", "stop": "answered"|"cancelled"|"step_limit"}``
   or ``{"type": "error", "message": ...}``
@@ -40,16 +42,18 @@ import datetime
 import os
 import platform
 import threading
+import time
 from typing import Any, Callable
 
 from .conversation import Message, TextDelta, ThinkingDelta, ToolCallReady, TurnEnd, trim_history
 from .permissions import PermissionGate
 from .providers.base import ModelProvider, ProviderError
-from .tools.registry import ToolRegistry
+from .tools.registry import CallContext, ToolRegistry, call_context
 
 # Operating an application's interface takes a snapshot, an action and a
 # check per step of the task, so a turn needs room for a few dozen requests.
 MAX_STEPS = 40
+PROGRESS_INTERVAL_SECONDS = 1.0
 EVENT_RESULT_CHARS = 2000
 Emit = Callable[[dict[str, Any]], None]
 
@@ -104,13 +108,38 @@ def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
         "- You can only do what the tools allow. If nothing fits, say so plainly instead of pretending.",
         "- Answers appear in a small popup. Be brief and direct. Give full paths for files and full URLs for "
         "links, each on its own line, so the user can open them. After acting, say in one line what you did.",
-        "- If a tool fails, read the error, fix the call or try another way, and tell the user if it still fails.",
+        "- If a tool fails, read the error, fix the call or try another way, and tell the user if it still fails. "
+        "Never repeat a command that failed or was stopped without changing something.",
+        "- Installing software, and anything else that needs the user's password or takes many minutes (builds, "
+        "large downloads), goes in run_in_terminal: the user watches it and types their password there. Tell the "
+        "user it is waiting for them in the terminal. It returns when the command is done; report the outcome.",
+        "- When installing software, always look for a pre-built package first: the official repositories, an AUR "
+        "package ending in -bin, or a Flatpak. Build from source (a plain AUR or -git package) only when no "
+        "pre-built one exists or the user asks. Say which you chose and why.",
+        "- Never stop or kill a program you started for the user unless they ask you to.",
         "",
         f"Now: {now}. User: {os.environ.get('USER', '')}. Home: {os.path.expanduser('~')}. "
         f"Host: {platform.node()}.",
         "Folders: " + ", ".join(f"{name} is {path}" for name, path in user_folders(folder_overrides).items()) + ".",
     ]
     return "\n".join(lines)
+
+
+def _run_with_context(registry: ToolRegistry, call, emit: Emit, cancel: threading.Event) -> tuple[bool, str]:
+    """Run one tool with a throttled progress reporter and the turn's cancel event."""
+    last = [0.0]
+
+    def progress(text: str) -> None:
+        now = time.monotonic()
+        if now - last[0] >= PROGRESS_INTERVAL_SECONDS:
+            last[0] = now
+            emit({"type": "tool_progress", "id": call.id, "text": " ".join(str(text).split())[:300]})
+
+    token = call_context.set(CallContext(progress, cancel))
+    try:
+        return registry.run(call.name, call.arguments)
+    finally:
+        call_context.reset(token)
 
 
 def run_turn(
@@ -177,7 +206,7 @@ def run_turn(
                 else:
                     allowed, refusal = (True, "") if gate is None else gate.check(
                         call.id, call.name, call.arguments, risk, summary, detail)
-                    ok, text = registry.run(call.name, call.arguments) if allowed else (False, refusal)
+                    ok, text = _run_with_context(registry, call, emit, cancel) if allowed else (False, refusal)
             history.append(Message("tool", text, tool_call_id=call.id))
             emit({"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]})
 

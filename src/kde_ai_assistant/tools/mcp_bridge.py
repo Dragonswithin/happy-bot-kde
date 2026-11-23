@@ -23,6 +23,7 @@ from typing import Any
 
 from ..mcp_client import McpError, McpManager
 from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, object_schema
+from .summaries import describe_search
 
 MCP_CALL_TIMEOUT_SECONDS = 90.0
 _UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
@@ -51,6 +52,7 @@ def _make_handler(manager: McpManager, server: str, tool: str):
 def mcp_tools(manager: McpManager, settings: dict[str, Any]) -> tuple[list[Tool], list[str]]:
     """Return ``(tools, warnings)`` for every enabled tool server."""
     role_tools = {(role["server"], role["tool"]): name for name, role in settings.get("roles", {}).items()}
+    query_arguments = {(role["server"], role["tool"]): role.get("query_argument") for role in settings.get("roles", {}).values()}
     tools: list[Tool] = []
     warnings: list[str] = []
     for server, entry in sorted(settings.get("tool_servers", {}).items()):
@@ -80,6 +82,6 @@ def mcp_tools(manager: McpManager, settings: dict[str, Any]) -> tuple[list[Tool]
                 risk=RISK_READ if (entry.get("read_only") or role) else RISK_CHANGE,
                 handler=_make_handler(manager, server, name),
                 source=server,
-                summarize=lambda arguments, label=f"{server}: {name}": label,
+                summarize=describe_search(role, server, name, query_arguments.get((server, name))),
             ))
     return tools, warnings

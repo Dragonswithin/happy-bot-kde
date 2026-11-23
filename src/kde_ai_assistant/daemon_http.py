@@ -53,6 +53,7 @@ from urllib.parse import parse_qs, urlparse
 from . import desktop_context
 from . import settings as settings_store
 from .ask_stream import ClientGone, stream_ask
+from .conversation_archive import ConversationArchive
 from .conversations import ConversationStore
 from .daemon_routes import ROUTES
 from .mcp_client import McpManager
@@ -150,7 +151,14 @@ class AssistantServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, host: str, port: int, runtime_dir: Path, config_file: Path | None = None) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        runtime_dir: Path,
+        config_file: Path | None = None,
+        history_dir: Path | None = None,
+    ) -> None:
         if not is_loopback_host(host):
             raise ValueError(f"refusing to listen on non-loopback address {host!r}")
         super().__init__((host, port), Handler)
@@ -161,7 +169,6 @@ class AssistantServer(ThreadingHTTPServer):
         self.state = DaemonState(host=host, port=bound_port, runtime_dir=self.runtime_dir)
         self.config_file = config_file or settings_store.config_path()
         self.mcp = McpManager()
-        self.conversations = ConversationStore()
         self.approvals = ApprovalBroker()
         self._settings_lock = threading.Lock()
         self.settings_error = ""
@@ -171,6 +178,8 @@ class AssistantServer(ThreadingHTTPServer):
             self.settings = settings_store.default_settings()
             self.settings_error = str(exc)
         self.mcp.configure(settings_store.server_specs(self.settings))
+        self.conversations = ConversationStore(ConversationArchive(history_dir, self.settings["history_days"]))
+        self.conversations.archive.prune()
         write_private_file(token_path(self.runtime_dir), self.auth_token)
         self.state.persist()
 
@@ -181,6 +190,8 @@ class AssistantServer(ThreadingHTTPServer):
             self.settings = stored
             self.settings_error = ""
             self.mcp.configure(settings_store.server_specs(stored))
+            self.conversations.archive.days = stored["history_days"]
+            self.conversations.archive.prune()
             return stored
 
     def shutdown_tools(self) -> None:

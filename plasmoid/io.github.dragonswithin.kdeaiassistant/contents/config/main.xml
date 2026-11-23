@@ -10,21 +10,6 @@
     <entry name="daemonUrl" type="String">
       <default></default>
     </entry>
-    <!-- Where the user types. false (default): in a text field embedded in
-         the panel. true: the panel shows an icon and the field is inside the
-         results popup. Use true if the panel field does not accept keyboard
-         input on your system. Vertical panels always behave as true. -->
-    <entry name="inputInPopup" type="Bool">
-      <default>false</default>
-    </entry>
-    <!-- Width of the panel text field, in Plasma grid units (one grid unit
-         is about the height of a line of text). Default 18. Range 8 to 60.
-         Ignored when the panel shows the button instead of the field. -->
-    <entry name="barWidth" type="Int">
-      <default>18</default>
-      <min>8</min>
-      <max>60</max>
-    </entry>
     <!-- Size of the results popup in Plasma grid units. Defaults 30 wide by
          26 tall. Ranges: width 20 to 70, height 12 to 50. -->
     <entry name="popupWidth" type="Int">

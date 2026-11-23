@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -339,6 +340,103 @@ class ShellToolTests(unittest.TestCase):
         self.assertEqual(shell.run_command({"command": "cat"}), "[exit status 0]\n(no output)")
 
 
+class ShellProgressAndTerminalTests(unittest.TestCase):
+    def run_with_context(self, arguments: dict, cancel_after: float | None = None) -> tuple[str, list[str], float]:
+        from kde_ai_assistant.tools.registry import CallContext, call_context
+
+        lines: list[str] = []
+        cancel = threading.Event()
+        if cancel_after is not None:
+            threading.Timer(cancel_after, cancel.set).start()
+        token = call_context.set(CallContext(lines.append, cancel))
+        started = time.monotonic()
+        try:
+            result = shell.run_command(arguments)
+        finally:
+            call_context.reset(token)
+        return result, lines, time.monotonic() - started
+
+    def test_output_is_reported_while_the_command_runs(self) -> None:
+        result, lines, _elapsed = self.run_with_context(
+            {"command": "for i in 1 2 3; do echo step $i; sleep 0.4; done"})
+        self.assertTrue(result.startswith("[exit status 0]"))
+        self.assertIn("step 3", result)
+        self.assertTrue(any(line.startswith("step") for line in lines), lines)
+        silent, quiet_lines, _ = self.run_with_context({"command": "sleep 0.5"})
+        self.assertTrue(any("no output yet" in line for line in quiet_lines), quiet_lines)
+
+    def test_stop_kills_the_command_and_its_children_at_once(self) -> None:
+        result, _lines, elapsed = self.run_with_context(
+            {"command": "echo begun; sleep 30 & sleep 30; wait", "timeout_seconds": 60}, cancel_after=0.5)
+        self.assertLess(elapsed, 5)
+        self.assertTrue(result.startswith("[stopped by the user]"), result)
+        self.assertIn("begun", result)
+
+    def test_password_commands_are_refused_with_a_pointer_to_the_terminal(self) -> None:
+        tool = next(tool for tool in shell.shell_tools() if tool.name == "run_command")
+        for command in ("yay -S ladybird --noconfirm", "sudo pacman -Syu"):
+            with self.subTest(command=command), self.assertRaisesRegex(ToolFailure, "run_in_terminal"):
+                tool.precheck({"command": command})
+        tool.precheck({"command": "yay -Ss ladybird"})
+        registry = ToolRegistry(shell.shell_tools())
+        self.assertEqual(registry.assess("run_in_terminal", {"command": "yay -S ladybird"})[0], RISK_DANGER)
+        self.assertEqual(registry.assess("run_in_terminal", {"command": "make -j8"})[0], RISK_CHANGE)
+
+    def fake_terminal(self, folder: Path) -> str:
+        """A stand-in terminal program: runs what follows '-e' with no window."""
+        program = folder / "xterm"
+        program.write_text("#!/bin/sh\nshift\nexec \"$@\" < /dev/null\n", encoding="utf-8")
+        program.chmod(0o755)
+        return str(program)
+
+    def run_terminal(self, command: str, cancel_after: float | None = None) -> tuple[str, list[str]]:
+        from unittest import mock
+
+        from kde_ai_assistant.tools.registry import CallContext, call_context
+
+        lines: list[str] = []
+        cancel = threading.Event()
+        if cancel_after is not None:
+            threading.Timer(cancel_after, cancel.set).start()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(shell, "terminal_program", return_value=self.fake_terminal(Path(tmp))), \
+                mock.patch.object(shell, "ensure_runtime_root", return_value=Path(tmp)):
+            token = call_context.set(CallContext(lines.append, cancel))
+            try:
+                result = shell.run_in_terminal({"command": command, "working_directory": tmp})
+            finally:
+                call_context.reset(token)
+            leftovers = [name for name in os.listdir(tmp) if name.startswith("terminal-")]
+        self.assertEqual(leftovers, [], "log and status files are removed")
+        return result, lines
+
+    def test_terminal_waits_for_the_command_and_reports_status_and_output(self) -> None:
+        result, lines = self.run_terminal("echo building; sleep 1; echo installed ok; exit 3")
+        self.assertTrue(result.startswith("[finished with exit status 3]"), result)
+        self.assertIn("installed ok", result)
+        self.assertTrue(any(line.startswith("Waiting for you in the terminal window") for line in lines), lines)
+        ok, _ = self.run_terminal("true")
+        self.assertTrue(ok.startswith("[finished with exit status 0]"), ok)
+
+    def test_closing_the_window_early_and_stop_are_reported_without_killing(self) -> None:
+        # The command's parent is `script`; its parent is the window's shell.
+        closed, _ = self.run_terminal("kill -9 $(ps -o ppid= -p $PPID | tr -d ' '); sleep 5")
+        self.assertIn("closed before the command finished", closed)
+        stopped, _ = self.run_terminal("sleep 3", cancel_after=0.5)
+        self.assertIn("stopped waiting at the user's request", stopped)
+
+    def test_terminal_command_keeps_the_window_open_and_reports_the_status(self) -> None:
+        konsole = shell.terminal_command("/usr/bin/konsole", "yay -S ladybird", "/home/x")
+        self.assertEqual(konsole[:5], ["/usr/bin/konsole", "--separate", "-e", "bash", "-c"])
+        script = konsole[5]
+        self.assertIn("cd /home/x", script)
+        self.assertIn("yay -S ladybird", script)
+        self.assertIn("Finished with exit status", script)
+        self.assertIn("read -r -n 1", script)
+        self.assertEqual(shell.terminal_command("/usr/bin/gnome-terminal", "ls", "/")[1], "--")
+        self.assertEqual(shell.terminal_command("/usr/bin/xterm", "ls", "/")[1], "-e")
+
+
 class ApplicationTests(unittest.TestCase):
     def test_discovery_and_matching(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -403,8 +501,23 @@ class SystemToolClassifierTests(unittest.TestCase):
         for tool in tools:
             self.assertIn(tool.risk, (RISK_READ, RISK_CHANGE, RISK_DANGER), tool.name)
             self.assertEqual(tool.parameters.get("type"), "object", tool.name)
-            if tool.risk != RISK_READ:
-                self.assertIsNotNone(tool.summarize, f"{tool.name} needs a summary for approval cards")
+            self.assertIsNotNone(tool.summarize, f"{tool.name} needs a plain-language summary for the popup")
+            self.assertTrue(tool.summarize({}).strip(), tool.name)
+
+    def test_read_and_search_summaries_read_naturally(self) -> None:
+        import os
+
+        from kde_ai_assistant.tools.summaries import describe_read_call, describe_search
+
+        home = os.path.expanduser("~")
+        self.assertEqual(describe_read_call("list_directory", {"path": f"{home}/Desktop"}), "Listed ~/Desktop")
+        self.assertEqual(describe_read_call("clipboard_text", {}), "Read the clipboard")
+        self.assertIsNone(describe_read_call("no_such_tool", {}))
+        files = describe_search("file_search", "index", "machine_search", "query")
+        self.assertEqual(files({"query": "tax return"}), "Searched your files for “tax return”")
+        web = describe_search("web_search", "searx", "web_search", "q")
+        self.assertEqual(web({"q": "x" * 100})[-2:], "…”")
+        self.assertEqual(describe_search(None, "gitlab", "list_issues", None)({}), "list issues (gitlab)")
 
 
 class ApprovalOverHttpTests(unittest.TestCase):
@@ -414,7 +527,7 @@ class ApprovalOverHttpTests(unittest.TestCase):
             target = root / "victim.txt"
             target.write_text("precious", encoding="utf-8")
             model = FakeModelService()
-            server = AssistantServer("127.0.0.1", 0, root / "runtime", root / "config.json")
+            server = AssistantServer("127.0.0.1", 0, root / "runtime", root / "config.json", root / "history")
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:

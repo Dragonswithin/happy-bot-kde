@@ -41,6 +41,8 @@ DANGEROUS = [
     "python -c 'import shutil; shutil.rmtree(\"x\")'", "python3 -c \"import os; os.remove('x')\"",
     "perl -e 'unlink \"x\"'", "node -e \"require('fs').rmSync('x')\"", "python -c 'import os; os.system(\"ls\")'",
     "rm 'unterminated", "kill -9 1", "nice -n 5 rm x",
+    "yay -S ladybird --noconfirm", "pacman -S firefox", "pacman -Syu", "pacman -U pkg.tar.zst", "paru -S x",
+    "yay", "apt install vim", "apt-get upgrade", "dnf install x", "flatpak install flathub org.x", "snap install x",
 ]
 
 SAFE = [
@@ -58,6 +60,8 @@ SAFE = [
     "nmcli device wifi list", "kscreen-doctor -o", "kwriteconfig6 --file kdeglobals --group KDE --key x y",
     "qdbus6 org.kde.KWin /KWin", "notify-send hi", "xdg-open https://example.org", "kill 12345", "pkill firefox",
     "kioclient exec file.desktop", "gio open file.txt", "trashcan-list", "", "   ",
+    "pacman -Ss ladybird", "pacman -Si firefox", "pacman -Q", "pacman -Qi x", "yay -Ss ladybird", "yay -Si x",
+    "flatpak install --user flathub org.x", "flatpak list", "apt search vim", "dnf search x",
 ]
 
 
@@ -95,6 +99,17 @@ class ShellRiskTests(unittest.TestCase):
         self.assertIn("administrator", classify_command("sudo pacman -Syu")[1])
         self.assertIn("deletes files", classify_command("rm x")[1])
         self.assertIn("removes installed software", classify_command("pacman -Rns foo")[1])
+
+    def test_commands_that_need_a_password_are_recognised(self) -> None:
+        from kde_ai_assistant.shell_risk import needs_password
+
+        for command in ("sudo pacman -Syu", "yay -S ladybird --noconfirm", "pacman -S x", "ls && sudo reboot",
+                        "doas ls", "su -c ls", "apt install vim", "pacman -Rns x", "FOO=1 sudo ls"):
+            with self.subTest(command=command):
+                self.assertTrue(needs_password(command))
+        for command in ("yay -Ss ladybird", "pacman -Q", "ls -la", "pkexec ls", "flatpak install --user x", "echo sudo"):
+            with self.subTest(command=command):
+                self.assertEqual(needs_password(command), "")
 
     def test_home_relative_paths_default_to_the_home_directory(self) -> None:
         self.assertEqual(classify_command("echo x > definitely-not-an-existing-file-xyz.txt")[0], "change")

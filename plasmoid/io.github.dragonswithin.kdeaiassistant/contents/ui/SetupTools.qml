@@ -15,6 +15,10 @@ import org.kde.kirigami as Kirigami
  * and web search, which tool servers are connected, and a scan that offers
  * the servers the user already set up for other AI programs.
  *
+ * A Kirigami.FormLayout, aligned with the other sections by ConfigSetup.qml.
+ * Tool and server names are shown with underscores as spaces; the stored
+ * names are unchanged.
+ *
  * A scan (`POST /tools/scan`) starts each discovered server briefly and
  * returns its tools and the roles it looks suited for. Choosing "Use for…"
  * imports the server and assigns that role in one step; "Add" imports it
@@ -24,26 +28,24 @@ import org.kde.kirigami as Kirigami
  * Durable changes go through `page.save` or `POST /tools/import`; this
  * component holds only the scan results.
  */
-ColumnLayout {
+Kirigami.FormLayout {
     id: section
 
     required property var page
 
     readonly property var servers: page.settings ? page.settings.tool_servers : ({})
+    readonly property var serverNames: Object.keys(servers).sort()
     readonly property var roles: page.settings ? page.settings.roles : ({})
     property var found: []
     property bool scanning: false
     property bool scanned: false
 
-    spacing: Kirigami.Units.smallSpacing
+    function readable(name) {
+        return String(name || "").replace(/_/g, " ");
+    }
 
     function roleLabel(role) {
         return role === "file_search" ? i18n("file search") : i18n("web search");
-    }
-
-    function roleText(role) {
-        const config = section.roles[role];
-        return config ? i18n("%1 (from %2)", config.tool, config.server) : i18n("not set up");
     }
 
     function scan() {
@@ -68,108 +70,149 @@ ColumnLayout {
             if (proposal) {
                 section.page.save(function(settings) { settings.roles[proposal.role] = proposal.config; });
             } else {
-                section.page.report(i18n("Added %1.", server.name), false);
+                section.page.report(i18n("Added %1.", section.readable(server.name)), false);
             }
         }, function(data) {
             section.page.report(data.error || i18n("Could not add %1", server.name), true);
         });
     }
 
-    Kirigami.Heading {
-        level: 3
-        text: i18n("Search and tools")
+    component RoleRow: RowLayout {
+        id: roleRow
+
+        required property string role
+        readonly property var config: section.roles[role]
+
+        spacing: Kirigami.Units.smallSpacing
+
+        Kirigami.Icon {
+            source: roleRow.role === "file_search" ? "folder-documents-symbolic" : "globe"
+            opacity: roleRow.config ? 1 : 0.5
+            Layout.preferredWidth: Kirigami.Units.iconSizes.small
+            Layout.preferredHeight: Kirigami.Units.iconSizes.small
+        }
+
+        QQC2.Label {
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 9
+            text: roleRow.config ? section.readable(roleRow.config.tool) : i18n("Not set up")
+            opacity: roleRow.config ? 1 : 0.7
+        }
+
+        QQC2.Label {
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 5
+            text: roleRow.config ? i18n("from %1", section.readable(roleRow.config.server)) : ""
+            font: Kirigami.Theme.smallFont
+            opacity: 0.6
+        }
+
+        QQC2.ToolButton {
+            visible: roleRow.config !== undefined
+            icon.name: "window-close"
+            text: i18n("Stop using this for %1", section.roleLabel(roleRow.role))
+            display: QQC2.AbstractButton.IconOnly
+            QQC2.ToolTip.text: text
+            QQC2.ToolTip.visible: hovered
+            onClicked: section.page.save(function(settings) { delete settings.roles[roleRow.role]; })
+        }
     }
 
-    Kirigami.FormLayout {
-        Layout.fillWidth: true
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Search")
+    }
 
-        RowLayout {
-            Kirigami.FormData.label: i18n("File search:")
+    RoleRow {
+        Kirigami.FormData.label: i18n("Files:")
+        role: "file_search"
+    }
 
-            QQC2.Label {
-                text: section.roleText("file_search")
-            }
-
-            QQC2.ToolButton {
-                visible: section.roles.file_search !== undefined
-                icon.name: "edit-clear"
-                text: i18n("Stop using")
-                display: QQC2.AbstractButton.IconOnly
-                QQC2.ToolTip.text: text
-                QQC2.ToolTip.visible: hovered
-                onClicked: section.page.save(function(settings) { delete settings.roles.file_search; })
-            }
-        }
-
-        RowLayout {
-            Kirigami.FormData.label: i18n("Web search:")
-
-            QQC2.Label {
-                text: section.roleText("web_search")
-            }
-
-            QQC2.ToolButton {
-                visible: section.roles.web_search !== undefined
-                icon.name: "edit-clear"
-                text: i18n("Stop using")
-                display: QQC2.AbstractButton.IconOnly
-                QQC2.ToolTip.text: text
-                QQC2.ToolTip.visible: hovered
-                onClicked: section.page.save(function(settings) { delete settings.roles.web_search; })
-            }
-        }
+    RoleRow {
+        Kirigami.FormData.label: i18n("Web:")
+        role: "web_search"
     }
 
     QQC2.Label {
-        Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         wrapMode: Text.Wrap
-        opacity: 0.8
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
         text: i18n("File search shows matching files while you type. Web search lets the assistant answer with current information.")
     }
 
-    Repeater {
-        model: Object.keys(section.servers).sort()
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Tools")
+    }
 
-        RowLayout {
-            id: connected
+    // Repeated rows go inside one column: a Repeater placed directly in a
+    // FormLayout can insert its rows after later siblings.
+    ColumnLayout {
+        Kirigami.FormData.label: i18n("Connected:")
+        Kirigami.FormData.labelAlignment: Qt.AlignTop
+        spacing: 0
 
-            required property string modelData
-            readonly property var entry: section.servers[modelData]
+        QQC2.Label {
+            visible: section.serverNames.length === 0
+            text: i18n("None yet")
+            opacity: 0.7
+        }
 
-            Kirigami.Icon {
-                source: "network-connect"
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            }
+        Repeater {
+            model: section.serverNames
 
-            QQC2.Label {
-                Layout.fillWidth: true
-                text: connected.entry && connected.entry.read_only
-                    ? i18n("%1 (look-up only)", connected.modelData) : connected.modelData
-                elide: Text.ElideRight
-            }
+            RowLayout {
+                id: connected
 
-            QQC2.Button {
-                text: i18n("Remove")
-                icon.name: "edit-delete"
-                onClicked: {
-                    const name = connected.modelData;
-                    section.page.save(function(settings) {
-                        delete settings.tool_servers[name];
-                        for (const role of Object.keys(settings.roles)) {
-                            if (settings.roles[role].server === name) {
-                                delete settings.roles[role];
+                required property string modelData
+                readonly property var entry: section.servers[modelData]
+
+                spacing: Kirigami.Units.smallSpacing
+
+                Kirigami.Icon {
+                    source: "plugins"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                }
+
+                QQC2.Label {
+                    Layout.minimumWidth: Kirigami.Units.gridUnit * 9
+                    text: section.readable(connected.modelData)
+                }
+
+                QQC2.Label {
+                    Layout.minimumWidth: Kirigami.Units.gridUnit * 5
+                    text: connected.entry !== undefined && connected.entry.read_only ? i18n("look-up only") : ""
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.6
+                }
+
+                QQC2.ToolButton {
+                    icon.name: "window-close"
+                    text: i18n("Disconnect %1", section.readable(connected.modelData))
+                    display: QQC2.AbstractButton.IconOnly
+                    QQC2.ToolTip.text: text
+                    QQC2.ToolTip.visible: hovered
+                    onClicked: {
+                        const name = connected.modelData;
+                        section.page.save(function(settings) {
+                            delete settings.tool_servers[name];
+                            for (const role of Object.keys(settings.roles)) {
+                                if (settings.roles[role].server === name) {
+                                    delete settings.roles[role];
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
         }
     }
 
     RowLayout {
+        spacing: Kirigami.Units.smallSpacing
+
         QQC2.Button {
-            text: i18n("Look for tools I already have")
+            text: i18n("Find installed tools…")
             icon.name: "edit-find"
             enabled: !section.scanning
             onClicked: section.scan()
@@ -184,60 +227,77 @@ ColumnLayout {
     }
 
     QQC2.Label {
-        Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         visible: section.scanned && section.found.length === 0
         wrapMode: Text.Wrap
+        opacity: 0.8
         text: i18n("Nothing more was found. Tools set up for other AI programs on this computer appear here.")
     }
 
-    Repeater {
-        model: section.found
+    ColumnLayout {
+        visible: section.found.length > 0
+        spacing: Kirigami.Units.smallSpacing
 
-        ColumnLayout {
-            id: candidate
+        Repeater {
+            model: section.found
 
-            required property var modelData
+            ColumnLayout {
+                id: candidate
 
-            Layout.fillWidth: true
-            spacing: 0
+                required property var modelData
 
-            RowLayout {
-                Layout.fillWidth: true
+                spacing: 0
 
-                QQC2.Label {
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                    text: candidate.modelData.error.length > 0
-                        ? i18n("%1 (from %2) could not be started", candidate.modelData.name, candidate.modelData.source)
-                        : i18np("%2 (from %3): %1 tool", "%2 (from %3): %1 tools", candidate.modelData.tools.length,
-                                candidate.modelData.name, candidate.modelData.source)
-                }
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
 
-                Repeater {
-                    model: candidate.modelData.proposals
+                    Kirigami.Icon {
+                        source: candidate.modelData.error.length > 0 ? "emblem-warning" : "plugins"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    }
+
+                    QQC2.Label {
+                        text: section.readable(candidate.modelData.name)
+                    }
+
+                    QQC2.Label {
+                        text: candidate.modelData.error.length > 0
+                            ? i18n("from %1, could not start", candidate.modelData.source)
+                            : i18np("from %2, %1 tool", "from %2, %1 tools", candidate.modelData.tools.length,
+                                    candidate.modelData.source)
+                        font: Kirigami.Theme.smallFont
+                        opacity: 0.6
+                    }
+
+                    Repeater {
+                        model: candidate.modelData.proposals
+
+                        QQC2.Button {
+                            required property var modelData
+                            text: i18n("Use for %1", section.roleLabel(modelData.role))
+                            QQC2.ToolTip.text: i18n("Use its %1 tool", section.readable(modelData.config.tool))
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: section.adopt(candidate.modelData, modelData)
+                        }
+                    }
 
                     QQC2.Button {
-                        required property var modelData
-                        text: i18n("Use %1 for %2", modelData.config.tool, section.roleLabel(modelData.role))
-                        onClicked: section.adopt(candidate.modelData, modelData)
+                        text: i18n("Add")
+                        icon.name: "list-add"
+                        enabled: candidate.modelData.error.length === 0
+                        onClicked: section.adopt(candidate.modelData, null)
                     }
                 }
 
-                QQC2.Button {
-                    text: i18n("Add")
-                    icon.name: "list-add"
-                    enabled: candidate.modelData.error.length === 0
-                    onClicked: section.adopt(candidate.modelData, null)
+                QQC2.Label {
+                    Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+                    visible: candidate.modelData.error.length > 0
+                    text: candidate.modelData.error
+                    wrapMode: Text.Wrap
+                    font: Kirigami.Theme.smallFont
+                    color: Kirigami.Theme.negativeTextColor
                 }
-            }
-
-            QQC2.Label {
-                Layout.fillWidth: true
-                visible: candidate.modelData.error.length > 0
-                text: candidate.modelData.error
-                wrapMode: Text.Wrap
-                font: Kirigami.Theme.smallFont
-                color: Kirigami.Theme.negativeTextColor
             }
         }
     }

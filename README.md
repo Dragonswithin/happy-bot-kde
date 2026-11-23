@@ -25,9 +25,24 @@ architecture and phase order are in `docs/ROADMAP.md`.
   Bluetooth, displays, colour scheme and KDE settings, set the clipboard,
   create, move and copy files, and run shell commands.
 - Anything that deletes (including moving to the trash and replacing a
-  file) or makes an OS-level change pauses and shows an approval card.
+  file) or makes an OS-level change, installing software included, pauses
+  and shows an approval card.
+- Long steps show that they are alive: a spinner, how long they have run,
+  and the latest line of output. Stop ends a running command at once, and a
+  desktop notification says when a request that took over a minute is done.
+- Installs, builds and anything that needs your password open in a terminal
+  window, where you watch the progress and type the password yourself; the
+  assistant never handles it. It waits for that window's command to finish
+  (the box says it is waiting for you), then reports how it went.
+- When installing, it looks for a pre-built package (official repositories,
+  `-bin` AUR packages, Flatpak) before building from source.
   Everything else runs at once. `kde-ai-assistant policy changes` or
   `policy everything` makes it ask more often.
+- Conversations are kept: reopening the box returns to the current one, and
+  a sidebar lists earlier ones to reopen and continue. They are saved,
+  readable only by you, in `~/.local/share/kde-ai-assistant/conversations`
+  and deleted 30 days after their last use (setting `history_days`; 0 saves
+  nothing). They can contain whatever the assistant read for you.
 - Every action that changed something is recorded in
   `$XDG_RUNTIME_DIR/kde-ai-assistant/actions.jsonl` until you log out.
 

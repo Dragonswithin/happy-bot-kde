@@ -33,7 +33,7 @@ class RouteTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
         self.config_file = root / "config" / "config.json"
-        self.server = AssistantServer("127.0.0.1", 0, root / "runtime", self.config_file)
+        self.server = AssistantServer("127.0.0.1", 0, root / "runtime", self.config_file, root / "history")
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self._thread.start()
 
@@ -102,7 +102,7 @@ class RouteTests(unittest.TestCase):
 
     def test_settings_survive_a_restart_of_the_daemon(self) -> None:
         self.configure()
-        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "runtime2", self.config_file)
+        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "runtime2", self.config_file, Path(self._tmp.name) / "history")
         try:
             self.assertIn("file_search", other.settings["roles"])
             self.assertEqual(other.settings_error, "")
@@ -113,7 +113,7 @@ class RouteTests(unittest.TestCase):
     def test_unreadable_settings_are_reported_not_fatal(self) -> None:
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         self.config_file.write_text("{broken", encoding="utf-8")
-        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "runtime3", self.config_file)
+        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "runtime3", self.config_file, Path(self._tmp.name) / "history")
         try:
             self.assertIn("could not read", other.settings_error)
             self.assertEqual(other.settings["tool_servers"], {})

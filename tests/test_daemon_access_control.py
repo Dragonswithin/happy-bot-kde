@@ -31,7 +31,7 @@ class AccessControlTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self._tmp.name) / "runtime"
-        self.server = AssistantServer("127.0.0.1", 0, self.runtime_dir, Path(self._tmp.name) / "config.json")
+        self.server = AssistantServer("127.0.0.1", 0, self.runtime_dir, Path(self._tmp.name) / "config.json", Path(self._tmp.name) / "history")
         self.port = self.server.server_address[1]
         self.token = self.server.auth_token
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -137,7 +137,7 @@ class AccessControlTests(unittest.TestCase):
         self.assertEqual(read_token(self.runtime_dir), "")
 
     def test_each_server_gets_a_new_token(self) -> None:
-        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "other", Path(self._tmp.name) / "c2.json")
+        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "other", Path(self._tmp.name) / "c2.json", Path(self._tmp.name) / "history")
         try:
             self.assertNotEqual(other.auth_token, self.token)
         finally:
@@ -149,7 +149,7 @@ class BindAddressTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for host in ("0.0.0.0", "192.168.1.10", "example.com"):
                 with self.subTest(host=host), self.assertRaises(ValueError):
-                    AssistantServer(host, 0, Path(tmp), Path(tmp) / "config.json")
+                    AssistantServer(host, 0, Path(tmp), Path(tmp) / "config.json", Path(tmp) / "history")
 
 
 if __name__ == "__main__":

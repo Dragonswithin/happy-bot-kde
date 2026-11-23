@@ -37,6 +37,9 @@ Schema (version 1)::
                                               #   Names: Desktop, Documents, Downloads, Pictures, Music,
                                               #   Videos. A folder not listed here is wherever the system
                                               #   has it (XDG user-dirs, which KDE's Locations page sets).
+      "history_days": 30,                     # default 30; days a conversation is kept after its last
+                                              #   use, in ~/.local/share/kde-ai-assistant/conversations.
+                                              #   0 keeps nothing on disk. Range 0 to 3650.
       "approval_policy": "danger",            # default "danger"; which tool calls wait for the user:
                                               #   "danger"     only deletion and OS-level changes
                                               #   "changes"    anything that changes state
@@ -79,6 +82,7 @@ PROVIDER_KINDS = ("openai_compatible",)
 DEFAULT_CONTEXT_WINDOW = 32768
 APPROVAL_POLICIES = ("danger", "changes", "everything")
 FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
+DEFAULT_HISTORY_DAYS = 30
 ROLE_NAMES = ("file_search", "web_search")
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
@@ -99,7 +103,7 @@ def config_path() -> Path:
 def default_settings() -> dict[str, Any]:
     return {
         "version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": "",
-        "approval_policy": "danger", "folders": {},
+        "approval_policy": "danger", "folders": {}, "history_days": DEFAULT_HISTORY_DAYS,
     }
 
 
@@ -205,7 +209,7 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
 def validate_settings(raw: Any) -> dict[str, Any]:
     """Return a normalised copy of ``raw`` with defaults filled in, or raise ``SettingsError``."""
     _require(isinstance(raw, dict), "settings must be an object")
-    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders"}, "")
+    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders", "history_days"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
     raw_roles = raw.get("roles", {})
@@ -227,6 +231,11 @@ def validate_settings(raw: Any) -> dict[str, Any]:
             isinstance(path, str) and path.startswith(("/", "~")),
             f"'folders': {name} must be an absolute path or start with ~",
         )
+    history_days = raw.get("history_days", DEFAULT_HISTORY_DAYS)
+    _require(
+        isinstance(history_days, int) and not isinstance(history_days, bool) and 0 <= history_days <= 3650,
+        "'history_days' must be a whole number of days from 0 to 3650",
+    )
     policy = raw.get("approval_policy", "danger")
     _require(policy in APPROVAL_POLICIES, f"'approval_policy' must be one of {', '.join(APPROVAL_POLICIES)}")
     return {
@@ -237,6 +246,7 @@ def validate_settings(raw: Any) -> dict[str, Any]:
         "active_model": active_model,
         "approval_policy": policy,
         "folders": {name: os.path.expanduser(path) for name, path in folders.items()},
+        "history_days": history_days,
     }
 
 
