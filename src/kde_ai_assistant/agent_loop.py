@@ -47,7 +47,9 @@ from .permissions import PermissionGate
 from .providers.base import ModelProvider, ProviderError
 from .tools.registry import ToolRegistry
 
-MAX_STEPS = 12
+# Operating an application's interface takes a snapshot, an action and a
+# check per step of the task, so a turn needs room for a few dozen requests.
+MAX_STEPS = 40
 EVENT_RESULT_CHARS = 2000
 Emit = Callable[[dict[str, Any]], None]
 
@@ -88,6 +90,11 @@ def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
         "- You can act on this computer with the tools: open and arrange windows, start applications, change "
         "settings, sound, network and displays, work with files, and run shell commands. Prefer a specific tool "
         "over a shell command when one fits. Do the task; do not just describe how.",
+        "- To operate another application's window (click a button, choose a menu entry, fill a field), call "
+        "ui_snapshot first, then ui_press or ui_set_text with a ref from it, then ui_snapshot again to see what "
+        "changed. 'This window' or 'this dialog' means the window named 'current'. Window titles change as you "
+        "work, so after the first call refer to a window by the id the tools report. A press can open a dialog, "
+        "which is a separate window with its own id; the result tells you.",
         "- Actions that delete things or change the operating system pause for the user's approval automatically. "
         "Do not ask for permission yourself, and if the user declines, do not try another route to the same result.",
         "- To find the user's files or documents, use the tool described as preferred for local files. Search "

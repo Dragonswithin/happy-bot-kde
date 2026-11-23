@@ -31,8 +31,11 @@ architecture and phase order are in `docs/ROADMAP.md`.
 - Every action that changed something is recorded in
   `$XDG_RUNTIME_DIR/kde-ai-assistant/actions.jsonl` until you log out.
 
-It cannot yet click or type inside other applications; that is the next
-phase in `docs/ROADMAP.md`.
+- It can operate other applications: read a window's buttons, menus and
+  fields through the accessibility interface, press them, fill in text, and
+  send keys. The first time it sends keys, Plasma asks you to allow input
+  control. Applications that expose no accessibility information cannot be
+  operated this way.
 
 ## Setting Up A Model
 
@@ -137,8 +140,9 @@ kde-ai-assistant context --kind window --pretty
 ## Requirements
 
 Plasma 6 on Wayland, Python 3.11 or newer, and PyGObject (`python-gobject`
-or `python3-gi`), which the window tools use to talk to KWin. Everything else
-is the Python standard library.
+or `python3-gi`) with `at-spi2-core`, which the window and application
+control tools use to talk to KWin, the accessibility bus and the desktop
+portal. Everything else is the Python standard library.
 
 ## Notes
 

@@ -1,7 +1,8 @@
 """Assembles the set of tools offered to the model for a turn.
 
-The catalogue is every built-in tool (reading the desktop, windows,
-applications, system controls, files, the shell) followed by the tools of the
+The catalogue is every built-in tool (reading the desktop, windows, operating
+other applications' interfaces, applications, system controls, files, the
+shell) followed by the tools of the
 user's MCP servers. Built-in names win a clash. Which calls may run without
 asking is not decided here: every tool is offered, and the permission gate
 judges each call.
@@ -14,6 +15,7 @@ from typing import Any
 from ..mcp_client import McpManager
 from .apps import app_tools
 from .files import file_tools
+from .gui import gui_tools
 from .mcp_bridge import mcp_tools
 from .observe import observe_tools
 from .registry import Tool, ToolRegistry
@@ -23,7 +25,8 @@ from .windows import window_tools
 
 
 def builtin_tools() -> list[Tool]:
-    return [*observe_tools(), *window_tools(), *app_tools(), *system_tools(), *file_tools(), *shell_tools()]
+    return [*observe_tools(), *window_tools(), *gui_tools(), *app_tools(), *system_tools(), *file_tools(),
+            *shell_tools()]
 
 
 def build_registry(manager: McpManager, settings: dict[str, Any]) -> tuple[ToolRegistry, list[str]]:

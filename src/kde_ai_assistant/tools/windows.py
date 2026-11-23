@@ -6,9 +6,10 @@ has risk ``change``: the effect is visible and reversible. Closing a window
 asks the application to close, so an application with unsaved work shows its
 own prompt.
 
-Windows are addressed by the ``window`` argument, which is either an id from
-``list_windows`` or text matched, case-insensitively, against the
-application name and the title. Text must match exactly one window; when it
+Windows are addressed by the ``window`` argument: an id from
+``list_windows``, text matched case-insensitively against the application
+name and the title, or ``current`` (also the default) for the window the
+user is working in. Text must match exactly one window; when it
 matches none or several the tool fails and lists the candidates with their
 ids, so the model can retry precisely.
 
@@ -27,7 +28,7 @@ from .registry import RISK_CHANGE, Tool, ToolFailure, object_schema
 LAYOUTS = ("left", "right", "top", "bottom", "top-left", "top-right", "bottom-left", "bottom-right",
            "maximize", "center", "restore")
 
-_FIND_JS = kwin_bridge.WINDOW_FIELDS_JS + """
+_FIND_JS = kwin_bridge.WINDOW_FIELDS_JS + kwin_bridge.CURRENT_WINDOW_JS + """
 function find(query) {
     var all = workspace.windowList().filter(function (w) { return w.normalWindow; });
     // Ids are accepted with or without their surrounding braces.
@@ -42,6 +43,14 @@ function find(query) {
             || String(w.caption).toLowerCase().indexOf(text) >= 0;
     });
 }
+// Dialogs are not "normal" windows, so ids are also looked up among all windows.
+function findAny(query) {
+    var bare = String(query).replace(/[{}]/g, "").toLowerCase();
+    var byId = workspace.windowList().filter(function (w) {
+        return String(w.internalId).replace(/[{}]/g, "").toLowerCase() === bare;
+    });
+    return byId.length ? byId : find(query);
+}
 // KWin applies geometry changes after the script returns, so replies report
 // the geometry that was requested rather than reading it back.
 function placed(w, g) {
@@ -51,7 +60,8 @@ function placed(w, g) {
     return { window: info };
 }
 var args = %s;
-var found = find(args.window);
+var found = (args.window === "" || args.window === "current")
+    ? (currentWindow() ? [currentWindow()] : []) : findAny(args.window);
 if (found.length !== 1) {
     return { matched: found.length, candidates: (found.length ? found : workspace.windowList().filter(
         function (w) { return w.normalWindow; })).map(describe) };
@@ -121,9 +131,9 @@ def _describe(window: dict[str, Any]) -> str:
 
 def _run(arguments: dict[str, Any], action_js: str) -> dict[str, Any]:
     """Find the one window ``arguments['window']`` names and run ``action_js`` on it."""
-    target = arguments.get("window")
+    target = arguments.get("window", "current")
     if not isinstance(target, str) or not target.strip():
-        raise ToolFailure("'window' is required: an id from list_windows, or part of the app name or title")
+        target = "current"
     payload = {**arguments, "window": target.strip()}
     try:
         result = kwin_bridge.shared().run(_FIND_JS % json.dumps(payload) + action_js)
@@ -153,6 +163,21 @@ def _optional_bool(arguments: dict[str, Any], name: str) -> bool | None:
     if value is None or isinstance(value, bool):
         return value
     raise ToolFailure(f"'{name}' must be true or false")
+
+
+def windows_of_process(pid: int) -> list[dict[str, Any]]:
+    """Every window (dialogs included) that belongs to process ``pid``."""
+    script = kwin_bridge.WINDOW_FIELDS_JS + (
+        "return workspace.windowList().filter(function (w) { return w.pid === %d && !w.deleted; }).map(describe);" % pid)
+    try:
+        return kwin_bridge.shared().run(script)
+    except (kwin_bridge.KWinUnavailable, kwin_bridge.KWinScriptError):
+        return []
+
+
+def describe_window(window: str) -> dict[str, Any]:
+    """KWin's description (id, title, app, pid, geometry, active) of the one window ``window`` names."""
+    return _run({"window": window}, "return { window: describe(w) };")["window"]
 
 
 def focus_window(arguments: dict[str, Any]) -> str:
@@ -195,12 +220,13 @@ def set_window_state(arguments: dict[str, Any]) -> str:
 
 
 def window_tools() -> list[Tool]:
-    window = {"type": "string", "description": "Window id from list_windows, or part of the application name or title"}
+    window = {"type": "string", "description": "'current' (default) for the window the user is working in, a window "
+              "id from list_windows, or part of the application name or title"}
 
     def tool(name: str, description: str, properties: dict[str, Any], handler, verb: str) -> Tool:
-        return Tool(name, description, object_schema({"window": window, **properties}, ["window", *(
-            ["layout"] if name == "arrange_window" else [])]), RISK_CHANGE, handler,
-            summarize=lambda arguments: f"{verb} window '{arguments.get('window', '')}'")
+        return Tool(name, description, object_schema({"window": window, **properties},
+                                                       ["layout"] if name == "arrange_window" else []), RISK_CHANGE, handler,
+            summarize=lambda arguments: f"{verb} window '{arguments.get('window') or 'current'}'")
 
     return [
         tool("focus_window", "Bring a window to the front and give it keyboard focus.", {}, focus_window, "Focus"),

@@ -197,9 +197,11 @@ Built-in tiers:
 3. **Act, GUI:** read an application's accessibility tree and invoke its
    actions (AT-SPI); synthetic keyboard and pointer input through the
    `RemoteDesktop` portal; screenshot + coordinates only for vision models.
-   Built natively (see Phase 3 findings): `gi.repository.Atspi` for the tree
-   and actions, KWin's EIS connection with `libei` for input. Accessibility
-   is switched on for the session when this tier is first used.
+   Built natively: `gi.repository.Atspi` for the tree and actions, and the
+   `RemoteDesktop` portal for keyboard input (see Phase 5 findings for why
+   not KWin's EIS connection). Accessibility is switched on for the session
+   when this tier is first used. There is no pointer input: controls are
+   pressed through their accessibility actions, which needs no coordinates.
 4. **Privileged:** root actions only through the external broker named in
    `AGENTS.md`. No root helper in this repo.
 
@@ -283,11 +285,14 @@ src/kde_ai_assistant/
     ask_stream.py       one streamed turn for POST /ask
     conversations.py    in-memory conversation histories
     kwin_bridge.py      runs snippets inside KWin, returns their result
+    accessibility.py    reads and operates other apps' interfaces (AT-SPI)
+    input_portal.py     keyboard input through the RemoteDesktop portal
+    glib_loop.py        the one GLib main loop the DBus features share
     permissions.py      approval policy, the gate, pending approvals, action log
     shell_risk.py       decides whether a shell command is a danger action
     providers/          base contract, openai_compatible
-    tools/              registry, catalog, observe, windows, apps, system,
-                        files, shell, mcp_bridge
+    tools/              registry, catalog, observe, windows, gui, apps,
+                        system, files, shell, mcp_bridge
     daemon_routes.py    what each endpoint does
     mcp_client.py       stdio MCP sessions, child-process supervision
     mcp_discovery.py    finds tool servers in other programs' configs
@@ -351,8 +356,8 @@ cards in the popup and CLI, tier 2 tools.
 scenarios pass from the bar.
 
 **Phase 5: GUI control.** Tier 3, built natively.
-*Exit:* "click Save in the focused dialog" and typing into a focused field
-work in a Qt and a GTK app on a text-only local model.
+*Exit:* pressing Save in a dialog and entering text in a field work in a Qt
+and a GTK app on a text-only local model.
 
 **Phase 6: One-go install and setup.** First-run setup, settings page
 (models, keys, tool servers and roles, approval policy, folders),
@@ -521,6 +526,44 @@ first usable release: Phases 0 to 6.**
 - The maintainer removed the Clipboard and Window quick buttons from the popup.
 - There are about 45 built-in tools. The local model handles the full list;
   first-token latency was not measurably worse than with ten.
+
+**Phase 5 (passed 2026-11-22).**
+
+- Exit check on the text-only local model:
+  - Qt: in a throwaway KWrite window the model pressed New File, entered
+    text, opened Save As, filled in the path in the Save dialog and pressed
+    Save. The file existed with the right content (68 s, 12 tool calls).
+  - GTK: it entered text in a `zenity` (GTK 4) dialog and pressed OK; the
+    dialog returned exactly that text (7.5 s).
+  - The maintainer confirmed from the bar that "type hello into this window" typed into
+    the editor he had been using.
+- Keyboard input uses the `RemoteDesktop` portal's `NotifyKeyboardKeysym`,
+  not KWin's EIS connection. The portal takes key symbols over DBus, so it
+  needs no `libei` binding and no keyboard-layout mapping, and it asks the
+  user once. The maintainer saw and approved the desktop's consent dialog; the restore
+  token is saved so it should not reappear. Whether it stays silent after a
+  new login has not been checked.
+- Pressing a control that opens a modal dialog makes the AT-SPI call time
+  out, because the application does not reply until the dialog closes. That
+  is reported as "sent; the application is busy" rather than as a failure.
+- Window titles change while an application is used ("Welcome", "Untitled",
+  "Save File"), so addressing windows by title failed mid-task. GUI tools
+  now return the stable window id and `ui_press` reports windows of the
+  application that opened, closed or were retitled. Dialogs count as
+  windows for this.
+- "This window" from the bar is the topmost ordinary window, because while
+  the user types the active window is the panel.
+- A turn may now make 40 model requests (was 12); a multi-step GUI task
+  needs a snapshot, an action and a check per step.
+- Unnamed fields take their name from the label that points at them
+  (`LABELLED_BY`) or their description.
+- GUI risk is best-effort and says so: a press is `danger` when the
+  control's label is destructive; Enter and typed commands in a terminal are
+  checked like shell commands.
+- Not built: pointer input and screenshot-and-click for vision models. No
+  acceptance scenario needs them and neither local model has vision.
+- Applications that publish no accessibility tree cannot be operated; the
+  tool says so.
 
 ## Decisions
 

@@ -21,8 +21,8 @@ Dependency: PyGObject (``gi``), for ``Gio`` DBus. It is imported lazily so the
 rest of the daemon works without it; ``KWinBridge.run`` then raises
 ``KWinUnavailable`` with an explanation.
 
-Threading: the DBus object is served by a GLib main loop on a daemon thread
-started on first use. ``run`` may be called from any thread; calls are
+Threading: the DBus object is served by the shared GLib main loop
+(``glib_loop``), started on first use. ``run`` may be called from any thread; calls are
 serialised by a lock because scripts are cheap and ordering keeps window
 operations predictable. ``run`` blocks up to ``timeout`` seconds.
 """
@@ -35,6 +35,8 @@ import secrets
 import threading
 from pathlib import Path
 from typing import Any
+
+from . import glib_loop
 
 BRIDGE_PATH = "/io/github/dragonswithin/KdeAiAssistant/KWinBridge"
 BRIDGE_INTERFACE = "io.github.dragonswithin.KdeAiAssistant.KWinBridge"
@@ -100,7 +102,7 @@ class KWinBridge:
                 raise KWinUnavailable(f"no desktop session bus: {error.message}") from error
             node = Gio.DBusNodeInfo.new_for_xml(_INTROSPECTION)
             connection.register_object(BRIDGE_PATH, node.interfaces[0], self._on_method_call, None, None)
-            threading.Thread(target=GLib.MainLoop().run, name="kwin-bridge", daemon=True).start()
+            glib_loop.ensure_running()
             self._gio, self._glib, self._connection = Gio, GLib, connection
 
     def _on_method_call(self, connection, sender, path, interface, method, parameters, invocation) -> None:
@@ -196,7 +198,27 @@ function describe(w) {
     };
 }
 """
-ACTIVE_WINDOW_JS = WINDOW_FIELDS_JS + "return workspace.activeWindow ? describe(workspace.activeWindow) : null;"
+# The window the user is working in. While they type in the panel bar the
+# active window is the panel itself, so in that case this is the topmost
+# ordinary window on the current desktop: the one they were just using.
+CURRENT_WINDOW_JS = """
+function currentWindow() {
+    var active = workspace.activeWindow;
+    if (active && (active.normalWindow || active.dialog)) { return active; }
+    var stack = workspace.stackingOrder;
+    for (var i = stack.length - 1; i >= 0; i--) {
+        var w = stack[i];
+        if ((w.normalWindow || w.dialog) && !w.minimized && (w.onAllDesktops || w.desktops.indexOf(workspace.currentDesktop) >= 0)) {
+            return w;
+        }
+    }
+    return null;
+}
+"""
+ACTIVE_WINDOW_JS = WINDOW_FIELDS_JS + CURRENT_WINDOW_JS + """
+var current = currentWindow();
+return current ? describe(current) : null;
+"""
 LIST_WINDOWS_JS = WINDOW_FIELDS_JS + """
 return workspace.windowList().filter(function (w) { return w.normalWindow; }).map(describe);
 """
