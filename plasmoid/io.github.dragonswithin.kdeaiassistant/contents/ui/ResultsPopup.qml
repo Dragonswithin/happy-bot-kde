@@ -34,7 +34,8 @@ import org.kde.plasma.extras as PlasmaExtras
  * The embedded field reports exactly what PanelBar.qml reports
  * (`queryEdited`, `accepted`, `selectionMove`) so main.qml treats both the
  * same. `hitActivated(location)` is a clicked result or a link clicked in
- * an answer; `closeRequested` is the close button.
+ * an answer; `closeRequested` is the close button; `settingsRequested` is
+ * the "Open settings" button shown under a message that setup is needed.
  *
  * Height follows content: with only hits showing the window is as tall as
  * the rows need; with the conversation showing it uses the configured
@@ -58,6 +59,7 @@ PlasmaCore.Dialog {
     signal selectionMove(int delta)
     signal hitActivated(string location)
     signal closeRequested()
+    signal settingsRequested()
     signal dismissed()
 
     type: inputInPopup ? PlasmaCore.Dialog.AppletPopup : PlasmaCore.Dialog.Tooltip
@@ -270,7 +272,7 @@ PlasmaCore.Dialog {
 
                         required property string kind
                         required property string text
-                        required property string state
+                        required property string stage
                         required property string callId
                         required property string detail
                         required property bool canRemember
@@ -319,8 +321,8 @@ PlasmaCore.Dialog {
                                 spacing: Kirigami.Units.smallSpacing
 
                                 Kirigami.Icon {
-                                    source: entry.state === "failed" ? "dialog-warning"
-                                        : entry.state === "ok" ? "dialog-ok" : "system-run"
+                                    source: entry.stage === "failed" ? "dialog-warning"
+                                        : entry.stage === "ok" ? "dialog-ok" : "system-run"
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
                                     opacity: 0.7
@@ -328,7 +330,7 @@ PlasmaCore.Dialog {
 
                                 PlasmaComponents3.Label {
                                     Layout.fillWidth: true
-                                    text: entry.state === "failed" ? i18n("%1 (failed)", entry.text) : entry.text
+                                    text: entry.stage === "failed" ? i18n("%1 (failed)", entry.text) : entry.text
                                     textFormat: Text.PlainText
                                     elide: Text.ElideRight
                                     font: Kirigami.Theme.smallFont
@@ -344,7 +346,7 @@ PlasmaCore.Dialog {
                                 radius: Kirigami.Units.cornerRadius
                                 color: "transparent"
                                 border.width: 1
-                                border.color: entry.state === "waiting"
+                                border.color: entry.stage === "waiting"
                                     ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.disabledTextColor
 
                                 ColumnLayout {
@@ -392,7 +394,7 @@ PlasmaCore.Dialog {
 
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        visible: entry.state === "waiting"
+                                        visible: entry.stage === "waiting"
 
                                         PlasmaComponents3.Button {
                                             text: i18n("Allow")
@@ -419,14 +421,32 @@ PlasmaCore.Dialog {
 
                                     PlasmaComponents3.Label {
                                         Layout.fillWidth: true
-                                        visible: entry.state !== "waiting"
-                                        text: entry.state === "allow" ? i18n("Allowed")
-                                            : entry.state === "deny" ? i18n("Declined")
-                                            : entry.state === "timeout" ? i18n("Not answered in time; not run")
+                                        visible: entry.stage !== "waiting"
+                                        text: entry.stage === "allow" ? i18n("Allowed")
+                                            : entry.stage === "deny" ? i18n("Declined")
+                                            : entry.stage === "timeout" ? i18n("Not answered in time; not run")
                                             : i18n("Cancelled; not run")
                                         font: Kirigami.Theme.smallFont
                                         opacity: 0.7
                                     }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: entry.kind === "setup"
+
+                                PlasmaComponents3.Label {
+                                    Layout.fillWidth: true
+                                    text: entry.text
+                                    textFormat: Text.PlainText
+                                    wrapMode: Text.Wrap
+                                }
+
+                                PlasmaComponents3.Button {
+                                    text: i18n("Open settings")
+                                    icon.name: "configure"
+                                    onClicked: popup.settingsRequested()
                                 }
                             }
 

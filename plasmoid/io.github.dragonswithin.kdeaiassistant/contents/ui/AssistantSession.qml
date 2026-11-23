@@ -6,31 +6,32 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-import org.kde.plasma.plasma5support as P5Support
-
 /**
  * Non-visual owner of one conversation with the per-user daemon.
  *
  * Holds everything PanelBar.qml, CompactRepresentation.qml and
  * ResultsPopup.qml display: the conversation `entries`, the busy flag, the
- * daemon status and the current instant file-search hits. It is the only
- * place in the applet that talks HTTP to the daemon (`/health`, `/search`,
- * `/open`, `/ask`, `/cancel`). main.qml creates exactly one instance and
- * supplies `daemonUrl` and `tokenFile`.
+ * daemon status and the current instant file-search hits. It talks to the
+ * daemon (`/health`, `/search`, `/open`, `/ask`, `/cancel`, `/approve`)
+ * through its own DaemonClient.qml, which owns the address and the bearer
+ * token. main.qml creates exactly one instance and supplies `configuredUrl`.
+ * `needsSetup` is true while the daemon reports that no AI model is chosen.
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
  * LOADING; `consumeStream` parses the new part into events and `applyEvent`
- * turns them into `entries`. Each entry is `{kind, text, state, callId}`:
+ * turns them into `entries`. Each entry is `{kind, text, stage, callId, detail,
+ * canRemember}` (`stage`, not `state`, because every QML item already has a
+ * `state` property):
  *
  * - kind "user", "assistant" (Markdown, grows as text streams in), "notice"
  *   and "error" use `text`.
- * - kind "tool" is one tool call: `text` is its display name, `state` is
+ * - kind "tool" is one tool call: `text` is its display name, `stage` is
  *   "running", "ok" or "failed", `callId` links the result to the call.
  * - kind "approval" is an action waiting for the user: `text` says what will
  *   run, `detail` why it needs approval, `callId` is the approval id,
  *   `canRemember` whether "allow for this session" may be offered, and
- *   `state` is "waiting" until `answerApproval` or the daemon resolves it
+ *   `stage` is "waiting" until `answerApproval` or the daemon resolves it
  *   ("allow", "deny", "timeout", "cancelled"). `pendingApprovals` counts the
  *   waiting ones so the panel can draw attention.
  *
@@ -45,13 +46,6 @@ import org.kde.plasma.plasma5support as P5Support
  * the daemon's message and code ("not_configured", "tool_failed") when the
  * last search failed.
  *
- * Every request carries the daemon's bearer token. The daemon writes it to
- * `tokenFile` (0600, in the user's runtime directory) and regenerates it on
- * each start. QML's XMLHttpRequest refuses local files, so the token is read
- * by running `cat` through Plasma's "executable" data source. It is loaded
- * on first use and reloaded once when the daemon answers 401, which is what
- * a daemon restart looks like from here.
- *
  * Nothing here blocks: all requests are asynchronous on the GUI thread. A
  * failed or unreachable daemon sets `status` to "offline" and adds an error
  * entry instead of throwing. `status` is one of "starting", "idle",
@@ -60,8 +54,8 @@ import org.kde.plasma.plasma5support as P5Support
 Item {
     id: session
 
-    property string daemonUrl: ""
-    property string tokenFile: ""
+    property alias configuredUrl: client.configuredUrl
+    property bool needsSetup: false
     property string status: "starting"
     property string statusText: i18n("Starting")
     property bool busy: false
@@ -75,11 +69,6 @@ Item {
     property string searchError: ""
     property string searchErrorCode: ""
     property int searchSequence: 0
-
-    // Bearer token state. `tokenWaiters` are callbacks queued while one
-    // `cat` is in flight, so concurrent requests share a single read.
-    property string token: ""
-    property var tokenWaiters: []
 
     // The in-flight /ask request and how much of its response was parsed.
     property var activeStream: null
@@ -102,17 +91,17 @@ Item {
         session.statusText = summary;
     }
 
-    function appendEntry(kind, text, state, callId, detail, canRemember) {
+    function appendEntry(kind, text, stage, callId, detail, canRemember) {
         session.entries.append({
-            kind: kind, text: text || "", state: state || "", callId: callId || "",
+            kind: kind, text: text || "", stage: stage || "", callId: callId || "",
             detail: detail || "", canRemember: canRemember === true
         });
     }
 
-    function setEntryState(callId, state) {
+    function setEntryStage(callId, stage) {
         for (let index = session.entries.count - 1; index >= 0; index--) {
             if (session.entries.get(index).callId === callId) {
-                session.entries.setProperty(index, "state", state);
+                session.entries.setProperty(index, "stage", stage);
                 return;
             }
         }
@@ -126,76 +115,12 @@ Item {
             });
     }
 
-    P5Support.DataSource {
-        id: tokenReader
-        engine: "executable"
-        connectedSources: []
-        onNewData: (source, data) => {
-            disconnectSource(source);
-            session.token = String(data["stdout"] || "").trim();
-            const waiters = session.tokenWaiters;
-            session.tokenWaiters = [];
-            waiters.forEach(waiter => waiter());
-        }
-    }
-
-    function loadToken(then) {
-        // The path is interpolated into a shell command; a quote in it would
-        // break out of the quoting, so such a path is treated as unreadable.
-        if (!session.tokenFile || session.tokenFile.indexOf("'") !== -1) {
-            session.token = "";
-            then();
-            return;
-        }
-        session.tokenWaiters.push(then);
-        if (session.tokenWaiters.length === 1) {
-            tokenReader.connectSource("cat -- '" + session.tokenFile + "'");
-        }
-    }
-
-    function withToken(then) {
-        if (session.token) {
-            then();
-        } else {
-            loadToken(then);
-        }
+    DaemonClient {
+        id: client
     }
 
     function request(method, path, payload, onSuccess, onFailure) {
-        withToken(() => send(method, path, payload, onSuccess, onFailure, true));
-    }
-
-    /** `mayReload`: retry once with a freshly read token if the daemon says 401. */
-    function send(method, path, payload, onSuccess, onFailure, mayReload) {
-        const xhr = new XMLHttpRequest();
-        xhr.open(method, session.daemonUrl + path);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.setRequestHeader("Authorization", "Bearer " + session.token);
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            if (xhr.status === 0) {
-                onFailure({ ok: false, error: i18n("The assistant is not running") });
-                return;
-            }
-            if (xhr.status === 401 && mayReload) {
-                session.loadToken(() => session.send(method, path, payload, onSuccess, onFailure, false));
-                return;
-            }
-            let data = {};
-            try {
-                data = JSON.parse(xhr.responseText || "{}");
-            } catch (error) {
-                data = { ok: false, error: i18n("Invalid response from the assistant") };
-            }
-            if (xhr.status >= 200 && xhr.status < 300 && data.ok !== false) {
-                onSuccess(data);
-            } else {
-                onFailure(data);
-            }
-        };
-        xhr.send(payload ? JSON.stringify(payload) : null);
+        client.request(method, path, payload, onSuccess, onFailure);
     }
 
     function refreshStatus() {
@@ -203,6 +128,7 @@ Item {
             return;
         }
         request("GET", "/health", null, function(data) {
+            session.needsSetup = !(data.setup && data.setup.model);
             session.setStatus("idle", i18n("Ready"));
         }, function(data) {
             session.setStatus("offline", data.error || i18n("The assistant is not running"));
@@ -265,7 +191,7 @@ Item {
         session.busy = true;
         setStatus("thinking", i18n("Thinking"));
         appendEntry("user", text);
-        withToken(() => startStream(text, true));
+        client.withToken(() => startStream(text, true));
         return true;
     }
 
@@ -274,9 +200,9 @@ Item {
         session.activeStream = xhr;
         session.streamOffset = 0;
         session.streamBuffer = "";
-        xhr.open("POST", session.daemonUrl + "/ask");
+        xhr.open("POST", client.daemonUrl + "/ask");
         xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.setRequestHeader("Authorization", "Bearer " + session.token);
+        xhr.setRequestHeader("Authorization", "Bearer " + client.token);
         xhr.onreadystatechange = function() {
             if (session.activeStream !== xhr) {
                 return;
@@ -285,7 +211,7 @@ Item {
                 session.consumeStream(xhr);
             } else if (xhr.readyState === XMLHttpRequest.DONE) {
                 if (xhr.status === 401 && mayReload) {
-                    session.loadToken(() => session.startStream(text, false));
+                    client.loadToken(() => session.startStream(text, false));
                     return;
                 }
                 if (xhr.status === 200) {
@@ -325,11 +251,11 @@ Item {
         session.busy = false;
         session.pendingApprovals = 0;
         for (let index = 0; index < session.entries.count; index++) {
-            const state = session.entries.get(index).state;
-            if (state === "running") {
-                session.entries.setProperty(index, "state", "failed");
-            } else if (state === "waiting") {
-                session.entries.setProperty(index, "state", "cancelled");
+            const stage = session.entries.get(index).stage;
+            if (stage === "running") {
+                session.entries.setProperty(index, "stage", "failed");
+            } else if (stage === "waiting") {
+                session.entries.setProperty(index, "stage", "cancelled");
             }
         }
         refreshStatus();
@@ -363,7 +289,7 @@ Item {
                 ? event.summary : toolLabel(event.name), "running", event.id);
             break;
         case "tool_result":
-            setEntryState(event.id, event.ok ? "ok" : "failed");
+            setEntryStage(event.id, event.ok ? "ok" : "failed");
             break;
         case "approval_required":
             setStatus("thinking", i18n("Waiting for your approval"));
@@ -372,7 +298,7 @@ Item {
             break;
         case "approval_resolved":
             session.pendingApprovals = Math.max(0, session.pendingApprovals - 1);
-            setEntryState(event.id, event.decision);
+            setEntryStage(event.id, event.decision);
             setStatus("thinking", i18n("Working"));
             break;
         case "done":
@@ -383,7 +309,8 @@ Item {
             }
             break;
         case "error":
-            appendEntry("error", event.message || i18n("Request failed"));
+            // An error the user fixes in settings gets a button that opens them.
+            appendEntry(event.code === "not_configured" ? "setup" : "error", event.message || i18n("Request failed"));
             break;
         }
     }

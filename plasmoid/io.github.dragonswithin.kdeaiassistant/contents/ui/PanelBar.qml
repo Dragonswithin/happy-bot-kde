@@ -24,6 +24,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
  * - `selectionMove(delta)`: Down (+1) or Up (-1), to move through results.
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
+ * - `menuRequested`: a right-click anywhere on the bar. The text field
+ *   would otherwise swallow it, so Plasma's own widget menu never appears.
  * - `inputFocusedChanged`: so the results popup can close when focus leaves,
  *   including when the user clicks anywhere outside the panel.
  *
@@ -62,6 +64,7 @@ Item {
     signal accepted(string text)
     signal selectionMove(int delta)
     signal dismissed()
+    signal menuRequested()
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * widthInGridUnits
     Layout.preferredWidth: Layout.minimumWidth
@@ -131,5 +134,12 @@ Item {
         enabled: !field.activeFocus
         cursorShape: Qt.IBeamCursor
         onPressed: bar.focusRequested()
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        cursorShape: Qt.IBeamCursor
+        onClicked: bar.menuRequested()
     }
 }

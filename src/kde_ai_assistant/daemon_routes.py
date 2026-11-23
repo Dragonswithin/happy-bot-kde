@@ -17,6 +17,10 @@ Endpoints:
 - ``GET /tools/servers``: configured servers, their tools and role proposals.
   This starts the servers, so it can take seconds.
 - ``POST /open``: open a file, folder or link (``desktop_actions``).
+- ``POST /models/discover``: find model services running on this computer.
+- ``POST /tools/scan``: start each discovered, not yet configured tool
+  server briefly to report its tools and the roles it could fill. Slow by
+  nature (seconds per server); servers are scanned in parallel.
 - ``POST /models/probe``: list the models a service offers, to help setup.
 - ``POST /models/test``: check that a configured model answers and can call
   tools. This sends one small request to the model.
@@ -38,10 +42,13 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import desktop_actions, desktop_context, instant_search, mcp_discovery, settings as settings_store
+from concurrent.futures import ThreadPoolExecutor
+
+from . import desktop_actions, desktop_context, instant_search, mcp_discovery, model_discovery
+from . import settings as settings_store
 from .agent_loop import user_folders
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
-from .mcp_client import McpError
+from .mcp_client import McpError, McpServerSpec, McpSession
 from .providers import ProviderError, create_provider
 from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, propose_role
@@ -189,6 +196,51 @@ def screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dic
     return 200, desktop_context.take_screenshot(server.runtime_dir)
 
 
+SCAN_STARTUP_SECONDS = 20.0
+
+
+def discover_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    def key(base_url: str, model_id: str) -> tuple[str, str]:
+        # The same service may be stored with or without its /v1 suffix.
+        return base_url.rstrip("/").removesuffix("/v1"), model_id
+
+    configured = {key(model["base_url"], model["model"]): name for name, model in server.settings["models"].items()}
+    services = model_discovery.discover_local(skip_ports=(server.state.port,))
+    for service in services:
+        for model in service["models"]:
+            model["configured_as"] = configured.get(key(service["base_url"], model["id"]))
+    return 200, {"ok": True, "services": services}
+
+
+def _scan_one(candidate: mcp_discovery.DiscoveredServer) -> dict[str, Any]:
+    described = candidate.describe()
+    described.update({"tools": [], "proposals": [], "error": ""})
+    spec = McpServerSpec(candidate.name, candidate.command, candidate.args, candidate.env)
+    try:
+        session = McpSession(spec, startup_timeout=SCAN_STARTUP_SECONDS)
+    except McpError as exc:
+        described["error"] = str(exc)
+        return described
+    try:
+        tools = session.list_tools()
+        described["tools"] = [tool["name"] for tool in tools]
+        described["proposals"] = [found for found in (propose_role(candidate.name, tool) for tool in tools) if found]
+    except McpError as exc:
+        described["error"] = str(exc)
+    finally:
+        session.close()
+    return described
+
+
+def scan_tool_servers(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    configured = {(entry["command"], tuple(entry["args"])) for entry in server.settings["tool_servers"].values()}
+    candidates = [c for c in mcp_discovery.discover_servers() if (c.command, c.args) not in configured]
+    if not candidates:
+        return 200, {"ok": True, "servers": []}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return 200, {"ok": True, "servers": list(pool.map(_scan_one, candidates))}
+
+
 def probe_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     """List models at ``base_url``, also trying ``<base_url>/v1`` so a bare address works."""
     base_url = str(body.get("base_url") or "").strip().rstrip("/")
@@ -261,6 +313,8 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/open"): open_location,
     ("POST", "/screenshot"): screenshot,
     ("POST", "/models/probe"): probe_models,
+    ("POST", "/models/discover"): discover_models,
+    ("POST", "/tools/scan"): scan_tool_servers,
     ("POST", "/models/test"): test_model,
     ("POST", "/cancel"): cancel,
     ("POST", "/approve"): approve,

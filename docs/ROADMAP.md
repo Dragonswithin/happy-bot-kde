@@ -290,6 +290,7 @@ src/kde_ai_assistant/
     glib_loop.py        the one GLib main loop the DBus features share
     permissions.py      approval policy, the gate, pending approvals, action log
     shell_risk.py       decides whether a shell command is a danger action
+    model_discovery.py  finds model services running on this computer
     providers/          base contract, openai_compatible
     tools/              registry, catalog, observe, windows, gui, apps,
                         system, files, shell, mcp_bridge
@@ -365,7 +366,7 @@ single install and uninstall commands, error messages with fixes. Test on a
 fresh user account with no prior configuration.
 *Exit:* on a fresh account, one install command plus first-run setup reaches
 a passing acceptance run with no file edited by hand. **This completes the
-first usable release: Phases 0 to 6.**
+first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
 
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports.
@@ -564,6 +565,54 @@ first usable release: Phases 0 to 6.**
   acceptance scenario needs them and neither local model has vision.
 - Applications that publish no accessibility tree cannot be operated; the
   tool says so.
+
+**Phase 6 (built 2026-11-22; exit check NOT yet passed).**
+
+- The exit check needs a fresh user account with someone logged into Plasma
+  as it. The maintainer chose not to do that now, so it is open and the first release
+  is not done. Nothing below substitutes for it.
+- What was verified instead, on the maintainer's account:
+  - Empty configuration: a second daemon started with an empty config and
+    runtime directory reported nothing set up. Using only the calls the
+    settings page makes (`/models/discover`, `/settings`, `/models/test`,
+    `/tools/scan`, `/tools/import`) it reached a working setup with no file
+    edited by hand: local model found and tested, file search and web search
+    adopted from the scan.
+  - From that setup, on the local model and on the hosted model: instant
+    search, focused window and clipboard, finding a document, renaming files
+    by date, tiling two windows, disk usage, a deletion that waited for
+    approval and was declined, and filling in and confirming a GTK dialog.
+    All passed. News was run on both models in Phase 3.
+  - The maintainer confirmed the bar's right-click menu opens the settings dialog and
+    the Assistant page shows the model, search tools, approvals and folders.
+- Not verified by anyone: the installer on an account that has never had
+  the assistant (panel placement, `~/.local/bin` on `PATH`, the daemon
+  starting at login), the portal consent staying granted after a new login,
+  the applet's activation shortcut, `--uninstall`, connecting to Wi-Fi,
+  switching between two displays, and the whole settings page flow driven by
+  hand from a blank state.
+- The `qmllint` on this machine's `PATH` is the Qt 5 one. It cannot parse
+  these files, and Qt tools log to the journal unless
+  `QT_FORCE_STDERR_LOGGING=1` is set, so earlier "lint passed" results for
+  the applet meant nothing. Use `/usr/lib/qt6/bin/qmllint`. It found an id
+  shadowing a property and a role named `state` clashing with `Item.state`.
+- The settings pages can be loaded outside Plasma to catch load errors:
+  `QT_FORCE_STDERR_LOGGING=1 QT_QPA_PLATFORM=offscreen qml6 ConfigSetup.qml`.
+  `i18n` and `Plasmoid` are undefined there, which is expected noise.
+- A text field in a panel takes right-clicks for itself, so Plasma's widget
+  menu never appeared. The applet has its own right-click menu.
+- A model service's `/v1/models` can be a catalogue: the NPU service lists
+  50 models and has one loaded. Discovery asks the Ollama-style `/api/ps`
+  where it exists and shows loaded models first, the rest on request.
+- Probing every local listening port hits non-HTTP services (an SSH port
+  answered with its banner). Probes treat any protocol error as "not a
+  model service", and a failing endpoint now returns a JSON error instead of
+  dropping the connection.
+- A cost of the chosen approval policy, seen once: asked only to find a
+  document, the local model created an empty folder first (`make_directory`
+  is a change, so it ran unprompted) and then said so. Nothing was lost, and
+  the action log recorded it. `kde-ai-assistant policy changes` prevents
+  this class of surprise at the price of more prompts.
 
 ## Decisions
 

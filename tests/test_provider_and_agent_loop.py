@@ -128,6 +128,35 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaisesRegex(ProviderError, "did not answer like a model service"):
             list_models(self.service.base_url)
 
+    def test_a_port_that_does_not_speak_http_is_reported_as_unreachable(self) -> None:
+        import socket
+
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(4)
+        port = listener.getsockname()[1]
+
+        def banner() -> None:
+            for _ in range(2):
+                try:
+                    connection, _address = listener.accept()
+                    connection.sendall(b"SSH-2.0-NotHttp\r\n")
+                    connection.close()
+                except OSError:
+                    return
+
+        thread = threading.Thread(target=banner, daemon=True)
+        thread.start()
+        try:
+            with self.assertRaisesRegex(ProviderError, "Could not reach a model service"):
+                list_models(f"http://127.0.0.1:{port}/v1", timeout=3)
+            with self.assertRaisesRegex(ProviderError, "Could not reach the model"):
+                list(OpenAICompatibleProvider(f"http://127.0.0.1:{port}/v1", "m", timeout=3).stream(
+                    [Message("user", "x")], [], threading.Event()))
+        finally:
+            listener.close()
+            thread.join(timeout=3)
+
     def test_create_provider_rejects_unknown_kinds(self) -> None:
         with self.assertRaisesRegex(ProviderError, "unknown model provider"):
             create_provider({"provider": "mystery"})

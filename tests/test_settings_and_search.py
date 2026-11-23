@@ -206,3 +206,76 @@ class DiscoveryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelDiscoveryTests(unittest.TestCase):
+    def test_listening_ports_are_read_from_proc_and_filtered(self) -> None:
+        from kde_ai_assistant.model_discovery import listening_ports
+
+        header = "  sl  local_address rem_address   st tx_queue rx_queue\n"
+        tcp = header + "\n".join([
+            "   0: 0100007F:CD91 00000000:0000 0A 0 0",     # 127.0.0.1:52625 listening
+            "   1: 00000000:1F90 00000000:0000 0A 0 0",     # 0.0.0.0:8080 listening
+            "   2: 0100007F:0016 00000000:0000 0A 0 0",     # port 22: below 1024
+            "   3: 0A00000A:2328 00000000:0000 0A 0 0",     # 10.0.0.10:9000: not loopback
+            "   4: 0100007F:C350 0100007F:D431 01 0 0",     # established, not listening
+            "garbage line",
+        ]) + "\n"
+        tcp6 = header + "   0: 00000000000000000000000001000000:2B67 " + "0" * 32 + ":0000 0A 0 0\n"   # [::1]:11111
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "tcp").write_text(tcp, encoding="ascii")
+            Path(tmp, "tcp6").write_text(tcp6, encoding="ascii")
+            self.assertEqual(listening_ports(Path(tmp)), [8080, 11111, 52625])
+            self.assertEqual(listening_ports(Path(tmp, "missing")), [])
+
+    def test_discovery_finds_only_real_model_services(self) -> None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from fake_model_service import FakeModelService
+
+        from kde_ai_assistant.model_discovery import discover_local
+
+        service = FakeModelService()
+        try:
+            port = int(service.base_url.rsplit(":", 1)[1].split("/")[0])
+            found = discover_local(ports=[port, 9])
+            self.assertEqual([(item["port"], item["models"][0]["id"]) for item in found], [(port, "fake-model")])
+            self.assertEqual(discover_local(ports=[port], skip_ports=(port,)), [])
+            self.assertEqual(discover_local(ports=[]), [])
+        finally:
+            service.close()
+
+    def test_loaded_models_come_first_when_the_service_says_which_are_running(self) -> None:
+        import json as json_module
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        from kde_ai_assistant.model_discovery import discover_local
+
+        class Catalogue(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):  # noqa: A002
+                return
+
+            def do_GET(self):  # noqa: N802
+                routes = {
+                    "/v1/models": {"data": [{"id": "big-a"}, {"id": "small-b"}, {"id": "running-c"}]},
+                    "/api/ps": {"models": [{"name": "running-c", "model": "running-c"}]},
+                }
+                payload = routes.get(self.path)
+                raw = json_module.dumps(payload if payload is not None else {"error": "no"}).encode()
+                self.send_response(200 if payload is not None else 404)
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Catalogue)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            found = discover_local(ports=[server.server_address[1]])[0]
+            self.assertTrue(found["loaded_known"])
+            self.assertEqual([(m["id"], m["loaded"]) for m in found["models"]],
+                             [("running-c", True), ("big-a", False), ("small-b", False)])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)

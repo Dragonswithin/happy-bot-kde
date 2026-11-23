@@ -247,7 +247,11 @@ class Handler(BaseHTTPRequestHandler):
         if streaming:
             self._stream_events(body)
             return
-        status, payload = route(self.server, parse_qs(parsed.query), body)
+        try:
+            status, payload = route(self.server, parse_qs(parsed.query), body)
+        except Exception as error:  # noqa: BLE001 - a handler bug must still produce a reply
+            status, payload = 500, {
+                "ok": False, "code": "internal", "error": f"The assistant hit an internal error: {type(error).__name__}: {error}"}
         self._json(status, payload)
 
     def _stream_events(self, body: dict[str, Any]) -> None:

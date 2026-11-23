@@ -37,9 +37,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
   control. Applications that expose no accessibility information cannot be
   operated this way.
 
-## Setting Up A Model
+## Setting Up From The Command Line
 
-Any service with an OpenAI-compatible chat API works, local or hosted:
+Everything the settings page does can also be scripted. For a model, any
+service with an OpenAI-compatible chat API works, local or hosted:
 
 ```bash
 kde-ai-assistant model probe http://127.0.0.1:8080          # what does it offer?
@@ -57,7 +58,7 @@ Documents and Downloads are (it follows the system's settings), and
 a hosted model, whatever the tools read (clipboard, file contents) is sent to
 that service.
 
-## Setting Up Search
+For search and tools:
 
 ```bash
 kde-ai-assistant tools discover          # servers found in other programs' settings
@@ -83,38 +84,60 @@ Useful environment overrides:
 
 ## Install
 
-From this repo:
+From a checkout of this repository, as your normal user:
 
 ```bash
 scripts/install.sh
 ```
 
-The installer copies:
+That installs the daemon and command-line client, starts the daemon as a
+systemd user service tied to your Plasma session, installs the panel widget
+and, the first time, adds the search bar to the panel that holds your
+application launcher. Then press Enter in the empty bar (or right-click it
+and choose Configure AI Assistant) to set it up:
+
+1. **AI model.** "Find models on this computer" lists model services that
+   are running locally; or add a hosted service by address, model id and API
+   key. Each model is tested when you add it.
+2. **Search and tools.** "Look for tools I already have" finds tool servers
+   you set up for other AI programs and offers to use them for file search
+   and web search.
+3. **Approvals and folders.** Sensible defaults; change them if you want.
+
+Nothing needs to be edited by hand. Running the installer again upgrades in
+place; after an upgrade, log out and in (or restart plasmashell) so the panel
+loads the new widget code.
+
+What goes where:
 
 - `src/kde_ai_assistant/` to `~/.local/lib/kde-ai-assistant/kde_ai_assistant/`
 - `launchers/kde-ai-assistant-daemon` and `launchers/kde-ai-assistant` to
   `~/.local/bin/`
 - `systemd/user/kde-ai-assistant-daemon.service` to
-  `~/.config/systemd/user/kde-ai-assistant-daemon.service`
-- the Plasma applet package to the user's Plasma package store with
-  `kpackagetool6`
+  `~/.config/systemd/user/`
+- the Plasma widget to your Plasma package store (`kpackagetool6`)
+- your settings, created on first use, in `~/.config/kde-ai-assistant/`
 
-It then enables and restarts the daemon. Running it again upgrades in place.
+To remove it:
 
-Add the "AI Assistant" widget to a Plasma panel, next to the application
-launcher. Right-click it and choose Configure to switch between a search bar
-and a button, set the bar width and the results size, and (on the Keyboard
-Shortcuts page) set a shortcut that focuses it. After an upgrade, log out and
-in, or restart plasmashell, so the panel loads the new widget code.
+```bash
+scripts/install.sh --uninstall           # keeps your settings
+scripts/install.sh --uninstall --purge   # removes them too
+```
 
-To test the widget in a window instead:
+The widget's Appearance settings switch between a search bar and a button
+and set the bar width and the results size; its Keyboard Shortcuts page sets
+a shortcut that focuses the bar.
+
+To test the widget in a window instead of a panel:
 
 ```bash
 plasmawindowed io.github.dragonswithin.kdeaiassistant
 ```
 
 Widget load errors are not printed to the terminal; read them with
-`journalctl --user -e | grep -E 'plasmashell|plasmawindowed'`.
+`journalctl --user -e | grep -E 'plasmashell|plasmawindowed'`, or set
+`QT_FORCE_STDERR_LOGGING=1`.
 
 ## Access Control
 
@@ -131,6 +154,7 @@ python3 -m unittest discover -s tests
 python3 -m py_compile src/kde_ai_assistant/*.py
 python3 -m py_compile src/kde_ai_assistant/*/*.py
 bash -n scripts/install.sh
+QT_FORCE_STDERR_LOGGING=1 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml plasmoid/*/contents/ui/*.qml
 systemd-analyze --user verify systemd/user/kde-ai-assistant-daemon.service
 systemctl --user status kde-ai-assistant-daemon.service
 kde-ai-assistant status --pretty

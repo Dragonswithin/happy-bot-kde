@@ -14,6 +14,7 @@ index, search engine or server name is known here.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .mcp_client import McpManager, ToolResult
@@ -21,9 +22,12 @@ from .mcp_client import McpManager, ToolResult
 QUERY_ARGUMENT_NAMES = ("query", "q", "search", "text", "keywords", "term", "prompt")
 LIMIT_ARGUMENT_NAMES = ("limit", "max_results", "top_k", "k", "count", "num_results", "n")
 DEFAULT_RESULT_LIMIT = 8
+# Whole words that mark a search tool as being about the user's own files or
+# about the web. "local" and "path" are deliberately absent: offline
+# reference archives and many other tools use them without searching files.
 _ROLE_WORDS = {
-    "file_search": ("file", "path", "local", "document", "disk", "filesystem", "folder", "machine"),
-    "web_search": ("web", "internet", "online", "searx", "google", "bing", "duckduckgo", "brave", "news"),
+    "file_search": ("file", "files", "document", "documents", "disk", "filesystem", "folder", "folders"),
+    "web_search": ("web", "internet", "online", "searx", "searxng", "google", "bing", "duckduckgo", "brave", "news"),
 }
 
 
@@ -73,7 +77,8 @@ def propose_role(server: str, tool: dict[str, Any]) -> dict[str, Any] | None:
     wording = f"{tool.get('name', '')} {tool.get('description', '')}".lower()
     if "search" not in wording and "find" not in wording:
         return None
-    scores = {role: sum(word in wording for word in words) for role, words in _ROLE_WORDS.items()}
+    found = set(re.findall(r"[a-z]+", wording))
+    scores = {role: len(found.intersection(words)) for role, words in _ROLE_WORDS.items()}
     role = max(scores, key=lambda name: scores[name])
     if scores[role] == 0 or list(scores.values()).count(scores[role]) > 1:
         return None

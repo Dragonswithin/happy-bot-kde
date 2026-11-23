@@ -15,7 +15,7 @@ import org.kde.kirigami as Kirigami
  * panel field does not receive keyboard focus on their system.
  *
  * It shows the daemon status as a coloured dot and a busy spinner, and emits
- * `clicked`; main.qml opens the results popup with its own input field in
+ * `menuRequested` on a right-click and `clicked` otherwise; main.qml opens the results popup with its own input field in
  * response. It holds no state of its own.
  */
 Item {
@@ -25,13 +25,21 @@ Item {
     property string iconName: "search"
 
     signal clicked()
+    signal menuRequested()
 
     implicitWidth: Kirigami.Units.iconSizes.medium
     implicitHeight: Kirigami.Units.iconSizes.medium
 
     MouseArea {
         anchors.fill: parent
-        onClicked: compact.clicked()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => {
+            if (mouse.button === Qt.RightButton) {
+                compact.menuRequested();
+            } else {
+                compact.clicked();
+            }
+        }
     }
 
     Kirigami.Icon {

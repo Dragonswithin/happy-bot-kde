@@ -12,8 +12,8 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 
 /**
- * "General" page of the applet's settings dialog: how the applet appears in
- * the panel and how large its parts are.
+ * "Appearance" page of the applet's settings dialog: how the applet appears
+ * in the panel and how large its parts are.
  *
  * Plasma binds each `cfg_<name>` property to the entry of the same name in
  * contents/config/main.xml and writes it back when the user applies. This

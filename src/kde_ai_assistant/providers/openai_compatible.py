@@ -26,6 +26,7 @@ connection when cancelled or when the generator is closed. Uses only
 
 from __future__ import annotations
 
+import http.client
 import json
 import threading
 from typing import Any, Iterator, Sequence
@@ -137,7 +138,7 @@ class OpenAICompatibleProvider:
                     body = {key: value for key, value in body.items() if key != "stream_options"}
                     return self._open(body)
                 raise ProviderError(_explain_http_error(error, self.base_url)) from error
-        except (URLError, TimeoutError, OSError) as error:
+        except (URLError, TimeoutError, OSError, http.client.HTTPException) as error:
             reason = getattr(error, "reason", error)
             raise ProviderError(f"Could not reach the model at {self.base_url}: {reason}") from error
 
@@ -202,7 +203,7 @@ class OpenAICompatibleProvider:
                             slot["arguments"].append(str(function["arguments"]))
                     if choice.get("finish_reason"):
                         stop_reason = str(choice["finish_reason"])
-        except (TimeoutError, OSError) as error:
+        except (TimeoutError, OSError, http.client.HTTPException) as error:
             raise ProviderError(f"The connection to the model was lost: {error}") from error
         finally:
             response.close()
@@ -236,7 +237,8 @@ def list_models(
     except HTTPError as error:
         with error:
             raise ProviderError(_explain_http_error(error, root)) from error
-    except (URLError, TimeoutError, OSError, ValueError) as error:
+    except (URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as error:
+        # HTTPException covers a port that answers with something other than HTTP.
         reason = getattr(error, "reason", error)
         raise ProviderError(f"Could not reach a model service at {root}: {reason}") from error
     entries = document.get("data") if isinstance(document, dict) else document

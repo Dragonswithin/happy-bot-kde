@@ -4,10 +4,10 @@
 
 pragma ComponentBehavior: Bound
 
-import QtCore as QtCore
 import QtQuick
 
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
 
 /**
@@ -37,26 +37,16 @@ import org.kde.plasma.plasmoid
  * The applet's activation shortcut (set by the user in the applet's
  * Keyboard Shortcuts page) focuses the field or opens the popup.
  *
- * The daemon address defaults to the per-uid loopback port defined in
- * src/kde_ai_assistant/runtime_paths.py and can be overridden with the
- * `daemonUrl` setting in contents/config/main.xml. The token file path is
- * the one that module's `token_path` uses.
+ * A right-click on the bar or the icon opens the applet's own small menu
+ * (settings, new conversation, remove).
+ *
+ * The daemon's address and token belong to DaemonClient.qml. The settings
+ * dialog (contents/config/config.qml) holds appearance options and the
+ * assistant's own setup; `openSettings` shows it, which is where a "no model
+ * yet" message sends the user.
  */
 PlasmoidItem {
     id: root
-
-    // StandardPaths returns a file:// URL in QML; the scheme is stripped so
-    // the value is a plain directory path such as /run/user/1000.
-    readonly property string runtimeLocation: String(QtCore.StandardPaths.writableLocation(QtCore.StandardPaths.RuntimeLocation)).replace(/^file:\/\//, "")
-    readonly property int sessionUid: {
-        const match = runtimeLocation.match(/\/run\/user\/([0-9]+)/);
-        return match ? parseInt(match[1]) : 1000;
-    }
-    readonly property int defaultDaemonPort: 19000 + Math.max(0, sessionUid - 1000)
-    readonly property string configuredDaemonUrl: Plasmoid.configuration.daemonUrl || ""
-    readonly property string daemonUrl: configuredDaemonUrl.length > 0
-        ? configuredDaemonUrl
-        : "http://127.0.0.1:" + defaultDaemonPort
 
     readonly property bool inputInPopup: Plasmoid.configuration.inputInPopup
         || Plasmoid.formFactor === PlasmaCore.Types.Vertical
@@ -87,8 +77,7 @@ PlasmoidItem {
 
     AssistantSession {
         id: session
-        daemonUrl: root.daemonUrl
-        tokenFile: root.runtimeLocation + "/kde-ai-assistant/token"
+        configuredUrl: Plasmoid.configuration.daemonUrl || ""
         onHitsChanged: {
             popup.selectedIndex = -1;
             root.updatePopup();
@@ -117,6 +106,7 @@ PlasmoidItem {
         onHitActivated: location => root.openHit(location)
         onDismissed: root.popupToggled = false
         onCloseRequested: root.closePopup()
+        onSettingsRequested: root.openSettings()
     }
 
     compactRepresentation: CompactRepresentation {
@@ -126,12 +116,15 @@ PlasmoidItem {
             root.popupToggled = !popup.visible;
             root.updatePopup();
         }
+        onMenuRequested: contextMenu.openRelative()
     }
 
     fullRepresentation: PanelBar {
         busy: session.busy
-        statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here") : session.statusText
-        offline: session.status === "offline" || session.pendingApprovals > 0
+        statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here")
+            : session.needsSetup && session.status !== "offline" ? i18n("Type here, or press Enter to set up")
+            : session.statusText
+        offline: session.status === "offline" || session.pendingApprovals > 0 || session.needsSetup
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: root.focusBar()
@@ -139,6 +132,7 @@ PlasmoidItem {
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
         onDismissed: root.closePopup()
+        onMenuRequested: contextMenu.openRelative()
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
@@ -147,6 +141,41 @@ PlasmoidItem {
             }
             root.updatePopup();
         }
+    }
+
+    // The applet's own right-click menu. A text field in the panel takes
+    // right-clicks for itself, so Plasma's standard widget menu is not
+    // reachable there; this offers the entries a user needs from it.
+    PlasmaExtras.Menu {
+        id: contextMenu
+        visualParent: root
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Configure AI Assistant…")
+            icon: "configure"
+            onClicked: root.openSettings()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("New conversation")
+            icon: "document-new"
+            onClicked: session.newChat()
+        }
+
+        PlasmaExtras.MenuItem {
+            separator: true
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Remove from panel")
+            icon: "edit-delete"
+            onClicked: Plasmoid.internalAction("remove").trigger()
+        }
+    }
+
+    function openSettings() {
+        root.closePopup();
+        Plasmoid.internalAction("configure").trigger();
     }
 
     function updatePopup() {
@@ -210,6 +239,10 @@ PlasmoidItem {
     function handleAccepted(text) {
         if (popup.selectedIndex >= 0 && popup.selectedIndex < session.hits.length) {
             root.openHit(session.hits[popup.selectedIndex].location);
+            return;
+        }
+        if (text.length === 0 && session.needsSetup) {
+            root.openSettings();
             return;
         }
         if (text.length === 0) {
