@@ -11,11 +11,18 @@ import org.kde.plasma.plasma5support as P5Support
 /**
  * Non-visual owner of one conversation with the per-user daemon.
  *
- * Holds the transcript, busy flag and daemon status that PanelBar.qml,
- * CompactRepresentation.qml and ResultsPopup.qml display, and is the only
- * place in the applet that talks HTTP to the daemon (`/health`, `/ask`,
- * `/screenshot`). main.qml creates exactly one instance and supplies
- * `daemonUrl`.
+ * Holds the transcript, busy flag, daemon status and the current instant
+ * file-search hits that PanelBar.qml, CompactRepresentation.qml and
+ * ResultsPopup.qml display, and is the only place in the applet that talks
+ * HTTP to the daemon (`/health`, `/search`, `/open`, `/ask`, `/screenshot`).
+ * main.qml creates exactly one instance and supplies `daemonUrl`.
+ *
+ * Instant search: `searchFiles` may be called on every keystroke. Replies
+ * can arrive out of order, so each request carries a sequence number and a
+ * reply is applied only if it is the newest one sent. `hits` is a list of
+ * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
+ * the daemon's message and code ("not_configured", "tool_failed") when the
+ * last search failed.
  *
  * Every request carries the daemon's bearer token. The daemon writes it to
  * `tokenFile` (0600, in the user's runtime directory) and regenerates it on
@@ -40,6 +47,11 @@ Item {
     property bool busy: false
 
     readonly property bool hasTranscript: transcript.length > 0
+
+    property var hits: []
+    property string searchError: ""
+    property string searchErrorCode: ""
+    property int searchSequence: 0
 
     // Bearer token state. `tokenWaiters` are callbacks queued while one
     // `cat` is in flight, so concurrent requests share a single read.
@@ -142,6 +154,44 @@ Item {
             session.setStatus("idle", i18n("Ready"));
         }, function(data) {
             session.setStatus("offline", data.error || i18n("The assistant is not running"));
+        });
+    }
+
+    function clearSearch() {
+        session.searchSequence += 1;
+        session.hits = [];
+        session.searchError = "";
+        session.searchErrorCode = "";
+    }
+
+    function searchFiles(text) {
+        const query = (text || "").trim();
+        if (query.length === 0) {
+            clearSearch();
+            return;
+        }
+        session.searchSequence += 1;
+        const sequence = session.searchSequence;
+        request("GET", "/search?limit=8&q=" + encodeURIComponent(query), null, function(data) {
+            if (sequence !== session.searchSequence) {
+                return;
+            }
+            session.searchError = "";
+            session.searchErrorCode = "";
+            session.hits = data.hits || [];
+        }, function(data) {
+            if (sequence !== session.searchSequence) {
+                return;
+            }
+            session.hits = [];
+            session.searchError = data.error || i18n("Search failed");
+            session.searchErrorCode = data.code || "tool_failed";
+        });
+    }
+
+    function openLocation(location) {
+        request("POST", "/open", { location: location }, function(data) {}, function(data) {
+            session.appendLine(i18n("Error"), data.error || i18n("Could not open %1", location));
         });
     }
 

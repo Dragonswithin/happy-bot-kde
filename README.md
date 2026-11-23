@@ -6,27 +6,36 @@ through your configured search tool, and acts on the system through tools,
 using any model you configure, local or hosted with an API key. The goal,
 architecture and phase order are in `docs/ROADMAP.md`.
 
-Today the repo is only the scaffold for that: a panel applet and a per-user
-daemon with desktop-context capture. No model provider, agent loop or action
-tools exist yet.
+## What Works Today
 
-## What It Provides
+- A text field in the Plasma panel with one results popup. A vertical panel,
+  or the widget's "Button" setting, shows an icon and puts the field inside
+  the popup instead.
+- Live file search while typing, through a search tool you already have,
+  with no AI model involved. Down and Enter, or a click, opens a result.
+- Tool servers (MCP, stdio) are started and supervised by the daemon. Ones
+  you already configured for other AI programs can be imported.
+- Desktop context capture: active window (KWin), clipboard (Klipper),
+  explicit screenshots (Spectacle).
 
-- A text field in the Plasma panel with one results popup under it. A
-  vertical panel, or the applet's `inputInPopup` setting, shows an icon and
-  puts the field inside the popup instead.
-- Context actions for clipboard text and active-window metadata.
-- Explicit screenshot capture through Spectacle.
-- Per-user daemon with loopback HTTP API and transient runtime state.
+No AI model is connected yet, so pressing Enter on a request reports that no
+model is set up. That is the next phase in `docs/ROADMAP.md`.
 
-## Current State
+## Setting Up Search
 
-No model is connected yet: requests typed into the bar reach the daemon and
-return an unavailable response. The daemon provides desktop context only.
+```bash
+kde-ai-assistant tools discover          # servers found in other programs' settings
+kde-ai-assistant tools import NAME       # add one (--read-only if it changes nothing)
+kde-ai-assistant tools list              # its tools, and suggested roles
+kde-ai-assistant role set file_search SERVER TOOL
+kde-ai-assistant role set web_search SERVER TOOL
+kde-ai-assistant search some words
+```
 
-- KWin DBus for active-window metadata.
-- Klipper DBus for clipboard text.
-- Spectacle for user-requested screenshots.
+Settings are stored in `~/.config/kde-ai-assistant/config.json` (mode 0600).
+The schema is documented at the top of `src/kde_ai_assistant/settings.py`.
+Change them through the commands above rather than by editing the file; the
+daemon validates and applies changes immediately.
 
 Useful environment overrides:
 

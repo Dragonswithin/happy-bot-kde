@@ -34,7 +34,9 @@ hosted one, on a machine set up only through the installer and first-run
 setup:
 
 - "tax return 2025 pdf" shows matching files from the user's index as they
-  type, with no model call; Enter opens the top hit.
+  type, with no model call; Down then Enter (or a click) opens one. Plain
+  Enter always sends the text to the assistant, so the same key never means
+  two things.
 - "Find the notes where I wrote about the fence quote." (index search through
   the model, results are openable)
 - "What happened in the news today about X?" (configured web-search tool,
@@ -269,8 +271,12 @@ src/kde_ai_assistant/
     conversation.py     neutral message / tool-call types
     providers/          base contract, openai_compatible
     tools/              registry, one module per domain (windows, files, ...)
+    daemon_routes.py    what each endpoint does
     mcp_client.py       stdio MCP sessions, child-process supervision
+    mcp_discovery.py    finds tool servers in other programs' configs
+    tool_roles.py       file_search / web_search role mapping and proposals
     instant_search.py   no-model query path to the file_search tool
+    desktop_actions.py  actions on the desktop, starting with opening things
     permissions.py      risk classes, policy, pending approvals
     settings.py         config file, secret lookup
     desktop_context.py  existing KWin / Klipper / Spectacle capture
@@ -310,7 +316,8 @@ still reaches `/health` with the token; tests pass.
 child processes, settings for servers and the `file_search` / `web_search`
 roles, instant path, bar shows live file hits and opens them.
 *Exit:* typing in the bar lists files from the user's index with no model
-configured; killing the index server shows a recoverable error.
+configured; killing the index server does not break search (it is restarted
+on the next query, and a server that cannot start is reported with its error).
 
 **Phase 3: Provider and agent loop.** OpenAI-compatible provider with
 streaming and tool calls, secret storage, agent loop, tier 1 tools plus MCP
@@ -385,6 +392,35 @@ first usable release: Phases 0 to 6.**
 - The maintainer's panel requirements, now implemented as applet settings: the bar
   width and results size are configurable; the panel can show a button
   instead of the bar; clicking or focusing the bar never opens the popup.
+
+**Phase 2 (passed 2026-11-22).**
+
+- Exit check: with no model configured, the maintainer typed in the panel bar, saw
+  matching files from his index, and opened one with Down and Enter. From
+  the CLI the same search takes about 0.3 s. Killing the index server
+  process was followed by a successful search: the daemon restarted it. The
+  failure paths (crash during a call, a server that cannot start, a tool
+  that reports an error) are covered by tests and return `tool_failed`.
+  The roadmap's exit wording was changed to match: silent recovery is
+  better than showing an error for a server that restarts fine.
+- The MCP client is standard library only: newline-delimited JSON-RPC over
+  the child's pipes. It works unchanged against both of the maintainer's servers.
+- Both servers were set up through `kde-ai-assistant tools import` and
+  `role set`, with no file edited by hand. Role proposals picked the right
+  tool on each (`machine_context_search`, `web_search`).
+- The maintainer's index is lexical for whole-machine search (full text over paths,
+  extracted text, OCR, media tags). Its semantic ranking is only available
+  per repository through `project_context_pack`, which needs a repository
+  root and so cannot back the search bar. The agent can call it in Phase 3.
+  Instant results therefore match words, not meaning.
+- A search tool's first call after the daemon starts is slower because the
+  server is started on demand.
+- The maintainer chose live results while typing (two or more characters, 200 ms
+  pause). Clicking or focusing the empty bar still opens nothing.
+- Search tools return different shapes, so hits are extracted tolerantly
+  (structured content, JSON text, then paths and links in plain text). Only
+  objects with a location under a common key count, which keeps a tool's
+  bookkeeping paths (index database, scan roots) out of the results.
 
 ## Decisions
 

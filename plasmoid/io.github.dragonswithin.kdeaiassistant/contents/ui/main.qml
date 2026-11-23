@@ -21,10 +21,16 @@ import org.kde.plasma.plasmoid
  * - Keyboard focus. A panel only accepts key input while an applet reports
  *   AcceptingInputStatus, so `wantsInput` drives `Plasmoid.status` and is
  *   set before the field is focused and cleared when the field loses focus.
- * - Popup visibility. Clicking or focusing the field never opens the popup.
- *   It opens when a request is submitted, reopens on Enter in an empty
- *   field if there is a conversation to show, and closes when focus leaves
- *   the field or on Escape.
+ * - Popup visibility (`updatePopup`). Clicking or focusing the field never
+ *   opens the popup. In bar mode it is visible while the field has focus
+ *   and there is something to show: file hits for the typed text, a search
+ *   failure, or a conversation the user opened by submitting a request (or
+ *   by pressing Enter in an empty field). Escape closes the conversation.
+ *   In button mode the button toggles it.
+ * - Typing. Text of two or more characters is sent to the instant file
+ *   search after `searchDelay` of no typing. Down/Up move a selection
+ *   through the hits. Enter opens the selected hit; with no selection it
+ *   sends the text to the assistant.
  *
  * The applet's activation shortcut (set by the user in the applet's
  * Keyboard Shortcuts page) focuses the field or opens the popup.
@@ -66,54 +72,137 @@ PlasmoidItem {
     activationTogglesExpanded: false
     preferredRepresentation: inputInPopup ? compactRepresentation : fullRepresentation
 
+    // Bar mode: true once the user asked to see the conversation.
+    property bool conversationOpen: false
+    // Button mode: true while the button has the popup toggled open.
+    property bool popupToggled: false
+    readonly property bool barFocused: fullRepresentationItem ? fullRepresentationItem.inputFocused : false
+    property string pendingQuery: ""
+
     AssistantSession {
         id: session
         daemonUrl: root.daemonUrl
         tokenFile: root.runtimeLocation + "/kde-ai-assistant/token"
+        onHitsChanged: {
+            popup.selectedIndex = -1;
+            root.updatePopup();
+        }
+        onSearchErrorCodeChanged: root.updatePopup()
+    }
+
+    Timer {
+        id: searchDelay
+        interval: 200
+        onTriggered: session.searchFiles(root.pendingQuery)
     }
 
     ResultsPopup {
         id: popup
         session: session
         inputInPopup: root.inputInPopup
+        showConversation: root.conversationOpen
         widthInGridUnits: Plasmoid.configuration.popupWidth
         heightInGridUnits: Plasmoid.configuration.popupHeight
         visualParent: root
         location: Plasmoid.location
-        onSubmitted: (text, contextKind) => session.ask(text, contextKind)
+        onQueryEdited: text => root.handleEdited(text)
+        onAccepted: text => root.handleAccepted(text)
+        onSelectionMove: delta => root.moveSelection(delta)
+        onHitActivated: location => root.openHit(location)
+        onContextRequested: (text, contextKind) => {
+            root.conversationOpen = true;
+            session.ask(text, contextKind);
+        }
+        onDismissed: root.popupToggled = false
     }
 
     compactRepresentation: CompactRepresentation {
         status: session.status
         iconName: Plasmoid.icon
-        onClicked: popup.visible = !popup.visible
+        onClicked: {
+            root.popupToggled = !popup.visible;
+            root.updatePopup();
+        }
     }
 
     fullRepresentation: PanelBar {
-        id: bar
         busy: session.busy
         statusText: session.statusText
         offline: session.status === "offline"
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: root.focusBar()
-        onSubmitted: text => {
-            if (session.ask(text, "combined")) {
-                bar.clear();
-                popup.visible = true;
-            }
-        }
-        onReopenRequested: popup.visible = session.hasTranscript
+        onQueryEdited: text => root.handleEdited(text)
+        onAccepted: text => root.handleAccepted(text)
+        onSelectionMove: delta => root.moveSelection(delta)
         onDismissed: {
-            popup.visible = false;
-            root.wantsInput = false;
+            root.conversationOpen = false;
+            root.updatePopup();
         }
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
-                popup.visible = false;
             }
+            root.updatePopup();
         }
+    }
+
+    function updatePopup() {
+        if (root.inputInPopup) {
+            popup.visible = root.popupToggled;
+            return;
+        }
+        const somethingToShow = root.conversationOpen
+            || session.hits.length > 0
+            || session.searchErrorCode === "tool_failed";
+        popup.visible = root.barFocused && somethingToShow;
+    }
+
+    function clearInput() {
+        if (root.inputInPopup) {
+            popup.clearInput();
+        } else if (root.fullRepresentationItem) {
+            root.fullRepresentationItem.clear();
+        }
+    }
+
+    function handleEdited(text) {
+        root.pendingQuery = text.trim();
+        if (root.pendingQuery.length >= 2) {
+            searchDelay.restart();
+        } else {
+            searchDelay.stop();
+            session.clearSearch();
+        }
+    }
+
+    function moveSelection(delta) {
+        const count = session.hits.length;
+        if (count === 0) {
+            return;
+        }
+        popup.selectedIndex = Math.max(-1, Math.min(count - 1, popup.selectedIndex + delta));
+    }
+
+    function openHit(location) {
+        session.openLocation(location);
+        root.clearInput();
+        root.popupToggled = false;
+        root.updatePopup();
+    }
+
+    function handleAccepted(text) {
+        if (popup.selectedIndex >= 0 && popup.selectedIndex < session.hits.length) {
+            root.openHit(session.hits[popup.selectedIndex].location);
+            return;
+        }
+        if (text.length === 0) {
+            root.conversationOpen = session.hasTranscript;
+        } else if (session.ask(text, "combined")) {
+            root.conversationOpen = true;
+            root.clearInput();
+        }
+        root.updatePopup();
     }
 
     function focusBar() {
@@ -131,7 +220,8 @@ PlasmoidItem {
         target: Plasmoid
         function onActivated() {
             if (root.inputInPopup) {
-                popup.visible = !popup.visible;
+                root.popupToggled = !popup.visible;
+                root.updatePopup();
             } else {
                 root.focusBar();
             }

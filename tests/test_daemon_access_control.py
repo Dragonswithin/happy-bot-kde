@@ -3,8 +3,9 @@
 Each test starts a real ``AssistantServer`` on an ephemeral loopback port
 with a temporary runtime directory and sends raw requests with
 ``http.client``, so the ``Host``, ``Origin`` and ``Authorization`` headers are
-exactly what the test sets. Only ``/health`` and unknown paths are requested;
-nothing here touches the desktop session.
+exactly what the test sets. Only ``/health``, ``/ask`` and unknown paths are
+requested, with a settings file inside the temporary directory, so nothing
+here touches the desktop session or the user's configuration.
 
 Run with ``python3 -m unittest discover -s tests`` from the repository root.
 """
@@ -30,7 +31,7 @@ class AccessControlTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self._tmp.name) / "runtime"
-        self.server = AssistantServer("127.0.0.1", 0, self.runtime_dir)
+        self.server = AssistantServer("127.0.0.1", 0, self.runtime_dir, Path(self._tmp.name) / "config.json")
         self.port = self.server.server_address[1]
         self.token = self.server.auth_token
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -130,7 +131,7 @@ class AccessControlTests(unittest.TestCase):
         self.assertEqual(read_token(self.runtime_dir), "")
 
     def test_each_server_gets_a_new_token(self) -> None:
-        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "other")
+        other = AssistantServer("127.0.0.1", 0, Path(self._tmp.name) / "other", Path(self._tmp.name) / "c2.json")
         try:
             self.assertNotEqual(other.auth_token, self.token)
         finally:
@@ -142,7 +143,7 @@ class BindAddressTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for host in ("0.0.0.0", "192.168.1.10", "example.com"):
                 with self.subTest(host=host), self.assertRaises(ValueError):
-                    AssistantServer(host, 0, Path(tmp))
+                    AssistantServer(host, 0, Path(tmp), Path(tmp) / "config.json")
 
 
 if __name__ == "__main__":

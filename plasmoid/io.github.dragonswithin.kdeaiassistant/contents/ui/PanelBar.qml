@@ -15,12 +15,16 @@ import org.kde.plasma.components as PlasmaComponents3
  * The applet's inline panel form: a single text field that lives in the
  * panel beside the launcher and is the only place the user types.
  *
- * It owns no conversation state. It reports intent through signals and
- * main.qml decides what they do: `focusRequested` when the user clicks the
- * unfocused field (the panel window must be granted keyboard focus before
- * the field can take it), `submitted` on Enter with text, `reopenRequested`
- * on Enter with an empty field, `dismissed` on Escape, and
- * `inputFocusedChanged` so the results popup can close when focus leaves.
+ * It owns no conversation or search state. It reports intent through signals
+ * and main.qml decides what they do:
+ *
+ * - `focusRequested`: the user clicked the unfocused field. The panel window
+ *   must be granted keyboard focus before the field can take it.
+ * - `queryEdited(text)`: the text changed, by typing or by `clear()`.
+ * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
+ * - `selectionMove(delta)`: Down (+1) or Up (-1), to move through results.
+ * - `dismissed`: Escape on an empty field. Escape on text clears it first.
+ * - `inputFocusedChanged`: so the results popup can close when focus leaves.
  *
  * Its width is fixed at `widthInGridUnits` (the applet's `barWidth`
  * setting): minimum, preferred and maximum are the same so the panel neither
@@ -43,8 +47,9 @@ Item {
     readonly property alias text: field.text
 
     signal focusRequested()
-    signal submitted(string text)
-    signal reopenRequested()
+    signal queryEdited(string text)
+    signal accepted(string text)
+    signal selectionMove(int delta)
     signal dismissed()
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * widthInGridUnits
@@ -74,8 +79,11 @@ Item {
         rightPadding: spinner.visible ? spinner.width + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing
         Accessible.name: i18n("Ask or search anything")
 
-        Keys.onReturnPressed: bar.submit()
-        Keys.onEnterPressed: bar.submit()
+        onTextChanged: bar.queryEdited(text)
+        Keys.onReturnPressed: bar.accepted(text.trim())
+        Keys.onEnterPressed: bar.accepted(text.trim())
+        Keys.onDownPressed: bar.selectionMove(1)
+        Keys.onUpPressed: bar.selectionMove(-1)
         Keys.onEscapePressed: {
             if (field.text.length > 0) {
                 field.text = "";
@@ -112,14 +120,5 @@ Item {
         enabled: !field.activeFocus
         cursorShape: Qt.IBeamCursor
         onPressed: bar.focusRequested()
-    }
-
-    function submit() {
-        const text = field.text.trim();
-        if (text.length > 0) {
-            bar.submitted(text);
-        } else {
-            bar.reopenRequested();
-        }
     }
 }
