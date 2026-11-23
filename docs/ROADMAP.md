@@ -653,6 +653,15 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
 - The maintainer's standing preference, now in the system prompt: install from a
   pre-built package (repositories, `-bin`, Flatpak) before building from
   source, and never kill a program started for him unless asked.
+- A third attempt installed Ladybird, but from an unofficial nightly
+  (github.com/harilvfs) via `curl … | bash`, which ran without approval and
+  used sudo to add `/etc/ssl/ladybird-ca-bundle.crt`. Official options
+  existed: AUR `ladybird-bin` (it searched with `pacman -Ss`, which cannot
+  see the AUR) and the project's Flatpak (it asked Flathub instead of the
+  `ladybird` remote). Now a downloaded script run in one step is `danger`
+  and the approval names its source, and the model must use official
+  sources in order and ask before any third-party build. The maintainer had the
+  nightly removed.
 - Verified with a real Konsole (a harmless command; nothing installed).
   Not verified: a real install, and whether the local model describes a
   declined action accurately (in one test it claimed to have opened the

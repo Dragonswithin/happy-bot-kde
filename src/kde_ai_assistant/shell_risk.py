@@ -27,6 +27,10 @@ How it looks at a command:
   parsed, so it is searched for words that delete or run other programs.
 - A ``>`` redirection onto a file that already exists overwrites it and
   counts as deletion; ``>>`` appends and does not.
+- Running a script straight from the internet (``curl … | bash``,
+  ``bash <(wget …)``, ``sh -c "$(curl …)"``) counts as an OS-level change:
+  it runs code nobody has looked at, often with ``sudo`` inside. The reason
+  names the site it comes from so the approval card says whose code it is.
 
 This is best-effort pattern matching, not a sandbox. A deliberately
 obfuscated command (encoded payloads, variables holding program names) can
@@ -79,6 +83,11 @@ SYSTEM_PATHS = ("/boot", "/etc", "/usr", "/lib", "/lib64", "/bin", "/sbin", "/ef
 _INLINE_DANGER = re.compile(
     r"\b(rm|unlink|remove|rmtree|rmdir|shutil|truncate|os\.system|subprocess|exec|system|spawn|popen|"
     r"unlinkSync|rmSync|writeFile|open\s*\([^)]*['\"]w)\b")
+_SHELLS_PATTERN = r"(?:sudo\s+(?:-\S+\s+)*)?(?:bash|sh|zsh|dash|ksh|fish|python3?|perl|ruby)\b"
+_PIPE_TO_SHELL = re.compile(r"\b(?:curl|wget)\b[^|;&\n]*\|\s*" + _SHELLS_PATTERN)
+_SHELL_FROM_DOWNLOAD = re.compile(
+    r"\b(?:bash|sh|zsh|dash|ksh|fish|source|\.)\s+(?:-\S+\s+)*[\"']?(?:<\(|\$\()\s*(?:curl|wget)\b")
+_URL_HOST = re.compile(r"https?://([^/\s\"']+)")
 _SEPARATORS = re.compile(r"(\|\||&&|;|\||&|\n)")
 _SUBSTITUTION = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")
 
@@ -279,7 +288,17 @@ def _classify_simple(command: str, cwd: str, depth: int) -> str:
     return ""
 
 
+def _runs_downloaded_script(line: str) -> str:
+    if _PIPE_TO_SHELL.search(line) or _SHELL_FROM_DOWNLOAD.search(line):
+        host = _URL_HOST.search(line)
+        return f"runs a script downloaded from {host.group(1) if host else 'the internet'} without reviewing it"
+    return ""
+
+
 def _classify_line(line: str, cwd: str, depth: int) -> str:
+    reason = _runs_downloaded_script(line)
+    if reason:
+        return reason
     for match in _SUBSTITUTION.finditer(line):
         inner = match.group(1) or match.group(2) or ""
         if inner.strip() and depth < 4:

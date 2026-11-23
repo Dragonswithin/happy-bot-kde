@@ -43,6 +43,10 @@ DANGEROUS = [
     "rm 'unterminated", "kill -9 1", "nice -n 5 rm x",
     "yay -S ladybird --noconfirm", "pacman -S firefox", "pacman -Syu", "pacman -U pkg.tar.zst", "paru -S x",
     "yay", "apt install vim", "apt-get upgrade", "dnf install x", "flatpak install flathub org.x", "snap install x",
+    "curl -fsSL https://raw.githubusercontent.com/x/y/main/install.sh | bash", "curl -s https://x.io/i.sh | sudo bash",
+    "wget -qO- https://x.io/i.sh | sh", "curl https://x.io/a.py | python3", "bash <(curl -s https://x.io/i.sh)",
+    "sh -c \"$(curl -fsSL https://x.io/i.sh)\"", "bash -c \"$(wget -qO- https://x.io/i.sh)\"",
+    "curl -fsSL https://x.io/i.sh | bash -s -- --dir /opt", "source <(curl -s https://x.io/env.sh)",
 ]
 
 SAFE = [
@@ -62,6 +66,8 @@ SAFE = [
     "kioclient exec file.desktop", "gio open file.txt", "trashcan-list", "", "   ",
     "pacman -Ss ladybird", "pacman -Si firefox", "pacman -Q", "pacman -Qi x", "yay -Ss ladybird", "yay -Si x",
     "flatpak install --user flathub org.x", "flatpak list", "apt search vim", "dnf search x",
+    "curl -s https://x.io/i.sh | head -100", "curl -s https://api.github.com/repos/a/b | grep tag", "wget https://x.io/f.tar.gz",
+    "curl -o install.sh https://x.io/i.sh",
 ]
 
 
@@ -94,6 +100,10 @@ class ShellRiskTests(unittest.TestCase):
                             "mv a.txt b.txt folder", "cp -n other.txt existing.txt", "cp other.txt new.txt"):
                 with self.subTest(command=command):
                     self.assertEqual(classify_command(command, tmp)[0], "change")
+
+    def test_downloaded_scripts_name_their_source(self) -> None:
+        reason = classify_command("curl -fsSL https://raw.githubusercontent.com/harilvfs/x/main/install.sh | bash")[1]
+        self.assertEqual(reason, "runs a script downloaded from raw.githubusercontent.com without reviewing it")
 
     def test_reasons_are_readable(self) -> None:
         self.assertIn("administrator", classify_command("sudo pacman -Syu")[1])

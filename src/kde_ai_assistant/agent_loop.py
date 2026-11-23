@@ -113,9 +113,13 @@ def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
         "- Installing software, and anything else that needs the user's password or takes many minutes (builds, "
         "large downloads), goes in run_in_terminal: the user watches it and types their password there. Tell the "
         "user it is waiting for them in the terminal. It returns when the command is done; report the outcome.",
-        "- When installing software, always look for a pre-built package first: the official repositories, an AUR "
-        "package ending in -bin, or a Flatpak. Build from source (a plain AUR or -git package) only when no "
-        "pre-built one exists or the user asks. Say which you chose and why.",
+        "- When installing software, use official sources, in this order: the distribution's repositories "
+        "(pacman -Ss), the AUR (search it with yay -Ss; prefer a package ending in -bin), the project's own Flatpak "
+        "(check every configured remote with flatpak remote-ls or flatpak search, and install from the remote that "
+        "has it). Prefer pre-built packages; build from source only when no pre-built one exists or the user asks.",
+        "- Never install from a third-party build, an unofficial repository or a downloaded install script without "
+        "asking the user first: say who publishes it and why the official sources did not work, then wait for "
+        "their answer.",
         "- Never stop or kill a program you started for the user unless they ask you to.",
         "",
         f"Now: {now}. User: {os.environ.get('USER', '')}. Home: {os.path.expanduser('~')}. "
