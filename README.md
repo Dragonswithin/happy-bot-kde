@@ -258,6 +258,24 @@ Widget load errors are not printed to the terminal; read them with
 `journalctl --user -e | grep -E 'plasmashell|plasmawindowed'`, or set
 `QT_FORCE_STDERR_LOGGING=1`.
 
+To look at one view after a change, without reinstalling or restarting the
+panel, draw it to a picture (views that need the running widget cannot be
+drawn this way):
+
+```bash
+scripts/preview_qml.sh WeatherCard.qml /tmp/weather.png 'weather: ({...})'
+```
+
+To try setup or requests without touching your own settings, start a second
+daemon with empty settings and point the CLI at it:
+
+```bash
+scripts/throwaway_daemon.sh start
+eval "$(scripts/throwaway_daemon.sh env)"
+python3 -m happy_bot.cli doctor
+scripts/throwaway_daemon.sh stop
+```
+
 ## Access Control
 
 The daemon listens on loopback only and can act for the user, so every
