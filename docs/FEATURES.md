@@ -235,8 +235,11 @@ text-only models and stays as an option afterwards.
 
 ## 8. Software Management
 
-- ◐ Install apps from official sources first, ask before third-party ones,
-  verify in the launcher (built; a real install is not verified).
+- ● Install apps from official sources first, ask before third-party ones,
+  verify in the launcher. (verified 2026-11-23: asked to install
+  kcolorchooser, it searched every source, installed it from the
+  distribution's repository in a terminal after approval and the
+  maintainer's password, and confirmed it in the launcher)
 - ● System update with reboot detection. (check_updates lists what is
   waiting from the distribution, the AUR and Flatpak, warns when the kernel
   is among them, and gives the one command run_in_terminal uses; after it,

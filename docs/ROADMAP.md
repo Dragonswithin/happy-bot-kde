@@ -890,8 +890,12 @@ Findings:
   `run_in_terminal`, after which the shell tool's existing restart check
   applies. On the maintainer's computer it reported nothing waiting, which
   matched the three commands run by hand. Installing an app from official
-  sources is built but still has no real install verified; that and a real
-  update need the maintainer to choose to run one.
+  sources was then verified with a real install the maintainer asked for:
+  "install the KDE colour chooser" searched every source, ran
+  `sudo pacman -S` in a terminal after approval, waited for the
+  maintainer's password and confirmed the launcher entry; pacman's log and
+  the desktop file agree. A real system update has not been run yet
+  (nothing was waiting).
 - Translations: `scripts/translations.sh` makes the template from every
   `i18n`/`i18np` call (all 329 distinct source strings checked present),
   merges `po/<lang>.po` files and compiles them into a staged copy of the
