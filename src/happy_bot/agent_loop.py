@@ -16,7 +16,8 @@ Progress is reported through ``emit`` as JSON-serialisable events, in order:
   (see ``permissions``)
 - ``{"type": "tool_progress", "id", "text"}`` while a long tool runs (at most
   one per ``PROGRESS_INTERVAL_SECONDS``; see ``tools.registry.call_context``)
-- ``{"type": "tool_result", "id", "name", "ok", "text"}``
+- ``{"type": "tool_result", "id", "name", "ok", "text"}``, plus ``"card"`` when
+  the tool draws its successful result as a card (``Tool.card``)
 - then exactly one of ``{"type": "done", "stop": "answered"|"cancelled"|"step_limit",
   "actions": [...]}`` or ``{"type": "error", "message": ...}``
 
@@ -288,6 +289,10 @@ def run_turn(
             if redact:
                 text = redact_secrets(text)
             history.append(Message("tool", text, tool_call_id=call.id))
-            emit({"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]})
+            event = {"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]}
+            card = registry.card(call.name, text) if ok else None
+            if card:
+                event["card"] = card
+            emit(event)
 
     finish("step_limit")

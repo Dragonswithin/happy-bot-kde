@@ -12,6 +12,10 @@ that. ``summarize`` gives the one-line, human description of a call that the
 approval card shows. ``precheck`` raises ``ToolFailure`` for a call that
 cannot succeed (a missing file, for example); it runs before the permission
 gate so the user is never asked to approve something that would fail.
+``card`` turns a successful result's text into a small dict the popup draws
+as a card (the weather, for example); it belongs to the tool that writes
+the text, so the two stay in step. ``ToolRegistry.card`` calls it and never
+raises: a result that does not parse simply has no card.
 
 Risk classes (see docs/ROADMAP.md, Permission Gate):
 
@@ -86,6 +90,7 @@ class Tool:
     classify: Callable[[dict[str, Any]], tuple[str, str]] | None = None
     summarize: Callable[[dict[str, Any]], str] | None = None
     precheck: Callable[[dict[str, Any]], None] | None = None
+    card: Callable[[str], dict[str, Any] | None] | None = None
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.parameters)
@@ -150,6 +155,16 @@ class ToolRegistry:
             except Exception:  # noqa: BLE001 - a summary is cosmetic
                 summary = name
         return risk, summary, reason
+
+    def card(self, name: str, text: str) -> dict[str, Any] | None:
+        """The popup card for a successful result of ``name``, or None."""
+        tool = self._tools.get(name)
+        if tool is None or tool.card is None:
+            return None
+        try:
+            return tool.card(text)
+        except Exception:  # noqa: BLE001 - a card is decoration; the answer must not fail for it
+            return None
 
     def precheck(self, name: str, arguments: dict[str, Any]) -> str:
         """Return why this call cannot succeed, or "" if nothing rules it out."""

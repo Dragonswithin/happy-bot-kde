@@ -1,4 +1,4 @@
-"""Tests for weather, mice and touchpads, key repeat, reopening the popup, pinning,
+"""Tests for weather (and its popup card), mice and touchpads, key repeat, reopening the popup, pinning,
 drive-, network- and battery-triggered routines, finding windows by their content, and
 opening folders and terminals.
 
@@ -49,6 +49,21 @@ class WeatherTests(unittest.TestCase):
         self.assertIn("2026-11-24: 6.0–12.0°C, rain, rain 70%, sunrise 08:21, sunset 17:00", text)
         with self.assertRaisesRegex(ToolFailure, "'days'"):
             weather.weather({"place": "Paris", "days": 30})
+        card = weather.weather_card(text)
+        self.assertEqual((card["place"], card["now"]["temperature"], card["now"]["conditions"]),
+                         ("Paris, Île-de-France, France", "11.2", "light rain"))
+        self.assertEqual(card["days"], [{"date": "2026-11-24", "low": "6.0", "high": "12.0", "conditions": "rain",
+                                         "rain": "70", "sunrise": "08:21", "sunset": "17:00"}])
+        self.assertIsNone(weather.weather_card("the weather service could not be reached"))
+
+    def test_the_card_travels_with_a_successful_weather_result(self) -> None:
+        from happy_bot.tools.registry import ToolRegistry
+
+        registry = ToolRegistry(weather.weather_tools())
+        text = "Oslo, Norway: now -3.0°C (feels -8.0°C), light snow, wind 20.0 km/h\n(Open-Meteo)"
+        self.assertEqual(registry.card("weather", text)["now"]["feels"], "-8.0")
+        self.assertIsNone(registry.card("weather", "garbled"))
+        self.assertIsNone(registry.card("no_such_tool", text))
 
 
 class InputTests(unittest.TestCase):

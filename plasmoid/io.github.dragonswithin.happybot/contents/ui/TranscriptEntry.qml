@@ -25,11 +25,14 @@ import org.kde.plasma.components as PlasmaComponents3
  *   tick or warning in the gutter. While it runs, a small spinner takes the
  *   gutter, the line shows how long it has been running, and the latest
  *   output line it reported appears underneath in fixed-width text, so a
- *   long command visibly makes progress.
+ *   long command visibly makes progress. A step whose result came with a
+ *   card (`card`, the weather) shows it underneath, drawn by WeatherCard.qml.
  * - "notice": a quiet step-like line ("Stopped.").
- * - "assistant": the answer in a tinted card, rendered as Markdown, with a
- *   Copy button that puts the whole answer on the clipboard; links are
- *   passed out through `linkActivated`. Its gutter shows the robot mascot
+ * - "assistant": the answer in a tinted card, drawn by AnswerBody.qml
+ *   (Markdown, code blocks each with their own Copy button, lists of files
+ *   that open with a click), with a Copy button that puts the whole answer
+ *   on the clipboard; links and opened files are passed out through
+ *   `linkActivated`. Its gutter shows the robot mascot
  *   when `useRobotMascot` is set, and is empty otherwise.
  * - "approval": an action waiting for the user, in an attention-coloured
  *   card: "Allow this?", what will run in small fixed-width text, why it
@@ -53,6 +56,14 @@ Item {
     required property bool canRemember
     required property real started
     required property string progress
+    required property string card
+    readonly property var cardData: {
+        try {
+            return card ? JSON.parse(card) : null;
+        } catch (error) {
+            return null;
+        }
+    }
     property bool useRobotMascot: false
     readonly property bool running: kind === "tool" && stage === "running"
     property real now: Date.now()
@@ -206,25 +217,24 @@ Item {
                         opacity: 0.6
                     }
 
-                    // the answer
-                    TextEdit {
+                    // a card the tool's result came with (WeatherCard.qml)
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing
+                        active: entry.kind === "tool" && entry.cardData !== null && entry.cardData.kind === "weather"
+                        visible: active
+                        sourceComponent: WeatherCard {
+                            weather: entry.cardData
+                        }
+                    }
+
+                    // the answer: Markdown, code blocks with Copy, file lists that open
+                    AnswerBody {
                         id: answerText
                         Layout.fillWidth: true
                         visible: entry.kind === "assistant"
-                        text: entry.text
-                        textFormat: TextEdit.MarkdownText
-                        wrapMode: TextEdit.Wrap
-                        readOnly: true
-                        selectByMouse: true
-                        color: Kirigami.Theme.textColor
-                        selectionColor: Kirigami.Theme.highlightColor
-                        selectedTextColor: Kirigami.Theme.highlightedTextColor
-                        font: Kirigami.Theme.defaultFont
+                        text: entry.kind === "assistant" ? entry.text : ""
                         onLinkActivated: link => entry.linkActivated(link)
-
-                        HoverHandler {
-                            cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor
-                        }
                     }
 
                     PlasmaComponents3.ToolButton {
@@ -235,11 +245,7 @@ Item {
                         display: PlasmaComponents3.AbstractButton.IconOnly
                         PlasmaComponents3.ToolTip.text: text
                         PlasmaComponents3.ToolTip.visible: hovered
-                        onClicked: {
-                            answerText.selectAll();
-                            answerText.copy();
-                            answerText.deselect();
-                        }
+                        onClicked: answerText.copyAll()
                     }
 
                     // approval

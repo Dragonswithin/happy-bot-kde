@@ -9,12 +9,15 @@ the tool is left out when the user's "local only" setting is on
 
 The answer is short text: now (temperature, conditions from the WMO weather
 code, wind), then each day's high, low, chance of rain, sunrise and sunset.
-``read``: it changes nothing.
+``weather_card`` reads that same text back into the popup's weather card
+(``{"kind": "weather", "place", "now", "days"}``, drawn by WeatherCard.qml),
+so the format and its reader live together here. ``read``: it changes nothing.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -76,8 +79,26 @@ def weather(arguments: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n(Open-Meteo)"
 
 
+_NOW = re.compile(r"^(?P<place>.+): now (?P<temperature>-?[\d.]+)°C \(feels (?P<feels>-?[\d.]+)°C\), "
+                  r"(?P<conditions>[^,]+), wind (?P<wind>[\d.]+) km/h$")
+_DAY = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2}): (?P<low>-?[\d.]+)–(?P<high>-?[\d.]+)°C, (?P<conditions>[^,]+), "
+                  r"rain (?P<rain>[\d?]+)%, sunrise (?P<sunrise>[\d:?]+), sunset (?P<sunset>[\d:?]+)$")
+
+
+def weather_card(text: str) -> dict[str, Any] | None:
+    """The weather card for ``weather``'s text, or None if the text is not in its format."""
+    lines = text.splitlines()
+    now = _NOW.match(lines[0]) if lines else None
+    if now is None:
+        return None
+    days = [match.groupdict() for match in (_DAY.match(line) for line in lines[1:]) if match]
+    return {"kind": "weather", "place": now["place"],
+            "now": {key: now[key] for key in ("temperature", "feels", "conditions", "wind")}, "days": days}
+
+
 def weather_tools() -> list[Tool]:
     return [Tool("weather", "Current weather and the next days' forecast, with sunrise and sunset, for a place.",
                  object_schema({"place": {"type": "string", "description": "City, optionally ', Country'"},
                                 "days": {"type": "integer", "description": "1 to 7, default 3"}}, ["place"]),
-                 RISK_READ, weather, summarize=lambda a: f"Check the weather in {a.get('place', '?')}")]
+                 RISK_READ, weather, summarize=lambda a: f"Check the weather in {a.get('place', '?')}",
+                 card=weather_card)]

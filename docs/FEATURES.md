@@ -95,11 +95,14 @@ text-only models and stays as an option afterwards.
   notification; KDE registers it at the next login, not yet verified)
 - ● A global "ask about this window" shortcut. (same entry; keys are assigned
   in System Settings)
-- ◐ Compact answer cards for common results: weather, definition, conversion,
-  a file list with thumbnails. (quick results show computed answers and conversions as
-  cards in the bar; richer cards in answers are deferred)
-- ◐ Markdown, code blocks with Copy, and tables in answers. (Markdown and a
-  Copy button for the whole answer; a Copy button per code block is deferred)
+- ● Compact answer cards for common results: weather, definition, conversion,
+  a file list with thumbnails. (quick results show computed answers and
+  conversions as cards in the bar; in answers, the weather tool's result is
+  a weather card and lists of files open with a click, pictures showing
+  their thumbnail; definitions have no tool of their own, so they stay text)
+- ● Markdown, code blocks with Copy, and tables in answers. (each code block
+  has its own Copy button and its language; checked rendered offscreen, not
+  yet seen by a person in the popup)
 - ● A KRunner plugin so the same assistant answers from KRunner. (checked live
   over DBus)
 - ⏸ Push-to-talk voice input through a speech-to-text endpoint the user

@@ -861,7 +861,18 @@ Findings:
   on the maintainer's account), and the settings page driven by a person.
 - Typing permission: the Behaviour page shows whether typing into other
   apps is allowed and an "Allow…" button that shows Plasma's question now
-  (`POST /typing/allow`). Not yet pressed by a person.
+  (`POST /typing/allow`). Not yet pressed by a person. Triggered once from
+  the daemon on the maintainer's account: Plasma's portal received the
+  request and nobody answered within the two minutes, so it stays unset.
+- Answer cards: answers are drawn by `AnswerBody.qml`, which splits the
+  Markdown (`answerParts.js`, tested in Node by `tests/test_answer_parts.py`)
+  into text, code blocks (each with its language and its own Copy button)
+  and lists of two or more file paths (rows with the file type's icon or a
+  picture's thumbnail, opened with a click). A tool can now attach a card to
+  a successful result (`Tool.card`, sent as `card` on `tool_result`); the
+  weather tool reads its own text back into one, drawn by `WeatherCard.qml`
+  under the step. Both were rendered offscreen with the KDE theme and
+  looked right; neither has been seen in the real popup yet.
 
 ## Decisions
 

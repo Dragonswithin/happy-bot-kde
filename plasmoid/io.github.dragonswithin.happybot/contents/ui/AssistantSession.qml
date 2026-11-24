@@ -21,7 +21,7 @@ import QtQuick
  * event stream. XMLHttpRequest reports the growing response at readyState
  * LOADING; `consumeStream` parses the new part into events and `applyEvent`
  * turns them into `entries`. Each entry is `{kind, text, stage, callId,
- * approvalId, detail, canRemember, started, progress}` (`stage`, not `state`, because every QML
+ * approvalId, detail, canRemember, started, progress, card}` (`stage`, not `state`, because every QML
  * item already has a `state` property):
  *
  * - kind "user", "assistant" (Markdown, grows as text streams in), "notice"
@@ -33,7 +33,9 @@ import QtQuick
  * - kind "tool" is one tool call: `text` is its display name, `stage` is
  *   "running", "ok" or "failed", `callId` links the result to the call,
  *   `started` is when it began (ms since the epoch, for the elapsed-time
- *   display) and `progress` the latest status line it reported.
+ *   display) and `progress` the latest status line it reported. `card` is
+ *   the JSON of the card the daemon sent with a successful result (the
+ *   weather, drawn by WeatherCard.qml), or "".
  * - kind "approval" is a tool call waiting for the user. The call's own
  *   "tool" entry turns into it in place, so one action is one row: `text`
  *   says what will run, `detail` why it needs approval, `approvalId` is what
@@ -126,7 +128,7 @@ Item {
         session.entries.append({
             kind: kind, text: text || "", stage: stage || "", callId: callId || "",
             approvalId: approvalId || "", detail: detail || "", canRemember: canRemember === true,
-            started: Date.now(), progress: ""
+            started: Date.now(), progress: "", card: ""
         });
     }
 
@@ -141,10 +143,13 @@ Item {
     }
 
     /** Records a tool result. An approval card keeps the user's answer as its outcome. */
-    function setEntryStage(callId, stage) {
+    function setEntryStage(callId, stage, card) {
         const index = findEntry("callId", callId);
         if (index >= 0 && session.entries.get(index).kind === "tool") {
             session.entries.setProperty(index, "stage", stage);
+            if (card) {
+                session.entries.setProperty(index, "card", JSON.stringify(card));
+            }
         }
     }
 
@@ -427,7 +432,7 @@ Item {
             break;
         }
         case "tool_result":
-            setEntryStage(event.id, event.ok ? "ok" : "failed");
+            setEntryStage(event.id, event.ok ? "ok" : "failed", event.card || null);
             break;
         case "approval_required": {
             setStatus("thinking", i18n("Waiting for your approval"));

@@ -252,6 +252,17 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual([m.text for m in second_request[-2:]], ["echo: a", "echo: b"])
         self.assert_history_valid()
 
+    def test_a_tool_card_travels_with_its_successful_result_only(self) -> None:
+        self.registry = ToolRegistry([
+            Tool("echo", "Echo.", object_schema(), RISK_READ, lambda a: "sunny", card=lambda text: {"kind": "weather", "now": text}),
+            Tool("broken", "Fails.", object_schema(), RISK_READ, lambda a: (_ for _ in ()).throw(ToolFailure("offline")),
+                 card=lambda text: {"kind": "weather"}),
+        ])
+        self.run_loop(ScriptedProvider([call("1", "echo"), call("2", "broken")], [TextDelta("Done.")]))
+        results = {event["id"]: event for event in self.events if event["type"] == "tool_result"}
+        self.assertEqual(results["1"]["card"], {"kind": "weather", "now": "sunny"})
+        self.assertNotIn("card", results["2"])
+
     def test_tool_failures_and_bad_calls_are_returned_to_the_model(self) -> None:
         bad_arguments = ToolCallReady(ToolCall("3", "echo", {}, "arguments were not valid JSON"))
         self.run_loop(ScriptedProvider(
