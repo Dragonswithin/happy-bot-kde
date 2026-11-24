@@ -62,11 +62,15 @@ import "barInput.js" as BarInput
  *   through the hits. Enter opens the selected hit; with no selection it
  *   sends the text to the assistant.
  *
- * The floating button (FloatingButton.qml, the `floatingButton` setting) and
- * the hotkey (the widget's global shortcut) both call `openForApplication`:
- * the popup (or the bar) opens with the application the user is in noted
- * (`session.captureApplication`), so questions are about it. Opening from
- * the panel clears that note. The button's position is saved in
+ * The floating Happy Bot (FloatingButton.qml, the `floatingButton` setting)
+ * and the hotkey (the widget's global shortcut) both call
+ * `openForApplication`, which notes the application the user is in
+ * (`session.captureApplication`) so questions are about it. With the
+ * floating button on, Happy Bot opens right at the button, in the same
+ * view as the popup, without the panel; otherwise in the bar or popup.
+ * While the floating one is open it is the `surface` the keyboard handlers
+ * work on (selection, Enter, putting text in the field). Opening from the
+ * panel clears the application note. The button's position is saved in
  * `floatingX`/`floatingY` when it is dragged.
  *
  * A right-click on the icon or the bar opens the applet's own small menu
@@ -100,7 +104,7 @@ PlasmoidItem {
         if (session.pendingApprovals > 0) {
             return PlasmaCore.Types.NeedsAttentionStatus;
         }
-        return session.busy || popup.visible ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
+        return session.busy || popup.visible || root.floatingOpen ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
     }
     toolTipSubText: session.statusText
     activationTogglesExpanded: false
@@ -112,12 +116,21 @@ PlasmoidItem {
     }
     onConversationOpenChanged: root.updateBarPopup()
 
+    // The floating Happy Bot when it is switched on, and whether it is open. While it is open it is
+    // where the user types, so the keyboard handlers below work on it instead of the panel popup.
+    readonly property var floating: floatingLoader.item
+    readonly property bool floatingOpen: floating !== null && floating.expanded
+    readonly property var surface: floatingOpen ? floating : popup
+
     AssistantSession {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
         searchLimit: Plasmoid.configuration.instantResults
         onHitsChanged: {
             popup.selectedIndex = -1;
+            if (root.floating) {
+                root.floating.selectedIndex = -1;
+            }
             root.updateBarPopup();
         }
         onSearchErrorChanged: root.updateBarPopup()
@@ -174,20 +187,42 @@ PlasmoidItem {
         onMenuRequested: contextMenu.openRelative()
     }
 
-    // The floating button over other windows (FloatingButton.qml), when switched on in the settings.
+    // The floating Happy Bot over other windows (FloatingButton.qml), when switched on in the settings.
+    // It opens into the same view as the popup, right where it is; the panel is not needed.
     Loader {
+        id: floatingLoader
         active: Plasmoid.configuration.floatingButton
         sourceComponent: FloatingButton {
+            session: session
             posX: Plasmoid.configuration.floatingX
             posY: Plasmoid.configuration.floatingY
             idleOpacity: Plasmoid.configuration.floatingOpacity / 100
             iconSource: Plasmoid.icon
             busy: session.busy
+            useRobotMascot: Plasmoid.configuration.useRobotMascot
+            showConversation: root.conversationOpen
+            widthInGridUnits: Plasmoid.configuration.popupWidth
+            heightInGridUnits: Plasmoid.configuration.popupHeight
             onClicked: root.openForApplication()
             onMenuRequested: contextMenu.openRelative()
             onMoved: (x, y) => {
                 Plasmoid.configuration.floatingX = x;
                 Plasmoid.configuration.floatingY = y;
+            }
+            onQueryEdited: text => root.handleEdited(text)
+            onAccepted: text => root.handleAccepted(text)
+            onSelectionMove: delta => root.moveSelection(delta)
+            onCompleteRequested: root.completeFromTop()
+            onHitActivated: location => root.openLocation(location)
+            onResultActivated: hit => root.openHit(hit)
+            onFileActionRequested: (hit, action) => root.fileAction(hit, action)
+            onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
+            onCloseRequested: root.closePopup()
+            onSettingsRequested: root.openSettings()
+            onDismissed: {
+                searchDelay.stop();
+                session.clearSearch();
+                clearInput();
             }
         }
     }
@@ -280,6 +315,9 @@ PlasmoidItem {
     }
 
     function closePopup() {
+        if (root.floating) {
+            root.floating.close();
+        }
         if (root.barMode) {
             root.conversationOpen = false;
             root.clearInput();
@@ -325,9 +363,11 @@ PlasmoidItem {
         });
     }
 
-    /** Puts text in whichever field the user types in: the panel bar or the popup's field. */
+    /** Puts text in whichever field the user types in: the floating Happy Bot, the panel bar or the popup. */
     function setInput(text) {
-        if (root.barMode && root.fullRepresentationItem) {
+        if (root.floatingOpen) {
+            root.floating.setInput(text);
+        } else if (root.barMode && root.fullRepresentationItem) {
             root.fullRepresentationItem.setText(text);
         } else {
             popup.setInput(text);
@@ -338,10 +378,18 @@ PlasmoidItem {
         root.setInput("");
     }
 
-    /** The floating button and the hotkey: open Happy Bot noting the application the user is in. */
+    /** The floating button and the hotkey: open Happy Bot noting the application the user is in.
+     *  With the floating button on, it opens right there; otherwise in the panel bar or popup. */
     function openForApplication() {
         session.captureApplication();
-        if (root.barMode) {
+        if (root.floating) {
+            popup.visible = false;
+            root.conversationOpen = session.hasTranscript || session.busy || session.pendingApprovals > 0
+                || session.history.length > 0;
+            session.refreshHistory();
+            session.refreshStatus();
+            root.floating.open();
+        } else if (root.barMode) {
             root.focusBar();
         } else if (!popup.visible) {
             root.openPopup();
@@ -377,7 +425,7 @@ PlasmoidItem {
             root.recall(delta);
             return;
         }
-        popup.selectedIndex = Math.max(-1, Math.min(count - 1, popup.selectedIndex + delta));
+        root.surface.selectedIndex = Math.max(-1, Math.min(count - 1, root.surface.selectedIndex + delta));
     }
 
     function openLocation(location) {
@@ -430,8 +478,8 @@ PlasmoidItem {
     }
 
     function handleAccepted(text) {
-        if (popup.selectedIndex >= 0 && popup.selectedIndex < session.hits.length) {
-            root.openHit(session.hits[popup.selectedIndex]);
+        if (root.surface.selectedIndex >= 0 && root.surface.selectedIndex < session.hits.length) {
+            root.openHit(session.hits[root.surface.selectedIndex]);
             return;
         }
         if (text.length === 0 && session.needsSetup) {
@@ -454,7 +502,8 @@ PlasmoidItem {
         target: Plasmoid
         // The hotkey (the widget's global shortcut): Happy Bot for the application in use.
         function onActivated() {
-            if (!root.barMode && (popup.visible || Date.now() - popup.hiddenAt < 300)) {
+            if (root.floatingOpen || (!root.floating && !root.barMode
+                                      && (popup.visible || Date.now() - popup.hiddenAt < 300))) {
                 root.closePopup();
             } else {
                 root.openForApplication();
@@ -467,7 +516,7 @@ PlasmoidItem {
     Connections {
         target: session
         function onPendingApprovalsChanged() {
-            if (session.pendingApprovals > 0 && popup.visible) {
+            if (session.pendingApprovals > 0 && (popup.visible || root.floatingOpen)) {
                 searchDelay.stop();
                 session.clearSearch();
                 root.conversationOpen = true;

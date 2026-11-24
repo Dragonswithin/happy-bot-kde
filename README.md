@@ -15,8 +15,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
   panels always show the icon.
 - A floating Happy Bot button over other windows (Search Bar settings:
   Floating button), which you drag anywhere and which fades while not in
-  use, and a hotkey (same page). Either opens Happy Bot knowing which
-  application you are in, shown as "Helping with: …", which you can remove.
+  use. Clicking it opens Happy Bot right there, field and all, with no
+  panel needed. A hotkey (same page) opens it too. Either way Happy Bot
+  knows which application you are in, shown as "Helping with: …", which
+  you can remove.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.

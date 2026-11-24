@@ -980,6 +980,15 @@ Findings:
   note at the start of the model's copy only. Seen working: the button
   appearing in place from the widget (checked by its colour in a
   screenshot). Not yet tried by a person: clicking, dragging, the hotkey.
+- The maintainer found the button only handed over to the panel bar, which
+  users may not show. The floating window now opens into Happy Bot itself:
+  it grows from the button toward the middle of the screen and holds the
+  same `ResultsView.qml` as the popup (field on the side nearest the
+  button, then matches or the conversation), takes the keyboard only while
+  open (layer-shell "on demand") and closes on a click elsewhere, Escape or
+  its close button. While it is open it is main.qml's `surface` for the
+  keyboard handlers. With the button on, the hotkey opens it too. A test
+  copy started open showed the field and AI picker in place.
 
 ## Decisions
 
