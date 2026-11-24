@@ -17,6 +17,10 @@ notification, which is how routines started by a systemd timer report back
 
 ``routine-check`` is what a network or battery routine's timer runs
 (``routine_conditions.py``).
+``app`` talks to the Happy Bot app through the daemon (``app_control.py``):
+``show`` opens the floating Happy Bot of a running app (``happy-bot-app``
+calls it when the app is already running), ``start`` starts it, and
+``autostart-on``/``autostart-off`` say whether it starts at login.
 ``eval`` runs ``evaluation.SCENARIOS`` as dry runs against a model and
 prints pass or fail with timings.
 ``mcp-serve`` speaks MCP on stdin and stdout so another AI program can use
@@ -237,6 +241,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
     routine_check.add_argument("--value", required=True)
     routine_check.add_argument("name")
+    app = sub.add_parser("app", help="The Happy Bot app (the floating Happy Bot): show it, start it, or say "
+                         "whether it starts when you log in.")
+    app.add_argument("action", choices=("show", "status", "start", "autostart-on", "autostart-off"))
     file_index = sub.add_parser("file-index-serve", help="Run as an MCP server (stdio) that searches a file index "
                                 "the computer already keeps (started by the assistant when file search uses it).")
     file_index.add_argument("--index", required=True, choices=("kde", "locate"))
@@ -468,6 +475,15 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 reply = {"ok": True, "result": check(args.name, args.kind, args.value,
                                                       lambda: stream_ask(routine["request"], notify=True))}
+        elif args.command == "app":
+            if args.action == "show":
+                reply = request_json("POST", "/app/show")
+            elif args.action == "status":
+                reply = request_json("GET", "/app")
+            else:
+                change = {"start": {"start": True}, "autostart-on": {"autostart": True},
+                          "autostart-off": {"autostart": False}}[args.action]
+                reply = request_json("POST", "/app", change)
         elif args.command == "mcp-serve":
             from .mcp_serve import serve
 

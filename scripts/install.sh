@@ -9,6 +9,9 @@
 #                                      po/*.po compiled into it (scripts/translations.sh)
 #                                      when translations exist
 #   krunner/happy-bot.desktop -> ~/.local/share/krunner/dbusplugins/ (KRunner plugin)
+#   desktop/io.github.dragonswithin.happybot.desktop -> ~/.local/share/applications/ (the
+#                                      "Happy Bot" app in the application menu, which runs
+#                                      happy-bot-app: the floating Happy Bot on its own)
 #   desktop/happy-bot-shortcuts.desktop -> ~/.local/share/applications/, linked from
 #                                      ~/.local/share/kglobalaccel/ (global shortcuts)
 # and, the first time, adds the search bar to the panel that holds the
@@ -44,10 +47,12 @@ SERVICE_SRC="${REPO_ROOT}/systemd/user/${SERVICE_NAME}"
 SERVICE_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
 PLASMOID_ID="io.github.dragonswithin.happybot"
 PLASMOID_DIR="${REPO_ROOT}/plasmoid/${PLASMOID_ID}"
-LAUNCHERS=(happy-bot-daemon happy-bot)
+LAUNCHERS=(happy-bot-daemon happy-bot happy-bot-app)
 KRUNNER_SRC="${REPO_ROOT}/krunner/happy-bot.desktop"
 KRUNNER_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/krunner/dbusplugins"
 SHORTCUTS_SRC="${REPO_ROOT}/desktop/happy-bot-shortcuts.desktop"
+APP_ENTRY_SRC="${REPO_ROOT}/desktop/${PLASMOID_ID}.desktop"
+AUTOSTART_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/autostart"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
 KGLOBALACCEL_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/kglobalaccel"
 
@@ -130,11 +135,13 @@ if (( uninstall )); then
   if (( dry_run )); then
     printf 'Would stop and disable %s and remove its unit file\n' "$SERVICE_NAME"
     printf 'Would remove the reminder and routine timers the assistant created, and the KRunner plugin\n'
+    printf 'Would stop the Happy Bot app and remove its menu and login entries\n'
     printf 'Would remove the search bar from every panel and uninstall the applet\n'
     printf 'Would remove %s and the launchers in %s\n' "$LIB_DIR" "$BIN_DIR"
     if (( purge )); then printf 'Would remove settings in %s\n' "$CONFIG_DIR"; else printf 'Would keep settings in %s\n' "$CONFIG_DIR"; fi
     exit 0
   fi
+  [[ -x "${BIN_DIR}/happy-bot-app" ]] && "${BIN_DIR}/happy-bot-app" --quit || true
   systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
   rm -f -- "${SERVICE_DIR}/${SERVICE_NAME}"
   # Reminder and routine units carry this marker (src/happy_bot/user_timers.py);
@@ -145,7 +152,8 @@ if (( uninstall )); then
     rm -f -- "$unit"
   done
   rm -f -- "${KRUNNER_DIR}/happy-bot.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop" \
-    "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
+    "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" \
+    "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
   systemctl --user daemon-reload || true
   remove_from_panels >/dev/null
   if applet_installed; then
@@ -184,6 +192,7 @@ if (( dry_run )); then
   printf 'Would install %s -> %s\n' "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
   printf 'Would install %s -> %s\n' "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
   printf 'Would install %s -> %s (and link it for global shortcuts)\n' "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
+  printf 'Would install %s -> %s (the Happy Bot app in the menu)\n' "$APP_ENTRY_SRC" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
   if (( start_service )); then
     printf 'Would enable and restart user service: %s\n' "$SERVICE_NAME"
   else
@@ -208,6 +217,12 @@ done
 install -m 0644 "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
 install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
 install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
+# The app's menu entry, its icon pointed at the robot picture the applet installs.
+APP_ICON="${XDG_DATA_HOME:-${HOME}/.local/share}/plasma/plasmoids/${PLASMOID_ID}/contents/images/happy-bot.svg"
+sed "s|^Icon=.*|Icon=${APP_ICON}|" "$APP_ENTRY_SRC" | install -D -m 0644 /dev/stdin "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
+if [[ -f "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop" ]]; then
+  install -m 0644 "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
+fi
 install -d -m 0755 "$KGLOBALACCEL_DIR"
 ln -sf -- "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop"
 
@@ -229,6 +244,8 @@ fi
 
 if (( had_applet )); then
   kpackagetool6 --type Plasma/Applet --upgrade "$APPLET_SOURCE" >/dev/null
+  # A running Happy Bot app keeps the old version until it starts again.
+  "${BIN_DIR}/happy-bot-app" --restart || true
   printf 'Search bar upgraded. Log out and in (or restart plasmashell) to load the new version.\n'
 else
   kpackagetool6 --type Plasma/Applet --install "$APPLET_SOURCE" >/dev/null

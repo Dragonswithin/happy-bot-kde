@@ -201,14 +201,20 @@ function describe(w) {
 # The window the user is working in. While they type in the panel bar the
 # active window is the panel itself, so in that case this is the topmost
 # ordinary window on the current desktop: the one they were just using.
+# Happy Bot's own windows (the floating Happy Bot, run by plasmawindowed, which
+# KWin counts as an ordinary window) and Plasma's are never that window.
 CURRENT_WINDOW_JS = """
+function isUserWindow(w) {
+    var own = ["plasmawindowed", "plasmashell", "org.kde.plasmashell"];
+    return (w.normalWindow || w.dialog) && own.indexOf(String(w.resourceClass)) < 0;
+}
 function currentWindow() {
     var active = workspace.activeWindow;
-    if (active && (active.normalWindow || active.dialog)) { return active; }
+    if (active && isUserWindow(active)) { return active; }
     var stack = workspace.stackingOrder;
     for (var i = stack.length - 1; i >= 0; i--) {
         var w = stack[i];
-        if ((w.normalWindow || w.dialog) && !w.minimized && (w.onAllDesktops || w.desktops.indexOf(workspace.currentDesktop) >= 0)) {
+        if (isUserWindow(w) && !w.minimized && (w.onAllDesktops || w.desktops.indexOf(workspace.currentDesktop) >= 0)) {
             return w;
         }
     }

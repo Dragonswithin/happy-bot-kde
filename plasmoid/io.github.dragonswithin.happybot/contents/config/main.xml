@@ -33,18 +33,13 @@
       <min>8</min>
       <max>60</max>
     </entry>
-    <!-- The floating Happy Bot button: a small round button above other
-         windows that can be dragged anywhere and fades while not in use.
-         Clicking it (like the hotkey) opens Happy Bot knowing which
-         application the user was in. floatingButton: shown or not (default
-         false). floatingX, floatingY: its position in logical pixels from
+    <!-- The floating Happy Bot, shown when Happy Bot runs as its own app
+         (happy-bot-app; these values belong to that app's copy of the
+         widget). floatingX, floatingY: its position in logical pixels from
          the top left of the screen; -1 (default) puts it near the bottom
          right. floatingOpacity: how visible it is while not in use, in
          percent (default 40, range 15 to 100; it is fully visible under the
          pointer). -->
-    <entry name="floatingButton" type="Bool">
-      <default>false</default>
-    </entry>
     <entry name="floatingX" type="Int">
       <default>-1</default>
     </entry>

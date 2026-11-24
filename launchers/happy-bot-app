@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Starts the Happy Bot app, or opens it if it is already running.
+#
+# The app is the Happy Bot widget run on its own by Plasma's plasmawindowed
+# (with --statusnotifier, so it keeps running with its window closed). Run
+# that way, the widget shows only the floating Happy Bot over other windows
+# (see plasmoid/.../contents/ui/main.qml, `standalone`). The "Happy Bot"
+# application-menu entry, the login entry and a launch shortcut all run
+# this script.
+#
+#   happy-bot-app            start the app; if it runs already, open the
+#                            floating Happy Bot (happy-bot app show, which
+#                            the running app hears through the daemon)
+#   happy-bot-app --restart  stop a running app and start it again, so it
+#                            loads a newly installed version (the installer
+#                            uses this)
+#   happy-bot-app --quit     stop a running app
+#
+# Exit status is that of the last command; a missing plasmawindowed is
+# reported on stderr.
+
+set -euo pipefail
+
+APPLET_ID="io.github.dragonswithin.happybot"
+PATTERN="^plasmawindowed --statusnotifier ${APPLET_ID}\$"
+BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+running() {
+  pgrep -u "$(id -u)" -f "$PATTERN" >/dev/null
+}
+
+quit_app() {
+  pkill -u "$(id -u)" -f "$PATTERN" || true
+  for _ in $(seq 40); do
+    running || return 0
+    sleep 0.1
+  done
+}
+
+start_app() {
+  command -v plasmawindowed >/dev/null || { printf 'happy-bot-app: plasmawindowed (Plasma) is needed\n' >&2; exit 1; }
+  setsid plasmawindowed --statusnotifier "$APPLET_ID" >/dev/null 2>&1 < /dev/null &
+}
+
+case "${1:-}" in
+  --quit) quit_app ;;
+  --restart)
+    if running; then
+      quit_app
+      start_app
+    fi
+    ;;
+  "")
+    if running; then
+      "${BIN_DIR}/happy-bot" app show >/dev/null
+    else
+      start_app
+    fi
+    ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

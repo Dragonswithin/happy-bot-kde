@@ -62,12 +62,20 @@ import "barInput.js" as BarInput
  *   through the hits. Enter opens the selected hit; with no selection it
  *   sends the text to the assistant.
  *
- * The floating Happy Bot (FloatingButton.qml, the `floatingButton` setting)
- * and the hotkey (the widget's global shortcut) both call
- * `openForApplication`, which notes the application the user is in
- * (`session.captureApplication`) so questions are about it. With the
- * floating button on, Happy Bot opens right at the button, in the same
- * view as the popup, without the panel; otherwise in the bar or popup.
+ * Happy Bot also runs as an app of its own (`standalone`): `happy-bot-app`
+ * starts this widget in Plasma's plasmawindowed, and the "Happy Bot" entry
+ * in the application menu runs it. Then the widget hides plasmawindowed's
+ * window and shows only the floating Happy Bot (FloatingButton.qml) over
+ * other windows; launching it again or clicking its tray entry opens the
+ * floating view (the second launch arrives as `/app/wait` from the
+ * daemon). In a panel there is no floating button; the panel widget and
+ * the app can run side by side.
+ *
+ * The floating Happy Bot and the hotkey (the widget's global shortcut)
+ * both call `openForApplication`, which notes the application the user is
+ * in (`session.captureApplication`) so questions are about it. In the app,
+ * Happy Bot opens right at the floating button, in the same view as the
+ * popup; in a panel, in the bar or popup.
  * While the floating one is open it is the `surface` the keyboard handlers
  * work on (selection, Enter, putting text in the field). Opening from the
  * panel clears the application note. The button's position is saved in
@@ -119,7 +127,16 @@ PlasmoidItem {
     }
     onConversationOpenChanged: root.updateBarPopup()
 
-    // The floating Happy Bot when it is switched on, and whether it is open. While it is open it is
+    // Run as the Happy Bot app (happy-bot-app: plasmawindowed, which gives the "application" form
+    // factor) rather than in a panel or on the desktop: then this is the floating Happy Bot only.
+    readonly property bool standalone: Plasmoid.formFactor === PlasmaCore.Types.Application
+    // The app's host window (plasmawindowed's), hidden: the floating Happy Bot is the app's face.
+    readonly property var hostWindow: standalone ? root.Window.window : null
+    property bool hostWindowSeen: false
+    // "Show yourself" requests seen from the daemon (`happy-bot app show`); -1 before the first answer.
+    property int showRequests: -1
+
+    // The floating Happy Bot in the app, and whether it is open. While it is open it is
     // where the user types, so the keyboard handlers below work on it instead of the panel popup.
     readonly property var floating: floatingLoader.item
     readonly property bool floatingOpen: floating !== null && floating.expanded
@@ -190,11 +207,11 @@ PlasmoidItem {
         onMenuRequested: contextMenu.openRelative()
     }
 
-    // The floating Happy Bot over other windows (FloatingButton.qml), when switched on in the settings.
-    // It opens into the same view as the popup, right where it is; the panel is not needed.
+    // The floating Happy Bot over other windows (FloatingButton.qml): the app's whole interface.
+    // It opens into the same view as the popup, right where it is; no panel is needed.
     Loader {
         id: floatingLoader
-        active: Plasmoid.configuration.floatingButton
+        active: root.standalone
         sourceComponent: FloatingButton {
             session: session
             posX: Plasmoid.configuration.floatingX
@@ -303,8 +320,7 @@ PlasmoidItem {
         }
     }
 
-    // The floating button's own menu. It has no "Remove from panel": from the floating button that
-    // would remove the whole widget, floating button included, which is not what a user expects there.
+    // The floating button's own menu: no "Remove from panel" (it is not in a panel), and Quit ends the app.
     PlasmaExtras.Menu {
         id: floatingMenu
         visualParent: root
@@ -322,9 +338,62 @@ PlasmoidItem {
         }
 
         PlasmaExtras.MenuItem {
-            text: i18n("Hide the floating button")
-            icon: "view-hidden"
-            onClicked: Plasmoid.configuration.floatingButton = false
+            text: i18n("Quit Happy Bot")
+            icon: "application-exit"
+            onClicked: Qt.quit()
+        }
+    }
+
+    // The app: hide the host window when it appears; when it appears again (its tray entry was
+    // clicked), hide it and open the floating Happy Bot instead.
+    Connections {
+        target: root.hostWindow
+        function onVisibleChanged() {
+            if (!root.hostWindow.visible) {
+                return;
+            }
+            Qt.callLater(function() { root.hostWindow.visible = false; });
+            if (root.hostWindowSeen) {
+                root.openForApplication();
+            }
+            root.hostWindowSeen = true;
+        }
+    }
+
+    onHostWindowChanged: {
+        if (root.hostWindow && root.hostWindow.visible) {
+            root.hostWindowSeen = true;
+            Qt.callLater(function() { root.hostWindow.visible = false; });
+        }
+    }
+
+    /** The app waits for "show yourself" (a second launch, or the hotkey) through the daemon. */
+    function waitForShowRequest() {
+        session.request("GET", "/app/wait?seen=" + root.showRequests, null, function(data) {
+            // A second launch or the launch shortcut: open the floating Happy Bot, or close it when open.
+            if (root.showRequests >= 0 && data.count > root.showRequests) {
+                if (root.floatingOpen) {
+                    root.closePopup();
+                } else {
+                    root.openForApplication();
+                }
+            }
+            root.showRequests = data.count;
+            root.waitForShowRequest();
+        }, function(data) {
+            showRetry.start();
+        });
+    }
+
+    Timer {
+        id: showRetry
+        interval: 5000
+        onTriggered: root.waitForShowRequest()
+    }
+
+    Component.onCompleted: {
+        if (root.standalone) {
+            root.waitForShowRequest();
         }
     }
 

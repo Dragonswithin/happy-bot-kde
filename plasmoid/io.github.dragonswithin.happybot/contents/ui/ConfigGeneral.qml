@@ -11,14 +11,16 @@ import QtQuick.Layouts
 import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 import org.kde.kquickcontrols
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 
 /**
  * "Search Bar" page of the applet's settings dialog: the applet's own
  * behaviour in the panel. The assistant's icon (the wand or the robot
  * mascot), what the panel shows (the icon, or a search bar of a chosen
- * width), the floating button over other windows (on or off, how faded,
- * back to its corner) and the hotkey, live file results while typing (on or
+ * width), the floating Happy Bot app (running or not, start it, start it at
+ * login; in the app's own settings also how faded and back to its corner)
+ * and the hotkey, live file results while typing (on or
  * off, how many characters, how long a pause, how many matches), the size
  * of the popup, and the address of the daemon for unusual setups.
  *
@@ -26,12 +28,17 @@ import org.kde.plasma.plasmoid
  * the same one as on Plasma's Keyboard Shortcuts page); like that page,
  * this one stores it in `saveConfig`, which the dialog calls on Apply.
  * Both the hotkey and the floating button open Happy Bot knowing which
- * application the user is in (main.qml, `openForApplication`).
+ * application the user is in (main.qml, `openForApplication`). The app's
+ * state comes from the daemon (`GET /app`, `POST /app`,
+ * src/happy_bot/app_control.py), read every few seconds while the page is
+ * open; the opacity and position values belong to the app's own copy of
+ * the widget, so they are shown only in the app (`standalone`).
  *
  * Plasma binds each `cfg_<name>` property to the entry of the same name in
  * contents/config/main.xml and writes it back when the user applies; the
- * ranges here mirror the min/max declared there. This page holds no other
- * state and makes no requests. Everything the daemon stores is on the other
+ * ranges here mirror the min/max declared there. Apart from the app's
+ * state above, this page holds no state and makes no requests. Everything
+ * else the daemon stores is on the other
  * pages (DaemonSettings.qml).
  */
 KCM.SimpleKCM {
@@ -47,7 +54,37 @@ KCM.SimpleKCM {
     property alias cfg_popupHeight: popupHeight.value
     property alias cfg_daemonUrl: daemonUrl.text
     property alias cfg_useRobotMascot: robotMascot.checked
-    property alias cfg_floatingButton: floatingButton.checked
+    // The Happy Bot app (the floating Happy Bot): whether it runs and starts at login, from the daemon.
+    readonly property bool standalone: Plasmoid.formFactor === PlasmaCore.Types.Application
+    property bool appRunning: false
+    property bool appAutostart: false
+
+    function readApp() {
+        appClient.request("GET", "/app", null, function(data) {
+            page.appRunning = data.running === true;
+            page.appAutostart = data.autostart === true;
+        }, function(data) {});
+    }
+
+    function changeApp(change) {
+        appClient.request("POST", "/app", change, function(data) {
+            page.appRunning = data.running === true;
+            page.appAutostart = data.autostart === true;
+        }, function(data) {});
+    }
+
+    DaemonClient {
+        id: appClient
+        configuredUrl: page.cfg_daemonUrl || ""
+    }
+
+    Timer {
+        interval: 1500
+        repeat: true
+        running: true
+        triggeredOnStart: true
+        onTriggered: page.readApp()
+    }
     property alias cfg_floatingOpacity: floatingOpacity.value
     property int cfg_floatingX
     property int cfg_floatingY
@@ -115,15 +152,38 @@ KCM.SimpleKCM {
             onKeySequenceModified: page.unsavedChanges = keySequence !== Plasmoid.globalShortcut
         }
 
+        RowLayout {
+            Kirigami.FormData.label: i18n("Floating Happy Bot:")
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: page.appRunning ? "checkmark" : "dialog-information"
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+
+            QQC2.Label {
+                text: page.appRunning ? i18n("Running") : i18n("Not running")
+            }
+
+            QQC2.Button {
+                visible: !page.appRunning
+                text: i18n("Start it")
+                icon.name: "media-playback-start"
+                highlighted: true
+                onClicked: page.changeApp({ start: true })
+            }
+        }
+
         QQC2.CheckBox {
-            id: floatingButton
-            Kirigami.FormData.label: i18n("Floating button:")
-            text: i18n("Show a Happy Bot button over other windows")
+            text: i18n("Start it when I log in")
+            checked: page.appAutostart
+            onToggled: page.changeApp({ autostart: checked })
         }
 
         RowLayout {
             Kirigami.FormData.label: i18n("When not in use:")
-            enabled: floatingButton.checked
+            visible: page.standalone
             spacing: Kirigami.Units.smallSpacing
 
             QQC2.Slider {
@@ -140,7 +200,8 @@ KCM.SimpleKCM {
         }
 
         QQC2.Button {
-            enabled: floatingButton.checked && (page.cfg_floatingX >= 0 || page.cfg_floatingY >= 0)
+            visible: page.standalone
+            enabled: page.cfg_floatingX >= 0 || page.cfg_floatingY >= 0
             text: i18n("Put it back in the corner")
             icon.name: "edit-undo"
             onClicked: {
@@ -154,7 +215,9 @@ KCM.SimpleKCM {
             wrapMode: Text.Wrap
             font: Kirigami.Theme.smallFont
             opacity: 0.7
-            text: i18n("Press the hotkey or click the button while using any application, and Happy Bot opens knowing which application you are in, so you can ask about it. Drag the button to move it anywhere; it fades until the pointer is over it.")
+            text: page.standalone
+                ? i18n("Press the hotkey or click the floating Happy Bot while using any application, and it opens right there knowing which application you are in. Drag it to move it anywhere; it fades until the pointer is over it.")
+                : i18n("The floating Happy Bot is an app of its own (Happy Bot in your application menu): it works without this panel widget. Its look and place are set from its own settings (right-click it). The hotkey here opens this panel widget, knowing which application you are in.")
         }
 
         Item {

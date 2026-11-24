@@ -995,6 +995,23 @@ Findings:
   23:41) and was put back with its search bar, mascot and floating button
   switched on. The floating button now has its own menu (settings, new
   conversation, hide the floating button) without that entry.
+- The maintainer then asked for Happy Bot to be an app of its own that also
+  has a Plasma widget, so it is in the application list and works floating
+  or from the panel. `happy-bot-app` runs the widget in Plasma's
+  `plasmawindowed --statusnotifier`, which gives it the "application" form
+  factor; there it hides plasmawindowed's window and is only the floating
+  Happy Bot (the panel widget no longer has a floating button, so there is
+  never a second one). The menu entry `io.github.dragonswithin.happybot.desktop`
+  runs the launcher; a second launch reaches the running app through the
+  daemon (`happy-bot app show` → `POST /app/show`, which the app waits for
+  on `GET /app/wait`), because its tray entry is not registered while its
+  window is hidden. Starting it now or at login is on the Search Bar page
+  (`POST /app`, `app_control.py`). KWin counts the floating window as an
+  ordinary window, so the "window in use" lookup skips Happy Bot's and
+  Plasma's own. Verified: the app starts with its window hidden and the
+  button in place; "show" opened it (720×324, focused) and a second one
+  closed it; the window in use stayed Konsole while it was open; an
+  install restarts a running app on the new version.
 
 ## Decisions
 

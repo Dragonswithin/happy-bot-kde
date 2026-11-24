@@ -13,12 +13,17 @@ architecture and phase order are in `docs/ROADMAP.md`.
   text field in the panel itself with results in a popup above it; while
   you type there, Plasma outlines the panel in its focus colour. Vertical
   panels always show the icon.
-- A floating Happy Bot button over other windows (Search Bar settings:
-  Floating button), which you drag anywhere and which fades while not in
-  use. Clicking it opens Happy Bot right there, field and all, with no
-  panel needed. A hotkey (same page) opens it too. Either way Happy Bot
-  knows which application you are in, shown as "Helping with: …", which
-  you can remove.
+- **Happy Bot the app**: "Happy Bot" in the application menu starts the
+  floating Happy Bot, a button over other windows that you drag anywhere and
+  that fades while not in use. Clicking it opens Happy Bot right there,
+  field and all; no panel widget is needed. Launching it again (or a launch
+  shortcut set in System Settings > Shortcuts) opens or closes it. The
+  Search Bar settings start it, or start it when you log in; right-click
+  the floating button for its own settings or to quit. Happy Bot knows
+  which application you are in when opened this way or with the hotkey,
+  shown as "Helping with: …", which you can remove.
+- The panel widget (search bar or icon) is optional and works alongside the
+  app.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.

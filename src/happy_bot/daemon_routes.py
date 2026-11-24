@@ -11,6 +11,12 @@ Endpoints:
 - ``GET /health``: daemon status, which parts of setup are complete, and the
   user's AIs in order (name and whether online) for the popup's per-chat picker.
 - ``GET /context``: desktop context capture (``desktop_context``).
+- ``GET /app``, ``POST /app``: whether the Happy Bot app (the floating Happy
+  Bot, run by ``happy-bot-app``) is running and starts at login; start it,
+  or turn starting at login on or off (``app_control``).
+- ``POST /app/show``, ``GET /app/wait?seen=N``: a second launch asks the
+  running app to open (``happy-bot app show``); the app waits on
+  ``/app/wait``, which answers when a request arrives or after 25 seconds.
 - ``GET /context/app``: the application the user is working in (name, class,
   window title), for the popup's "Helping with" when it is opened from the
   floating button or the hotkey (``desktop_context.current_application``).
@@ -92,7 +98,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import (desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+from . import (app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_presets, model_setup, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
@@ -142,6 +148,34 @@ def context(server: "AssistantServer", query: dict[str, list[str]], body: dict[s
     captured = desktop_context.combined_context(kind)
     server.state.update(last_context_kind=kind)
     return 200, {"ok": True, "context": captured}
+
+
+def app_status(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "running": app_control.running(), "autostart": app_control.autostart_enabled()}
+
+
+def app_change(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """``{"autostart": bool}`` starts it at login or not; ``{"start": true}`` starts it now if it is not running."""
+    try:
+        if isinstance(body.get("autostart"), bool):
+            app_control.set_autostart(body["autostart"])
+        if body.get("start") is True and not app_control.running():
+            app_control.start()
+    except OSError as error:
+        return _error(500, f"Could not change how the Happy Bot app starts: {error}", "invalid")
+    return app_status(server, query, body)
+
+
+def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "count": app_control.waker.notify(), "running": app_control.running()}
+
+
+def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        seen = int(_first(query, "seen", "-1"))
+    except ValueError:
+        return _error(400, "seen must be a number", "invalid")
+    return 200, {"ok": True, "count": app_control.waker.wait(seen)}
 
 
 def current_application(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -488,6 +522,10 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,
+    ("GET", "/app"): app_status,
+    ("POST", "/app"): app_change,
+    ("POST", "/app/show"): app_show,
+    ("GET", "/app/wait"): app_wait,
     ("GET", "/search"): search,
     ("GET", "/settings"): get_settings,
     ("PUT", "/settings"): put_settings,

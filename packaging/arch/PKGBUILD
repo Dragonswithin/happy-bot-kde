@@ -4,7 +4,8 @@
 # It installs system-wide what scripts/install.sh installs per user: the
 # package in /usr/lib/happy-bot, the two commands in /usr/bin, the
 # daemon as a systemd *user* unit, the panel applet, the KRunner plugin and
-# the global-shortcut entry, with any po/*.po translations compiled into the
+# the global-shortcut entry, the "Happy Bot" app (happy-bot-app and its menu
+# entry), with any po/*.po translations compiled into the
 # applet. Each user then runs, once:
 #   systemctl --user enable --now happy-bot-daemon.service
 # and adds "Happy Bot" to a panel. Settings stay per user in
@@ -35,6 +36,10 @@ package() {
   find "${pkgdir}/usr/lib/happy-bot" -name '__pycache__' -prune -exec rm -rf {} +
   install -Dm755 "${_root}/launchers/happy-bot" "${pkgdir}/usr/bin/happy-bot"
   install -Dm755 "${_root}/launchers/happy-bot-daemon" "${pkgdir}/usr/bin/happy-bot-daemon"
+  install -Dm755 "${_root}/launchers/happy-bot-app" "${pkgdir}/usr/bin/happy-bot-app"
+  sed "s|^Icon=.*|Icon=/usr/share/plasma/plasmoids/io.github.dragonswithin.happybot/contents/images/happy-bot.svg|" \
+    "${_root}/desktop/io.github.dragonswithin.happybot.desktop" \
+    | install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/io.github.dragonswithin.happybot.desktop"
   sed 's|^ExecStart=%h/.local/bin/|ExecStart=/usr/bin/|' "${_root}/systemd/user/happy-bot-daemon.service" \
     | install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/user/happy-bot-daemon.service"
   install -d "${pkgdir}/usr/share/plasma/plasmoids"
