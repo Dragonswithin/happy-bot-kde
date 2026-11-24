@@ -7,6 +7,17 @@ client as it happens. ``daemon_http`` owns the socket and passes ``send``, a
 callable that writes one event and raises ``ClientGone`` when the client has
 disconnected.
 
+A body with ``"ephemeral": true`` is not kept in the conversation history
+(``eval`` uses it). A body may name a configured ``model`` to use for this request instead of
+the active one (``kde-ai-assistant eval --model``).
+
+Routines and dry runs: the system prompt lists the user's routines, and the
+registry includes the routine tools, which change settings through
+``server.replace_settings`` exactly as the settings page does. A body with
+``"dry_run": true`` offers only tools that cannot change anything
+(``ToolRegistry.reads_only``) and asks the model to list the steps it would
+take; ``kde-ai-assistant ask --dry-run`` uses it to try a routine safely.
+
 Event stream, in addition to the agent loop's events (see ``agent_loop``):
 
 - first: ``{"type": "start", "conversation_id", "model", "tools": [...],
@@ -23,8 +34,24 @@ Every event is also recorded on the conversation, and the conversation is
 saved when the turn ends however it ends, so it can be reopened later (see
 ``conversations``).
 
-A turn that takes longer than ``NOTIFY_AFTER_SECONDS`` ends with a desktop
-notification, so the user learns it finished even with the popup closed.
+The user's ``agent`` settings shape the turn: their instructions and the
+abilities they switched off go into a new conversation's system prompt, the
+switched-off tool groups are left out of the registry, and ``max_steps``
+caps the model requests. A turn that takes longer than
+``notify_after_seconds`` (0: never) ends with a desktop notification, so the
+user learns it finished even with the popup closed.
+
+Models: a priced model is refused once this month's spending reaches
+``agent.monthly_spend_cap`` (``spend``). Every finished turn's tokens and
+cost are recorded, and the ``done`` event names the model and its cost. If
+the chosen model fails before it produced anything and a local
+``agent.fallback_model`` is set, the turn is run again on the fallback, with
+a ``{"type": "notice", "message"}`` event saying so; a hosted fallback is
+never used automatically, so nothing is sent off the computer unasked. When
+a local model service says all its slots are busy (``model_busy``; services
+with one slot queue requests), a notice says the request is waiting. With a hosted model
+(``redaction.is_local_address`` false) tool results are redacted before they
+are sent (see ``agent_loop``).
 Work a tool deferred to after the turn (a Plasma shell restart requested by
 ``tools.app_visibility``) runs once the turn has finished streaming.
 
@@ -35,24 +62,30 @@ valid either way.
 
 from __future__ import annotations
 
+import copy
+import json
 import shutil
+import urllib.request
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
 from . import settings as settings_store
+from . import spend
 from .agent_loop import run_turn, system_prompt
 from .conversation import Message
 from .desktop_context import run_command
 from .permissions import PermissionGate
+from .redaction import is_local_address
 from .tools import app_visibility
 from .providers import ProviderError, create_provider
-from .tools.catalog import build_registry
+from .tools.catalog import GROUP_DESCRIPTIONS, build_registry
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
 
 MAX_MESSAGE_CHARS = 20000
-NOTIFY_AFTER_SECONDS = 60
+DRY_RUN_PREFIX = ("Dry run: do not change anything (only look-up tools are available). Look up what you need, "
+                  "then list exactly the steps you would take for this request, one per line:\n")
 
 
 class ClientGone(ConnectionError):
@@ -67,9 +100,24 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             send({"type": "error", "message": "message is required", "code": "invalid"})
             return
         settings = server.settings
+        chosen = str(body.get("model") or "")
+        if chosen and chosen not in settings.get("models", {}):
+            send({"type": "error", "message": f"There is no model named {chosen}.", "code": "invalid"})
+            return
+        if chosen:
+            settings = {**settings, "active_model": chosen}
         model = settings_store.active_model(settings)
         if model is None:
             send({"type": "error", "message": "No AI model is set up yet.", "code": "not_configured"})
+            return
+        if (settings.get("agent") or {}).get("local_only") and not is_local_address(model["base_url"]):
+            send({"type": "error", "code": "not_configured", "message": "Local only is switched on, but the chosen "
+                  "model is hosted. Choose a model on this computer, or switch local only off under Behaviour."})
+            return
+        cap = (settings.get("agent") or {}).get("monthly_spend_cap", 0)
+        if spend.over_cap(model, cap):
+            send({"type": "error", "code": "not_configured", "message": f"This month's spending on hosted models "
+                  f"has reached the cap of {cap}. Raise the cap under Behaviour, or choose a local model."})
             return
         try:
             provider = create_provider(model)
@@ -84,11 +132,24 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         return
 
     started = time.monotonic()
+    agent = settings.get("agent") or settings_store.default_agent()
     try:
         conversation.cancel.clear()
-        registry, warnings = build_registry(server.mcp, settings)
+        def update_settings(mutate):
+            changed = copy.deepcopy(server.settings)
+            mutate(changed)
+            return server.replace_settings(changed)
+
+        registry, warnings = build_registry(server.mcp, settings, lambda: server.settings, update_settings)
+        dry_run = body.get("dry_run") is True
+        if dry_run:
+            registry = registry.reads_only()
+            message = (DRY_RUN_PREFIX + message)[:MAX_MESSAGE_CHARS]
         if not conversation.history:
-            conversation.history.append(Message("system", system_prompt(settings.get("folders"))))
+            unavailable = [GROUP_DESCRIPTIONS[group] for group in agent["disabled_tool_groups"]]
+            conversation.history.append(
+                Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
+                                                agent["confirm_plans"], settings.get("routines"))))
         conversation.history.append(Message("user", message))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")
@@ -109,14 +170,73 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         })
         gate = PermissionGate(
             settings.get("approval_policy", "danger"), server.approvals, emit, conversation.cancel, server.runtime_dir)
-        run_turn(provider, conversation.history, registry, emit, conversation.cancel, model["context_window"], gate=gate)
+        if is_local_address(model["base_url"]) and model_busy(model["base_url"]):
+            emit({"type": "notice", "message": "The model is busy with another program; your request will start "
+                                               "when it is free."})
+        model_name = settings.get("active_model", "")
+        held = _attempt(provider, model_name, model, conversation, registry, emit, gate, agent,
+                        hold_first_error=bool(_fallback(settings, model_name)))
+        if held is not None:
+            fallback_name = _fallback(settings, model_name)
+            fallback = settings["models"][fallback_name]
+            emit({"type": "notice", "message": f"{model_name} did not answer ({held['message']}); "
+                                               f"{fallback_name} on this computer answered instead."})
+            _attempt(create_provider(fallback), fallback_name, fallback, conversation, registry, emit, gate, agent,
+                     hold_first_error=False)
     finally:
-        server.conversations.save(conversation)
+        if body.get("ephemeral") is True:
+            server.conversations.forget(conversation.id)
+        else:
+            server.conversations.save(conversation)
         conversation.turn_lock.release()
         server.state.update(status="idle")
-        if time.monotonic() - started > NOTIFY_AFTER_SECONDS:
+        notify_after = agent["notify_after_seconds"]
+        if notify_after and time.monotonic() - started > notify_after:
             notify_finished(conversation.title)
         app_visibility.run_after_turn()
+
+
+def model_busy(base_url: str) -> bool:
+    """Whether a local llama.cpp-style service reports every slot busy (``GET /slots``); False if it cannot say."""
+    root = base_url.rstrip("/").removesuffix("/v1")
+    try:
+        with urllib.request.urlopen(root + "/slots", timeout=1) as response:
+            slots = json.loads(response.read(200_000))
+    except (OSError, ValueError):
+        return False
+    return isinstance(slots, list) and bool(slots) and all(isinstance(slot, dict) and slot.get("is_processing")
+                                                           for slot in slots)
+
+
+def _fallback(settings: dict[str, Any], current: str) -> str:
+    """The fallback model's name when it is set, different and on this computer; else ""."""
+    name = (settings.get("agent") or {}).get("fallback_model", "")
+    model = settings.get("models", {}).get(name)
+    return name if name and name != current and model and is_local_address(model["base_url"]) else ""
+
+
+def _attempt(provider, name: str, model: dict[str, Any], conversation, registry, emit, gate, agent,
+             hold_first_error: bool) -> dict[str, Any] | None:
+    """Run the turn on one model. With ``hold_first_error``, an error before anything happened is
+    returned instead of shown, so the caller can try the fallback; the history is unchanged then."""
+    progressed = [False]
+    held: list[dict[str, Any]] = []
+
+    def guarded(event: dict[str, Any]) -> None:
+        if event["type"] == "error" and hold_first_error and not progressed[0]:
+            held.append(event)
+            return
+        if event["type"] in ("thinking", "text_delta", "tool_call"):
+            progressed[0] = True
+        if event["type"] == "done":
+            usage = event.get("usage") or {}
+            event = {**event, "model": name,
+                     "cost": spend.record(name, model, usage.get("input_tokens", 0), usage.get("output_tokens", 0))}
+        emit(event)
+
+    run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
+             max_steps=agent["max_steps"], gate=gate, redact=not is_local_address(model["base_url"]))
+    return held[0] if held else None
 
 
 def notify_finished(title: str) -> None:

@@ -21,6 +21,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402

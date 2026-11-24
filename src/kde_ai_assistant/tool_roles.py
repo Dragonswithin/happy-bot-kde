@@ -4,8 +4,9 @@ A tool server exposes arbitrary tools. Two jobs need a specific one: the
 search bar's instant file search (``file_search``) and answering from the web
 (``web_search``). A role in the settings names the server and tool and says
 which argument receives the user's text. This module turns a role plus a
-query into a tool call, and helps setup by proposing role assignments from a
-tool's name, description and input schema.
+query into a tool call, helps setup by proposing role assignments from a
+tool's name, description and input schema, and lists a tool's arguments so
+the settings page can let the user pick the query argument by hand.
 
 The proposals are heuristics over wording ("search", "file", "web"); they are
 shown to the user as suggestions and never applied on their own. No specific
@@ -39,6 +40,16 @@ def _properties(tool: dict[str, Any]) -> dict[str, Any]:
     schema = tool.get("inputSchema")
     properties = schema.get("properties") if isinstance(schema, dict) else None
     return properties if isinstance(properties, dict) else {}
+
+
+def tool_arguments(tool: dict[str, Any]) -> list[dict[str, Any]]:
+    """The tool's arguments as ``{"name", "type", "required"}``, for the settings page's role editor."""
+    schema = tool.get("inputSchema") if isinstance(tool.get("inputSchema"), dict) else {}
+    required = set(schema.get("required", [])) if isinstance(schema.get("required"), list) else set()
+    return [
+        {"name": name, "type": str(spec.get("type", "")) if isinstance(spec, dict) else "", "required": name in required}
+        for name, spec in _properties(tool).items()
+    ]
 
 
 def find_query_argument(tool: dict[str, Any]) -> str | None:

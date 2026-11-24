@@ -11,16 +11,18 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * "AI model" section of ConfigSetup.qml: choose which configured model
- * answers, test or remove it, find model services running on this computer,
- * and add a hosted or other service by address.
+ * "AI model" section of the AI Model page (ConfigModels.qml): choose which
+ * configured model answers, test or remove it, find model services running
+ * on this computer, and add a hosted or other service by address. The chosen
+ * model's stored properties are edited below it, in ModelDetails.qml.
  *
- * It is a Kirigami.FormLayout so its labels line up with the other sections
- * (ConfigSetup.qml links them with `twinFormLayouts`). The add-a-service
+ * It is a Kirigami.FormLayout so its labels line up with ModelDetails.qml
+ * (ConfigModels.qml links them with `twinFormLayouts`). The add-a-service
  * fields stay folded away until asked for.
  *
  * It keeps only transient state (what a scan found, the add-form fields, the
- * last test result). Everything durable goes through `page.save`. A model's
+ * last test result). Everything durable goes through `page.save`
+ * (DaemonSettings.qml). A model's
  * API key is typed here once and sent to the daemon; it is never read back.
  *
  * A model whose address is not on this computer is labelled as hosted with

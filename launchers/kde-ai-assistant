@@ -3,17 +3,20 @@
 
 The package is not pip-installed; ``scripts/install.sh`` copies it to
 ``~/.local/lib/kde-ai-assistant`` (override with ``KDE_AI_ASSISTANT_LIB``), and
-this file only puts that directory on the import path and calls the entry
-point. Run from a checkout, it falls back to the repository's ``src``.
+a system package (``packaging/arch/PKGBUILD``) puts it in
+``/usr/lib/kde-ai-assistant``; this file puts the first of those that exists
+on the import path, in that order, and calls the entry point. Run from a
+checkout, it falls back to the repository's ``src``.
 """
 
 import os
 import sys
 from pathlib import Path
 
-_installed = Path(os.environ.get("KDE_AI_ASSISTANT_LIB") or Path.home() / ".local/lib/kde-ai-assistant")
-_checkout = Path(__file__).resolve().parent.parent / "src"
-sys.path.insert(0, str(_installed if (_installed / "kde_ai_assistant").is_dir() else _checkout))
+_candidates = [Path(os.environ["KDE_AI_ASSISTANT_LIB"])] if os.environ.get("KDE_AI_ASSISTANT_LIB") else []
+_candidates += [Path.home() / ".local/lib/kde-ai-assistant", Path("/usr/lib/kde-ai-assistant"),
+                Path(__file__).resolve().parent.parent / "src"]
+sys.path.insert(0, str(next((path for path in _candidates if (path / "kde_ai_assistant").is_dir()), _candidates[-1])))
 
 from kde_ai_assistant.cli import main  # noqa: E402 - path set up above
 

@@ -15,6 +15,9 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from kde_ai_assistant import mcp_client  # noqa: E402
 from kde_ai_assistant.mcp_client import McpError, McpManager, McpServerSpec  # noqa: E402

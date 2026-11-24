@@ -15,6 +15,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402
@@ -28,6 +32,10 @@ from kde_ai_assistant.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFa
 
 ECHO = ToolSpec("echo", "Echo text.", object_schema({"text": {"type": "string"}}, ["text"]))
 
+
+def done_core(event: dict) -> dict:
+    """A ``done`` event without its usage and model details, which vary by model."""
+    return {key: event[key] for key in ("type", "stop", "actions") if key in event}
 
 class ProviderTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -254,7 +262,7 @@ class AgentLoopTests(unittest.TestCase):
         self.assertIn("no tool named 'missing_tool'", results[1]["text"])
         self.assertIn("not valid JSON", results[2]["text"])
         self.assertEqual(self.ran, [])
-        self.assertEqual(self.events[-1], {"type": "done", "stop": "answered"})
+        self.assertEqual(done_core(self.events[-1]), {"type": "done", "stop": "answered", "actions": []})
         self.assert_history_valid()
 
     def test_a_dangerous_step_that_succeeded_is_not_repeated_but_a_failed_one_can_be(self) -> None:
@@ -287,7 +295,7 @@ class AgentLoopTests(unittest.TestCase):
     def test_step_limit_stops_a_model_that_never_answers(self) -> None:
         provider = ScriptedProvider(*[[call(str(index), "echo", text="x")] for index in range(10)])
         self.run_loop(provider, max_steps=3)
-        self.assertEqual(self.events[-1], {"type": "done", "stop": "step_limit"})
+        self.assertEqual(done_core(self.events[-1]), {"type": "done", "stop": "step_limit", "actions": []})
         self.assertEqual(len(provider.seen), 3)
         self.assert_history_valid()
 
@@ -305,14 +313,14 @@ class AgentLoopTests(unittest.TestCase):
     def test_cancel_during_tools_skips_the_rest_but_answers_every_call(self) -> None:
         self.run_loop(ScriptedProvider([call("1", "stopper"), call("2", "echo", text="never")], [TextDelta("no")]))
         self.assertEqual(self.ran, [])
-        self.assertEqual(self.events[-1], {"type": "done", "stop": "cancelled"})
+        self.assertEqual(done_core(self.events[-1]), {"type": "done", "stop": "cancelled", "actions": []})
         self.assertEqual(self.history[-1].text, "Not run: the user cancelled.")
         self.assert_history_valid()
 
     def test_cancel_before_start_and_during_stream(self) -> None:
         self.cancel.set()
         self.run_loop(ScriptedProvider([TextDelta("x")]))
-        self.assertEqual(self.events, [{"type": "done", "stop": "cancelled"}])
+        self.assertEqual([done_core(event) for event in self.events], [{"type": "done", "stop": "cancelled", "actions": []}])
         self.assertEqual(len(self.history), 2)
 
     def test_tools_can_report_progress_and_it_is_throttled(self) -> None:

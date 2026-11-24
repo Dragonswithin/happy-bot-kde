@@ -23,8 +23,14 @@ sudo, package installs through yay or pacman, ...) is refused before it
 runs, because there is no terminal for the user to type into; the model is
 told to use ``run_in_terminal`` instead.
 
-``run_in_terminal`` opens the user's terminal (KDE's ``TerminalApplication``
-setting, else Konsole) running the command, and waits until it finishes:
+Both tools are built by ``shell_tools`` with two of the user's settings
+(``agent`` in ``settings.py``): ``run_command``'s default time limit when the
+model names none, and the terminal ``run_in_terminal`` opens. The terminal is
+one of ``SUPPORTED_TERMINALS``, whose command lines ``terminal_command`` knows;
+when none is chosen it is KDE's ``TerminalApplication`` setting if that is a
+supported one, else the first supported terminal installed.
+
+``run_in_terminal`` opens that terminal running the command, and waits until it finishes:
 installs, builds, and anything that asks for a password or wants the user to
 watch. Inside the terminal the command runs under ``script``, which keeps a
 real terminal (so password prompts work) while recording what is shown to a
@@ -68,7 +74,9 @@ MAX_TIMEOUT_SECONDS = 1800
 OUTPUT_HEAD_CHARS = 2500
 OUTPUT_TAIL_CHARS = 4500
 POLL_SECONDS = 0.2
-TERMINAL_FALLBACKS = ("konsole", "kgx", "gnome-terminal", "xterm")
+# Terminals whose way of running a command is known (see terminal_command), in
+# the order tried when the user chose none and KDE's own choice is not usable.
+SUPPORTED_TERMINALS = ("konsole", "kitty", "alacritty", "foot", "wezterm", "kgx", "gnome-terminal", "xterm")
 TERMINAL_WAIT_SECONDS = 4 * 3600
 TERMINAL_HEAD_CHARS = 1500
 TERMINAL_TAIL_CHARS = 3500
@@ -111,12 +119,12 @@ def _kill(process: subprocess.Popen) -> None:
         pass
 
 
-def run_command(arguments: dict[str, Any]) -> str:
+def run_command(arguments: dict[str, Any], default_timeout: int = DEFAULT_TIMEOUT_SECONDS) -> str:
     command = _command(arguments)
     directory = _working_directory(arguments)
     if not os.path.isdir(directory):
         raise ToolFailure(f"the working directory {directory} does not exist")
-    timeout = arguments.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
+    timeout = arguments.get("timeout_seconds", default_timeout)
     if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
         raise ToolFailure("'timeout_seconds' must be a number")
     timeout = max(1, min(MAX_TIMEOUT_SECONDS, int(timeout)))
@@ -169,15 +177,32 @@ def run_command(arguments: dict[str, Any]) -> str:
     return result
 
 
-def terminal_program() -> str:
-    """The user's terminal: KDE's TerminalApplication setting if it exists, else the first installed fallback."""
+def installed_terminals() -> list[str]:
+    """The supported terminals found on ``PATH``, for the settings page to offer."""
+    return [name for name in SUPPORTED_TERMINALS if shutil.which(name)]
+
+
+def terminal_program(preferred: str = "") -> str:
+    """Path of the terminal to open: ``preferred`` (the user's setting) if given, else automatic.
+
+    Automatic is KDE's TerminalApplication setting when it names a supported
+    terminal, else the first supported one installed.
+    """
+    if preferred:
+        found = shutil.which(preferred)
+        if not found:
+            raise ToolFailure(f"the terminal chosen in the assistant's settings ({preferred}) is not installed; "
+                              "tell the user to choose another under Behaviour in the assistant's settings")
+        return found
     configured = run_program(["kreadconfig6", "--file", "kdeglobals", "--group", "General",
                               "--key", "TerminalApplication"], timeout=3)["stdout"].strip()
-    for candidate in ([shlex.split(configured)[0]] if configured else []) + list(TERMINAL_FALLBACKS):
+    kde_choice = os.path.basename(shlex.split(configured)[0]) if configured else ""
+    candidates = ([kde_choice] if kde_choice in SUPPORTED_TERMINALS else []) + list(SUPPORTED_TERMINALS)
+    for candidate in candidates:
         found = shutil.which(candidate)
         if found:
             return found
-    raise ToolFailure("no terminal program is installed")
+    raise ToolFailure("no supported terminal program is installed")
 
 
 def terminal_command(terminal: str, command: str, directory: str, log: str = "", status: str = "") -> list[str]:
@@ -201,6 +226,10 @@ def terminal_command(terminal: str, command: str, directory: str, log: str = "",
         return [terminal, "--separate", "-e", "bash", "-c", script]
     if name in ("gnome-terminal", "kgx"):
         return [terminal, "--", "bash", "-c", script]
+    if name in ("kitty", "foot"):
+        return [terminal, "bash", "-c", script]
+    if name == "wezterm":
+        return [terminal, "start", "--", "bash", "-c", script]
     return [terminal, "-e", "bash", "-c", script]
 
 
@@ -230,7 +259,7 @@ def pending_reboot() -> str:
     return ""
 
 
-def run_in_terminal(arguments: dict[str, Any]) -> str:
+def run_in_terminal(arguments: dict[str, Any], terminal: str = "") -> str:
     command = _command(arguments)
     directory = _working_directory(arguments)
     if not os.path.isdir(directory):
@@ -239,7 +268,7 @@ def run_in_terminal(arguments: dict[str, Any]) -> str:
     work = ensure_runtime_root()
     log, status_file = str(work / f"terminal-{token}.log"), str(work / f"terminal-{token}.status")
     try:
-        window = subprocess.Popen(terminal_command(terminal_program(), command, directory, log, status_file),
+        window = subprocess.Popen(terminal_command(terminal_program(terminal), command, directory, log, status_file),
                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                   start_new_session=True)
     except OSError as error:
@@ -292,7 +321,8 @@ def run_in_terminal(arguments: dict[str, Any]) -> str:
     return result
 
 
-def shell_tools() -> list[Tool]:
+def shell_tools(default_timeout: int = DEFAULT_TIMEOUT_SECONDS, terminal: str = "") -> list[Tool]:
+    """The two shell tools, using the user's default time limit and terminal (see module docstring)."""
     command = {"type": "string"}
     directory = {"type": "string", "description": "Default: the home folder"}
     return [
@@ -304,9 +334,9 @@ def shell_tools() -> list[Tool]:
             object_schema({
                 "command": command,
                 "working_directory": directory,
-                "timeout_seconds": {"type": "integer", "description": f"Default {DEFAULT_TIMEOUT_SECONDS}, max {MAX_TIMEOUT_SECONDS}"},
+                "timeout_seconds": {"type": "integer", "description": f"Default {default_timeout}, max {MAX_TIMEOUT_SECONDS}"},
             }, ["command"]),
-            RISK_CHANGE, run_command, classify=classify, precheck=precheck,
+            RISK_CHANGE, lambda arguments: run_command(arguments, default_timeout), classify=classify, precheck=precheck,
             summarize=lambda arguments: f"Run: {str(arguments.get('command', ''))[:300]}",
         ),
         Tool(
@@ -315,7 +345,7 @@ def shell_tools() -> list[Tool]:
             "(yay, pacman, flatpak), builds, long downloads, anything that asks for a password. Waits until the "
             "command finishes and returns its exit status and last output; do not check on it or stop it meanwhile.",
             object_schema({"command": command, "working_directory": directory}, ["command"]),
-            RISK_CHANGE, run_in_terminal, classify=classify,
+            RISK_CHANGE, lambda arguments: run_in_terminal(arguments, terminal), classify=classify,
             summarize=lambda arguments: f"Open a terminal running: {str(arguments.get('command', ''))[:300]}",
         ),
     ]

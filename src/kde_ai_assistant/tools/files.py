@@ -17,6 +17,10 @@ two, because the handler never replaces anything the call did not ask to.
 
 There is no permanent-delete tool: ``trash_path`` moves to the desktop trash
 so a mistake can be undone. Paths may start with ``~``.
+
+Every successful change is recorded in ``undo_journal`` with what is needed
+to reverse it (``tools/undo.py``); a file about to be replaced is first
+copied aside by ``undo_journal.back_up``.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .. import undo_journal
 from ..desktop_context import run_command
 from ..shell_risk import SYSTEM_PATHS
 from .registry import RISK_CHANGE, RISK_DANGER, Tool, ToolFailure, object_schema
@@ -76,6 +81,8 @@ def write_text_file(arguments: dict[str, Any]) -> str:
     existed = path.exists()
     if existed and not append and not arguments.get("overwrite"):
         raise ToolFailure(f"{path} already exists. Pass overwrite=true to replace it, or append=true to add to it.")
+    previous_size = path.stat().st_size if existed else 0
+    backup = undo_journal.back_up(path) if existed and not append else ""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a" if append else "w", encoding="utf-8") as handle:
@@ -83,6 +90,12 @@ def write_text_file(arguments: dict[str, Any]) -> str:
     except OSError as error:
         raise ToolFailure(f"could not write {path}: {error.strerror or error}") from error
     action = "Appended to" if append and existed else "Replaced" if existed else "Created"
+    if append and existed:
+        undo_journal.record("file_appended", f"Appended to {path}", {"path": str(path), "size": previous_size})
+    elif existed:
+        undo_journal.record("file_replaced", f"Replaced the contents of {path}", {"path": str(path), "backup": backup})
+    else:
+        undo_journal.record("file_created", f"Created {path}", {"path": str(path)})
     return f"{action} {path} ({len(content)} characters)."
 
 
@@ -95,10 +108,14 @@ def make_directory(arguments: dict[str, Any]) -> str:
     path = _path(arguments, "path")
     if path.is_dir():
         return f"{path} already exists."
+    topmost = path
+    while not topmost.parent.exists():
+        topmost = topmost.parent
     try:
         path.mkdir(parents=True)
     except OSError as error:
         raise ToolFailure(f"could not create {path}: {error.strerror or error}") from error
+    undo_journal.record("folder_created", f"Created folder {path}", {"path": str(path), "topmost": str(topmost)})
     return f"Created folder {path}."
 
 
@@ -123,6 +140,7 @@ def _transfer(arguments: dict[str, Any], move: bool) -> str:
         raise ToolFailure("the source and destination are the same")
     if (landing.exists() or landing.is_symlink()) and not arguments.get("overwrite"):
         raise ToolFailure(f"{landing} already exists. Pass overwrite=true to replace it.")
+    replaced = landing.exists() or landing.is_symlink()
     try:
         if landing.is_dir() and not landing.is_symlink():
             if any(landing.iterdir()):
@@ -139,6 +157,11 @@ def _transfer(arguments: dict[str, Any], move: bool) -> str:
             shutil.copy2(source, landing)
     except OSError as error:
         raise ToolFailure(f"could not {'move' if move else 'copy'} {source}: {error.strerror or error}") from error
+    if move:
+        undo_journal.record("moved", f"Moved {source} to {landing}",
+                            {"source": str(source), "landing": str(landing), "replaced": replaced})
+    else:
+        undo_journal.record("copied", f"Copied {source} to {landing}", {"copy": str(landing), "replaced": replaced})
     return f"{'Moved' if move else 'Copied'} {source} to {landing}."
 
 
@@ -159,6 +182,7 @@ def trash_path(arguments: dict[str, Any]) -> str:
     result = run_command(["gio", "trash", "--", str(path)], timeout=60.0)
     if not result["ok"]:
         raise ToolFailure(result["stderr"].strip() or f"could not move {path} to the trash")
+    undo_journal.record("trashed", f"Moved {path} to the trash", {"path": str(path)})
     return f"Moved {path} to the trash. It can be restored from there."
 
 

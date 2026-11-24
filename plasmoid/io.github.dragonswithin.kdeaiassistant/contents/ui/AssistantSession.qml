@@ -25,7 +25,11 @@ import QtQuick
  * item already has a `state` property):
  *
  * - kind "user", "assistant" (Markdown, grows as text streams in), "notice"
- *   and "error" use `text`.
+ *   and "error" use `text`. When a request ends, every change the daemon
+ *   reports as not done (failed, declined by the user, not run) becomes a
+ *   "Not done: …" notice after the answer, followed by which model answered
+ *   and the tokens (and cost, for a priced model) it used. A "notice" event
+ *   (for example, the fallback model answered instead) is shown as is.
  * - kind "tool" is one tool call: `text` is its display name, `stage` is
  *   "running", "ok" or "failed", `callId` links the result to the call,
  *   `started` is when it began (ms since the epoch, for the elapsed-time
@@ -53,7 +57,12 @@ import QtQuick
  * `deleteConversation` removes one; deleting the open one starts a new one. `cancel` aborts
  * the request, which makes the daemon stop the turn.
  *
- * Instant search: `searchFiles` may be called on every keystroke. Replies
+ * Instant search: `searchFiles` may be called on every keystroke. It asks the
+ * daemon for quick results (`/quick`: answers, windows, applications,
+ * settings pages, conversations; `quickHits`) and for at most `searchLimit`
+ * file matches (`/search`; `fileHits`) at once; `hits` is both, quick first.
+ * A quick hit has `kind` "quick" and an `action`; `activateQuick` carries it
+ * out. Replies
  * can arrive out of order, so each request carries a sequence number and a
  * reply is applied only if it is the newest one sent. `hits` is a list of
  * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
@@ -80,7 +89,10 @@ Item {
     readonly property bool hasTranscript: entries.count > 0
     property int pendingApprovals: 0
 
-    property var hits: []
+    property int searchLimit: 8
+    property var quickHits: []
+    property var fileHits: []
+    readonly property var hits: quickHits.concat(fileHits)
     property string searchError: ""
     property string searchErrorCode: ""
     property int searchSequence: 0
@@ -165,12 +177,14 @@ Item {
 
     function clearSearch() {
         session.searchSequence += 1;
-        session.hits = [];
+        session.quickHits = [];
+        session.fileHits = [];
         session.searchError = "";
         session.searchErrorCode = "";
     }
 
-    function searchFiles(text) {
+    /** `mode` "files" asks only for file matches, "answer" only for quick results; anything else both. */
+    function searchFiles(text, mode) {
         const query = (text || "").trim();
         if (query.length === 0) {
             clearSearch();
@@ -178,20 +192,49 @@ Item {
         }
         session.searchSequence += 1;
         const sequence = session.searchSequence;
-        request("GET", "/search?limit=8&q=" + encodeURIComponent(query), null, function(data) {
+        if (mode === "files") {
+            session.quickHits = [];
+        } else {
+            request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
+                if (sequence === session.searchSequence) {
+                    session.quickHits = data.results || [];
+                }
+            }, function(data) {
+                if (sequence === session.searchSequence) {
+                    session.quickHits = [];
+                }
+            });
+        }
+        if (mode === "answer") {
+            session.fileHits = [];
+            session.searchError = "";
+            return;
+        }
+        request("GET", "/search?limit=" + session.searchLimit + "&q=" + encodeURIComponent(query), null, function(data) {
             if (sequence !== session.searchSequence) {
                 return;
             }
             session.searchError = "";
             session.searchErrorCode = "";
-            session.hits = data.hits || [];
+            session.fileHits = data.hits || [];
         }, function(data) {
             if (sequence !== session.searchSequence) {
                 return;
             }
-            session.hits = [];
+            session.fileHits = [];
             session.searchError = data.error || i18n("Search failed");
             session.searchErrorCode = data.code || "tool_failed";
+        });
+    }
+
+    /** Carries out a quick result: a conversation is opened here, anything else by the daemon. */
+    function activateQuick(hit) {
+        if (hit.action.type === "conversation") {
+            openConversation(hit.action.target);
+            return;
+        }
+        request("POST", "/quick/activate", { action: hit.action }, function(data) {}, function(data) {
+            session.appendEntry("error", data.error || i18n("Could not open %1", hit.title));
         });
     }
 
@@ -403,12 +446,27 @@ Item {
             setStatus("thinking", i18n("Working"));
             break;
         }
-        case "done":
+        case "done": {
+            // The daemon's record of what was not done, shown after the
+            // answer so it cannot be talked over by the model's own account.
+            const reasons = { failed: i18n("failed"), declined: i18n("you declined"), not_run: i18n("not run") };
+            (event.actions || []).filter(action => action.outcome !== "done").forEach(action =>
+                appendEntry("notice", i18n("Not done: %1 (%2)", action.summary, reasons[action.outcome] || action.outcome)));
+            const tokens = event.usage ? event.usage.input_tokens + event.usage.output_tokens : 0;
+            if (event.model && tokens > 0) {
+                appendEntry("notice", event.cost > 0
+                    ? i18n("%1 · %2 tokens · %3", event.model, Number(tokens).toLocaleString(Qt.locale(), "f", 0), event.cost.toFixed(4))
+                    : i18n("%1 · %2 tokens", event.model, Number(tokens).toLocaleString(Qt.locale(), "f", 0)));
+            }
             if (event.stop === "cancelled") {
                 appendEntry("notice", i18n("Stopped"));
             } else if (event.stop === "step_limit") {
                 appendEntry("notice", i18n("Stopped after too many steps. Ask again to continue."));
             }
+            break;
+        }
+        case "notice":
+            appendEntry("notice", event.message || "");
             break;
         case "error":
             // An error the user fixes in settings gets a button that opens them.

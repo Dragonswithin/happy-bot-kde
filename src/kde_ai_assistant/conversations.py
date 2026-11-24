@@ -128,6 +128,11 @@ class ConversationStore:
         except OSError:
             pass  # history is a convenience; a full disk must not fail the turn
 
+    def forget(self, conversation_id: str) -> None:
+        """Drop a conversation from memory without saving it (requests marked ephemeral)."""
+        with self._lock:
+            self._conversations.pop(conversation_id, None)
+
     def list(self) -> list[dict[str, Any]]:
         """Saved conversations, newest first, plus unsaved ones still in memory."""
         listed = {item["id"]: item for item in self.archive.list()}

@@ -36,7 +36,11 @@ PlasmaCore.Dialog {
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
+    signal completeRequested()
     signal hitActivated(string location)
+    signal resultActivated(var hit)
+    signal fileActionRequested(var hit, string action)
+    signal filesDropped(var paths)
     signal closeRequested()
     signal settingsRequested()
     signal dismissed()
@@ -60,6 +64,10 @@ PlasmaCore.Dialog {
         resultsView.clearInput();
     }
 
+    function setInput(text) {
+        resultsView.setInput(text);
+    }
+
     mainItem: ResultsView {
         id: resultsView
 
@@ -73,7 +81,11 @@ PlasmaCore.Dialog {
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)
         onSelectionMove: delta => popup.selectionMove(delta)
+        onCompleteRequested: popup.completeRequested()
         onHitActivated: location => popup.hitActivated(location)
+        onResultActivated: hit => popup.resultActivated(hit)
+        onFileActionRequested: (hit, action) => popup.fileActionRequested(hit, action)
+        onFilesDropped: paths => popup.filesDropped(paths)
         onCloseRequested: popup.closeRequested()
         onSettingsRequested: popup.settingsRequested()
     }

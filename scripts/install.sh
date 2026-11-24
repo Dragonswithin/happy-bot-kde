@@ -6,6 +6,9 @@
 #   launchers/*                      -> ~/.local/bin/
 #   systemd/user/*.service           -> ~/.config/systemd/user/
 #   plasmoid/<id>/                   -> the user's Plasma applet store (kpackagetool6)
+#   krunner/kde-ai-assistant.desktop -> ~/.local/share/krunner/dbusplugins/ (KRunner plugin)
+#   desktop/kde-ai-assistant-shortcuts.desktop -> ~/.local/share/applications/, linked from
+#                                      ~/.local/share/kglobalaccel/ (global shortcuts)
 # and, the first time, adds the search bar to the panel that holds the
 # application launcher, so nothing is left to do by hand. Setup then continues
 # in the bar itself: press Enter in it, or right-click it and choose Configure.
@@ -22,8 +25,9 @@
 #   --dry-run     print the plan and change nothing
 #   --no-start    install without enabling or restarting the daemon
 #   --no-panel    do not add the search bar to a panel
-#   --uninstall   remove everything this script installed, and the bar from
-#                 every panel; your settings in ~/.config/kde-ai-assistant stay
+#   --uninstall   remove everything this script installed, the bar from every
+#                 panel, and the reminder and routine timers the assistant
+#                 created; your settings in ~/.config/kde-ai-assistant stay
 #   --purge       with --uninstall: remove the settings too
 set -euo pipefail
 
@@ -39,6 +43,11 @@ SERVICE_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
 PLASMOID_ID="io.github.dragonswithin.kdeaiassistant"
 PLASMOID_DIR="${REPO_ROOT}/plasmoid/${PLASMOID_ID}"
 LAUNCHERS=(kde-ai-assistant-daemon kde-ai-assistant)
+KRUNNER_SRC="${REPO_ROOT}/krunner/kde-ai-assistant.desktop"
+KRUNNER_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/krunner/dbusplugins"
+SHORTCUTS_SRC="${REPO_ROOT}/desktop/kde-ai-assistant-shortcuts.desktop"
+APPLICATIONS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
+KGLOBALACCEL_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/kglobalaccel"
 
 usage() {
   printf 'Usage: %s [--dry-run] [--no-start] [--no-panel]\n       %s --uninstall [--purge] [--dry-run]\n' "$0" "$0"
@@ -118,6 +127,7 @@ require_command systemctl
 if (( uninstall )); then
   if (( dry_run )); then
     printf 'Would stop and disable %s and remove its unit file\n' "$SERVICE_NAME"
+    printf 'Would remove the reminder and routine timers the assistant created, and the KRunner plugin\n'
     printf 'Would remove the search bar from every panel and uninstall the applet\n'
     printf 'Would remove %s and the launchers in %s\n' "$LIB_DIR" "$BIN_DIR"
     if (( purge )); then printf 'Would remove settings in %s\n' "$CONFIG_DIR"; else printf 'Would keep settings in %s\n' "$CONFIG_DIR"; fi
@@ -125,6 +135,15 @@ if (( uninstall )); then
   fi
   systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
   rm -f -- "${SERVICE_DIR}/${SERVICE_NAME}"
+  # Reminder and routine units carry this marker (src/kde_ai_assistant/user_timers.py);
+  # nothing else in the directory is touched.
+  for unit in "${SERVICE_DIR}"/kde-ai-assistant-reminder-* "${SERVICE_DIR}"/kde-ai-assistant-routine-*; do
+    [[ -f "$unit" ]] && grep -q '^X-KdeAiAssistant=yes' "$unit" || continue
+    case "$unit" in *.timer|*.path) systemctl --user disable --now "$(basename -- "$unit")" >/dev/null 2>&1 || true ;; esac
+    rm -f -- "$unit"
+  done
+  rm -f -- "${KRUNNER_DIR}/kde-ai-assistant.desktop" "${KGLOBALACCEL_DIR}/kde-ai-assistant-shortcuts.desktop" \
+    "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
   systemctl --user daemon-reload || true
   remove_from_panels >/dev/null
   if applet_installed; then
@@ -161,6 +180,8 @@ if (( dry_run )); then
     printf 'Would install %s -> %s\n' "${REPO_ROOT}/launchers/${launcher}" "${BIN_DIR}/${launcher}"
   done
   printf 'Would install %s -> %s\n' "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
+  printf 'Would install %s -> %s\n' "$KRUNNER_SRC" "${KRUNNER_DIR}/kde-ai-assistant.desktop"
+  printf 'Would install %s -> %s (and link it for global shortcuts)\n' "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
   if (( start_service )); then
     printf 'Would enable and restart user service: %s\n' "$SERVICE_NAME"
   else
@@ -183,6 +204,10 @@ for launcher in "${LAUNCHERS[@]}"; do
   install -m 0755 "${REPO_ROOT}/launchers/${launcher}" "${BIN_DIR}/${launcher}"
 done
 install -m 0644 "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
+install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/kde-ai-assistant.desktop"
+install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
+install -d -m 0755 "$KGLOBALACCEL_DIR"
+ln -sf -- "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop" "${KGLOBALACCEL_DIR}/kde-ai-assistant-shortcuts.desktop"
 
 systemctl --user daemon-reload
 if (( start_service )); then

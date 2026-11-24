@@ -17,8 +17,24 @@ Progress is reported through ``emit`` as JSON-serialisable events, in order:
 - ``{"type": "tool_progress", "id", "text"}`` while a long tool runs (at most
   one per ``PROGRESS_INTERVAL_SECONDS``; see ``tools.registry.call_context``)
 - ``{"type": "tool_result", "id", "name", "ok", "text"}``
-- then exactly one of ``{"type": "done", "stop": "answered"|"cancelled"|"step_limit"}``
-  or ``{"type": "error", "message": ...}``
+- then exactly one of ``{"type": "done", "stop": "answered"|"cancelled"|"step_limit",
+  "actions": [...]}`` or ``{"type": "error", "message": ...}``
+
+``usage`` adds up the tokens the service reported over the turn's model
+requests (``{"input_tokens", "output_tokens", "requests"}``), for the
+spending record (``spend``) and the popup.
+
+``actions`` is the turn's record of every call that was not a pure read:
+``{"summary", "outcome"}`` with outcome ``done``, ``failed``, ``declined``
+(the permission gate refused it) or ``not_run`` (it could not run, or the
+turn was cancelled first). The popup shows what was not done after the
+answer, so a model that claims an action it was refused is contradicted by
+the record rather than believed.
+
+When ``redact`` is true (a hosted model), tool results pass through
+``redaction.redact`` before they are added to the history, so passwords,
+API keys and private keys a tool happened to read are not sent off the
+computer; the popup's own copy of the result is redacted the same way.
 
 History contract: ``history`` is mutated in place and is always left valid
 for the next request. An assistant message is appended only when its stream
@@ -52,9 +68,11 @@ import time
 from typing import Any, Callable
 
 from .conversation import Message, TextDelta, ThinkingDelta, ToolCallReady, TurnEnd, trim_history
+from .redaction import redact as redact_secrets
+from .routines import prompt_lines
 from .permissions import PermissionGate
 from .providers.base import ModelProvider, ProviderError
-from .tools.registry import RISK_DANGER, CallContext, ToolRegistry, call_context
+from .tools.registry import RISK_DANGER, RISK_READ, CallContext, ToolRegistry, call_context
 
 # Operating an application's interface takes a snapshot, an action and a
 # check per step of the task, so a turn needs room for a few dozen requests.
@@ -74,7 +92,8 @@ def user_folders(overrides: dict[str, str] | None = None) -> dict[str, str]:
     (what KDE's Locations page writes), then ``~/<Name>``.
     """
     home = os.path.expanduser("~")
-    folders = {name: os.path.join(home, name) for name in ("Desktop", "Documents", "Downloads", "Pictures")}
+    folders = {name: os.path.join(home, name)
+               for name in ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")}
     config = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config"), "user-dirs.dirs")
     keys = {"XDG_DESKTOP_DIR": "Desktop", "XDG_DOCUMENTS_DIR": "Documents", "XDG_DOWNLOAD_DIR": "Downloads",
             "XDG_PICTURES_DIR": "Pictures", "XDG_MUSIC_DIR": "Music", "XDG_VIDEOS_DIR": "Videos"}
@@ -90,8 +109,28 @@ def user_folders(overrides: dict[str, str] | None = None) -> dict[str, str]:
     return folders
 
 
-def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
-    """Instructions given to the model at the start of every conversation."""
+def system_prompt(
+    folder_overrides: dict[str, str] | None = None,
+    instructions: str = "",
+    unavailable: list[str] | None = None,
+    confirm_plans: bool = False,
+    routines: dict[str, Any] | None = None,
+) -> str:
+    """Instructions given to the model at the start of every conversation.
+
+    ``instructions`` is the user's own text from the settings page (``agent.
+    instructions``) and comes last, so it can change the guidance above it;
+    the permission gate is enforced in code and is not affected by it. The
+    user's preferences (where to install software from, asking before
+    third-party sources, not stopping programs) live there, not here, so the
+    user can see and change them; ``settings.SUGGESTED_INSTRUCTIONS`` is the
+    starting text.
+    ``unavailable`` describes the built-in tool groups the user switched off
+    (``tools.catalog.GROUP_DESCRIPTIONS``). ``confirm_plans`` (the user's
+    ``agent.confirm_plans`` setting) asks for a plan before multi-step
+    changes. ``routines`` (the ``routines`` setting) are listed so the
+    user can run one by name (``routines.prompt_lines``).
+    """
     now = datetime.datetime.now().astimezone().strftime("%A, %d %B %Y, %H:%M %Z")
     lines = [
         "You are the assistant built into the user's KDE Plasma desktop. The user types a request into a "
@@ -121,22 +160,25 @@ def system_prompt(folder_overrides: dict[str, str] | None = None) -> str:
         "- Installing software, and anything else that needs the user's password or takes many minutes (builds, "
         "large downloads), goes in run_in_terminal: the user watches it and types their password there. Tell the "
         "user it is waiting for them in the terminal. It returns when the command is done; report the outcome.",
-        "- When installing software, use official sources, in this order: the distribution's repositories "
-        "(pacman -Ss), the AUR (search it with yay -Ss; prefer a package ending in -bin), the project's own Flatpak "
-        "(check every configured remote with flatpak remote-ls or flatpak search, and install from the remote that "
-        "has it). Prefer pre-built packages; build from source only when no pre-built one exists or the user asks.",
         "- An install is finished only when the application can be opened. After installing an application, "
         "call verify_app_install. If it reports that the app is not visible, call refresh_app_menu, then tell "
         "the user what happened. Report success only after verification, and say how to open the app.",
-        "- Never install from a third-party build, an unofficial repository or a downloaded install script without "
-        "asking the user first: say who publishes it and why the official sources did not work, then wait for "
-        "their answer.",
-        "- Never stop or kill a program you started for the user unless they ask you to.",
         "",
         f"Now: {now}. User: {os.environ.get('USER', '')}. Home: {os.path.expanduser('~')}. "
         f"Host: {platform.node()}.",
         "Folders: " + ", ".join(f"{name} is {path}" for name, path in user_folders(folder_overrides).items()) + ".",
     ]
+    lines += prompt_lines(routines or {})
+    if confirm_plans:
+        lines += ["", "Before a request that will change more than one thing, first reply with a short numbered "
+                  "plan of the changes and ask the user to confirm. Look things up first if needed, but change "
+                  "nothing until they agree. A single change, or anything read-only, needs no plan."]
+    if unavailable:
+        lines += ["", "The user has switched off these abilities in the assistant's settings: " + "; ".join(unavailable)
+                  + ". If a request needs one, say that it is switched off in the settings; do not work around it."]
+    if instructions.strip():
+        lines += ["", "The user's own instructions. Follow them; where they differ from the guidance above, they win:",
+                  instructions.strip()]
     return "\n".join(lines)
 
 
@@ -166,13 +208,20 @@ def run_turn(
     context_window: int = 32768,
     max_steps: int = MAX_STEPS,
     gate: PermissionGate | None = None,
+    redact: bool = False,
 ) -> None:
     """Run the turn whose user message is the last entry of ``history`` (see module docstring)."""
     specs = registry.specs()
     succeeded: set[tuple[str, str]] = set()  # danger calls that already succeeded this turn
+    actions: list[dict[str, str]] = []
+    usage = {"input_tokens": 0, "output_tokens": 0, "requests": 0}
+
+    def finish(stop: str) -> None:
+        emit({"type": "done", "stop": stop, "actions": actions, "usage": usage})
+
     for _step in range(max_steps):
         if cancel.is_set():
-            emit({"type": "done", "stop": "cancelled"})
+            finish("cancelled")
             return
         text_parts: list[str] = []
         calls = []
@@ -188,18 +237,22 @@ def run_turn(
                         emit({"type": "thinking"})
                 elif isinstance(event, ToolCallReady):
                     calls.append(event.call)
-                elif isinstance(event, TurnEnd) and event.stop_reason == "cancelled":
-                    cancel.set()
+                elif isinstance(event, TurnEnd):
+                    usage["requests"] += 1
+                    usage["input_tokens"] += event.input_tokens
+                    usage["output_tokens"] += event.output_tokens
+                    if event.stop_reason == "cancelled":
+                        cancel.set()
         except ProviderError as error:
             emit({"type": "error", "message": str(error)})
             return
         if cancel.is_set():
-            emit({"type": "done", "stop": "cancelled"})
+            finish("cancelled")
             return
 
         history.append(Message("assistant", "".join(text_parts), tuple(calls)))
         if not calls:
-            emit({"type": "done", "stop": "answered"})
+            finish("answered")
             return
 
         for call in calls:
@@ -207,6 +260,7 @@ def run_turn(
                 history.append(Message("tool", "Not run: the user cancelled.", tool_call_id=call.id))
                 continue
             risk, summary, detail = registry.assess(call.name, call.arguments)
+            outcome = "not_run"
             emit({
                 "type": "tool_call", "id": call.id, "name": call.name,
                 "arguments": call.arguments, "risk": risk, "summary": summary,
@@ -226,9 +280,14 @@ def run_turn(
                     allowed, refusal = (True, "") if gate is None else gate.check(
                         call.id, call.name, call.arguments, risk, summary, detail)
                     ok, text = _run_with_context(registry, call, emit, cancel) if allowed else (False, refusal)
+                    outcome = ("done" if ok else "failed") if allowed else "declined"
             if ok and risk == RISK_DANGER:
                 succeeded.add(key)
+            if risk != RISK_READ:
+                actions.append({"summary": summary, "outcome": outcome})
+            if redact:
+                text = redact_secrets(text)
             history.append(Message("tool", text, tool_call_id=call.id))
             emit({"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]})
 
-    emit({"type": "done", "stop": "step_limit"})
+    finish("step_limit")

@@ -123,6 +123,10 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
+    def reads_only(self) -> "ToolRegistry":
+        """The same tools minus every one that can change anything, for a dry run."""
+        return ToolRegistry([tool for tool in self._tools.values() if tool.risk == RISK_READ and tool.classify is None])
+
     def assess(self, name: str, arguments: dict[str, Any]) -> tuple[str, str, str]:
         """Return ``(risk, summary, detail)`` for one call, for the permission gate.
 

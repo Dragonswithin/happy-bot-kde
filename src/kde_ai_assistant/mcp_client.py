@@ -1,4 +1,4 @@
-"""Stdio MCP client and supervisor for the tool servers the daemon uses.
+"""MCP client and supervisor for the tool servers the daemon uses.
 
 The assistant gets file search, web search and any other user-supplied tools
 from Model Context Protocol servers. Each server is a child process that
@@ -6,6 +6,10 @@ speaks JSON-RPC 2.0, one JSON object per line, on its stdin and stdout. This
 module starts those processes, performs the MCP handshake, lists and calls
 their tools, and stops them. Nothing here knows what any particular server
 does.
+
+Servers reached over HTTP instead (a spec with ``url``) are handled by
+``mcp_http.McpHttpSession``; both share ``ToolCalls`` for listing and calling
+tools, and the manager treats them alike.
 
 ``McpSession`` is one running server. A reader thread owns the child's stdout
 and routes each reply to the caller waiting on its request id; callers block
@@ -54,13 +58,17 @@ class McpError(RuntimeError):
 
 @dataclass(frozen=True)
 class McpServerSpec:
-    """How to launch one server. ``env`` is added to the daemon's environment."""
+    """How to reach one server: launch ``command`` (stdio), or, when ``url`` is set,
+    talk to it over HTTP (``mcp_http``) with ``headers`` added to every request.
+    ``env`` is added to a launched server's environment."""
 
     name: str
-    command: str
+    command: str = ""
     args: tuple[str, ...] = ()
     env: tuple[tuple[str, str], ...] = ()
     read_only: bool = False
+    url: str = ""
+    headers: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -77,7 +85,52 @@ class _Pending:
     replies: "queue.Queue[dict[str, Any]]" = field(default_factory=lambda: queue.Queue(maxsize=1))
 
 
-class McpSession:
+class ToolCalls:
+    """Listing and calling tools over any transport that provides ``request``.
+
+    Subclasses set ``spec``, ``_state_lock`` and ``_tools`` (the cached list,
+    None until fetched) and implement ``request(method, params, timeout)``.
+    """
+
+    spec: McpServerSpec
+    _state_lock: threading.Lock
+    _tools: list[dict[str, Any]] | None
+
+    def request(self, method: str, params: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def list_tools(self) -> list[dict[str, Any]]:
+        """Return every tool the server offers (name, description, inputSchema)."""
+        with self._state_lock:
+            if self._tools is not None:
+                return list(self._tools)
+        tools: list[dict[str, Any]] = []
+        cursor: str | None = None
+        for _ in range(MAX_TOOL_PAGES):
+            result = self.request("tools/list", {"cursor": cursor} if cursor else {}, LIST_TIMEOUT_SECONDS)
+            tools.extend(tool for tool in result.get("tools", []) if isinstance(tool, dict) and tool.get("name"))
+            cursor = result.get("nextCursor")
+            if not cursor:
+                break
+        with self._state_lock:
+            self._tools = tools
+        return list(tools)
+
+    def call_tool(self, name: str, arguments: dict[str, Any], timeout: float) -> ToolResult:
+        result = self.request("tools/call", {"name": name, "arguments": arguments}, timeout)
+        texts = [
+            str(block.get("text", ""))
+            for block in result.get("content", [])
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        return ToolResult(
+            text="\n".join(texts),
+            is_error=bool(result.get("isError")),
+            structured=result.get("structuredContent"),
+        )
+
+
+class McpSession(ToolCalls):
     """One started and initialised MCP server process."""
 
     def __init__(self, spec: McpServerSpec, startup_timeout: float = STARTUP_TIMEOUT_SECONDS) -> None:
@@ -202,36 +255,6 @@ class McpSession:
         result = reply.get("result")
         return result if isinstance(result, dict) else {}
 
-    def list_tools(self) -> list[dict[str, Any]]:
-        """Return every tool the server offers (name, description, inputSchema)."""
-        with self._state_lock:
-            if self._tools is not None:
-                return list(self._tools)
-        tools: list[dict[str, Any]] = []
-        cursor: str | None = None
-        for _ in range(MAX_TOOL_PAGES):
-            result = self.request("tools/list", {"cursor": cursor} if cursor else {}, LIST_TIMEOUT_SECONDS)
-            tools.extend(tool for tool in result.get("tools", []) if isinstance(tool, dict) and tool.get("name"))
-            cursor = result.get("nextCursor")
-            if not cursor:
-                break
-        with self._state_lock:
-            self._tools = tools
-        return list(tools)
-
-    def call_tool(self, name: str, arguments: dict[str, Any], timeout: float) -> ToolResult:
-        result = self.request("tools/call", {"name": name, "arguments": arguments}, timeout)
-        texts = [
-            str(block.get("text", ""))
-            for block in result.get("content", [])
-            if isinstance(block, dict) and block.get("type") == "text"
-        ]
-        return ToolResult(
-            text="\n".join(texts),
-            is_error=bool(result.get("isError")),
-            structured=result.get("structuredContent"),
-        )
-
     def close(self) -> None:
         """Stop the server: close stdin, then SIGTERM, then SIGKILL its process group."""
         if self._closed:
@@ -267,7 +290,7 @@ class McpManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._specs: dict[str, McpServerSpec] = {}
-        self._sessions: dict[str, McpSession] = {}
+        self._sessions: dict[str, ToolCalls] = {}
         self._start_locks: dict[str, threading.Lock] = {}
         self._last_start: dict[str, float] = {}
 
@@ -291,7 +314,7 @@ class McpManager:
         with self._lock:
             return self._specs.get(name)
 
-    def session(self, name: str) -> McpSession:
+    def session(self, name: str) -> "ToolCalls":
         """Return a live session for ``name``, starting or restarting it if needed."""
         with self._lock:
             spec = self._specs.get(name)
@@ -312,7 +335,12 @@ class McpManager:
             with self._lock:
                 self._last_start[name] = time.monotonic()
                 self._sessions.pop(name, None)
-            session = McpSession(spec)
+            if spec.url:
+                from .mcp_http import McpHttpSession
+
+                session = McpHttpSession(spec)
+            else:
+                session = McpSession(spec)
             with self._lock:
                 if self._specs.get(name) != spec:
                     session.close()

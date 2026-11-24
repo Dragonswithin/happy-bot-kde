@@ -27,7 +27,8 @@ import org.kde.plasma.components as PlasmaComponents3
  *   output line it reported appears underneath in fixed-width text, so a
  *   long command visibly makes progress.
  * - "notice": a quiet step-like line ("Stopped.").
- * - "assistant": the answer in a tinted card, rendered as Markdown; links are
+ * - "assistant": the answer in a tinted card, rendered as Markdown, with a
+ *   Copy button that puts the whole answer on the clipboard; links are
  *   passed out through `linkActivated`.
  * - "approval": an action waiting for the user, in an attention-coloured
  *   card: "Allow this?", what will run in small fixed-width text, why it
@@ -204,6 +205,7 @@ Item {
 
                     // the answer
                     TextEdit {
+                        id: answerText
                         Layout.fillWidth: true
                         visible: entry.kind === "assistant"
                         text: entry.text
@@ -219,6 +221,21 @@ Item {
 
                         HoverHandler {
                             cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor
+                        }
+                    }
+
+                    PlasmaComponents3.ToolButton {
+                        Layout.alignment: Qt.AlignRight
+                        visible: entry.kind === "assistant" && entry.text.length > 0
+                        icon.name: "edit-copy"
+                        text: i18n("Copy answer")
+                        display: PlasmaComponents3.AbstractButton.IconOnly
+                        PlasmaComponents3.ToolTip.text: text
+                        PlasmaComponents3.ToolTip.visible: hovered
+                        onClicked: {
+                            answerText.selectAll();
+                            answerText.copy();
+                            answerText.deselect();
                         }
                     }
 

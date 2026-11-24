@@ -15,6 +15,10 @@ ids, so the model can retry precisely.
 
 Layouts are computed from the screen's usable area (panels excluded) of the
 screen the window is on, or of the named ``screen``.
+
+Before a window is placed, resized or changed in state, its current place
+is recorded in ``undo_journal`` so the change can be undone
+(``tools/undo.py``).
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .. import kwin_bridge
+from .. import kwin_bridge, undo_journal
 from .registry import RISK_CHANGE, Tool, ToolFailure, object_schema
 
 LAYOUTS = ("left", "right", "top", "bottom", "top-left", "top-right", "bottom-left", "bottom-right",
@@ -180,6 +184,16 @@ def describe_window(window: str) -> dict[str, Any]:
     return _run({"window": window}, "return { window: describe(w) };")["window"]
 
 
+def _remember_place(arguments: dict[str, Any], verb: str) -> None:
+    """Record where the window is now, so the change about to be made can be undone."""
+    try:
+        before = describe_window(str(arguments.get("window") or "current"))
+    except ToolFailure:
+        return
+    undo_journal.record("window", f"{verb} window {before['app']} \"{before['title']}\"", {
+        "window": before["id"], **{name: before[name] for name in ("x", "y", "width", "height", "minimized", "fullscreen")}})
+
+
 def focus_window(arguments: dict[str, Any]) -> str:
     result = _run(arguments, "w.minimized = false; workspace.activeWindow = w; return { window: describe(w) };")
     return "Focused: " + _describe(result["window"])
@@ -195,6 +209,7 @@ def arrange_window(arguments: dict[str, Any]) -> str:
     if layout not in LAYOUTS:
         raise ToolFailure(f"'layout' must be one of: {', '.join(LAYOUTS)}")
     screen = arguments.get("screen")
+    _remember_place(arguments, "Arranged")
     result = _run({"window": arguments.get("window"), "layout": layout, "screen": screen or None}, _ARRANGE_JS)
     return f"Placed {layout}: " + _describe(result["window"])
 
@@ -206,6 +221,7 @@ def move_resize_window(arguments: dict[str, Any]) -> str:
     for name in ("width", "height"):
         if geometry[name] is not None and geometry[name] < 50:
             raise ToolFailure(f"'{name}' must be at least 50 pixels")
+    _remember_place(arguments, "Moved")
     result = _run({"window": arguments.get("window"), **geometry}, _GEOMETRY_JS)
     return "Now: " + _describe(result["window"])
 
@@ -215,6 +231,7 @@ def set_window_state(arguments: dict[str, Any]) -> str:
     desktop = _optional_int(arguments, "desktop")
     if desktop is None and all(value is None for value in state.values()):
         raise ToolFailure("give at least one of minimized, fullscreen, keep_above, desktop")
+    _remember_place(arguments, "Changed")
     result = _run({"window": arguments.get("window"), **state, "desktop": desktop}, _STATE_JS)
     return "Now: " + _describe(result["window"])
 

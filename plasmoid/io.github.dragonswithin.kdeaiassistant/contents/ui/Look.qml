@@ -38,6 +38,9 @@ QtObject {
     })
 
     function hitIcon(hit) {
+        if (hit.kind === "quick") {
+            return hit.icon || "system-run";
+        }
         if (hit.kind === "folder") {
             return "folder";
         }
@@ -49,8 +52,11 @@ QtObject {
         return extensionIcons[extension] || "text-x-generic";
     }
 
-    /** The folder a hit is in, with the home folder shown as ~. Links show their host. */
+    /** The folder a hit is in, with the home folder shown as ~. Links show their host; quick results their kind. */
     function hitWhere(hit) {
+        if (hit.kind === "quick") {
+            return hit.subtitle || "";
+        }
         if (hit.kind === "link") {
             const match = hit.location.match(/^https?:\/\/([^\/]+)/);
             return match ? match[1] : hit.location;

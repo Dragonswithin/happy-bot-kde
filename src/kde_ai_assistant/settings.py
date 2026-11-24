@@ -13,7 +13,9 @@ Schema (version 1)::
       "version": 1,
       "tool_servers": {
         "<name>": {
-          "command": "/path/to/executable",   # required
+          "command": "/path/to/executable",   # required unless "url" is given: a program to start
+          "url": "",                          #   or, instead, the address of an HTTP MCP server (mcp_http.py)
+          "headers": {"Name": "value"},       # default {}; HTTP headers for a url server (secret, like env)
           "args": ["..."],                    # default []
           "env": {"NAME": "value"},           # default {}, added to the daemon's environment
           "enabled": true,                    # default true; false keeps the entry but never starts it
@@ -29,7 +31,9 @@ Schema (version 1)::
           "api_key": "",                      # default ""; sent as a bearer token when set
           "headers": {"Name": "value"},       # default {}; extra request headers some services need
           "context_window": 32768,            # default 32768; tokens, used to trim long conversations
-          "vision": false                     # default false; whether the model accepts images
+          "vision": false,                    # default false; whether the model accepts images
+          "input_price": 0,                   # default 0; cost per million input tokens, in the user's
+          "output_price": 0                   #   currency, for spending totals and the cap (spend.py)
         }
       },
       "active_model": "<name>",               # default ""; which model answers requests
@@ -44,6 +48,51 @@ Schema (version 1)::
                                               #   "danger"     only deletion and OS-level changes
                                               #   "changes"    anything that changes state
                                               #   "everything" every call, including reads
+      "agent": {                              # how a request is carried out; every key optional
+        "instructions": "...",                # default SUGGESTED_INSTRUCTIONS; the user's own standing
+                                              #   instructions, added to the model's instructions for new
+                                              #   conversations. "" means none. At most 4000 characters.
+        "max_steps": 40,                      # default 40; model requests one request may make before
+                                              #   it stops with "step_limit". Range 5 to 200.
+        "notify_after_seconds": 60,           # default 60; a request that took longer ends with a
+                                              #   desktop notification. 0 never notifies. Range 0 to 3600.
+        "command_timeout_seconds": 60,        # default 60; how long run_command lets a command run
+                                              #   when the model names no limit. Range 5 to 1800.
+        "terminal": "",                       # default "" = KDE's default terminal (System Settings,
+                                              #   Default Applications), else Konsole; or one of
+                                              #   SUPPORTED_TERMINALS in tools/shell.py
+        "fallback_model": "",                 # default ""; a model on this computer to answer when the chosen
+                                              #   one does not respond (only a local one is used automatically)
+        "monthly_spend_cap": 0,               # default 0 = none; stop using priced models once this month's
+                                              #   spending (spend.py) reaches it
+        "load_plugins": false,                # default false; true: load tools from the user's plugin files in
+                                              #   ~/.config/kde-ai-assistant/plugins (tools/plugins.py)
+        "serve_tools": false,                 # default false; true: other AI programs on this computer may use
+                                              #   the built-in tools through `kde-ai-assistant mcp-serve`;
+                                              #   anything needing approval is refused there
+        "local_only": false,                  # default false; true: nothing read leaves the computer: a hosted
+                                              #   model is refused, and web search and web pages are not offered
+        "confirm_plans": false,               # default false; true: before a request that changes more than
+                                              #   one thing, the assistant first shows its plan and waits for
+                                              #   the user to agree.
+        "disabled_tool_groups": []            # default []; built-in action groups never offered to the
+                                              #   model: "windows", "apps", "gui", "system", "files",
+                                              #   "shell", "phone", "schedule" (see tools/catalog.py).
+                                              #   Reading the desktop
+                                              #   and the user's tool servers are not affected.
+      },
+      "personal": {                           # where the assistant keeps the user's notes and to-dos
+        "notes_file": "",                     #   default "" = Notes.md in the Documents folder
+        "todo_file": ""                       #   default "" = To-do.md in the Documents folder
+      },                                      #   (absolute paths or ~; plain Markdown, see tools/notes.py)
+      "layouts": {                            # default {}; saved window layouts, name -> list of
+        "<name>": [{"app": "org.kde.kate",    #   {app, x, y, width, height} in pixels; schema in
+                    "x": 0, "y": 0,           #   tools/workspace.py (validate_layouts)
+                    "width": 960, "height": 1080}]
+      },
+      "routines": {                           # default {}; named requests the user saved, run when asked,
+        "<name>": {...}                       #   on a schedule or when a folder changes. Schema and meaning:
+      },                                      #   routines.py
       "roles": {
         "file_search": {                      # optional; the tool the search bar queries while typing
           "server": "<name>", "tool": "<tool name>",
@@ -54,12 +103,17 @@ Schema (version 1)::
       }
     }
 
+The settings page (the applet's "Configure…" dialog) has a control for every
+key above, so a user never edits this file; the ``kde-ai-assistant`` CLI
+covers the main ones (models, tool servers, roles, policy, folders) for
+scripts.
+
 Server names are 1 to 64 characters of letters, digits, ``_``, ``.`` or
 ``-``; model names follow the same rule. A role must point at a configured
 server and ``active_model`` at a configured model. Unknown keys are rejected
 so a typo is reported instead of silently ignored.
 
-``redacted`` is the form sent to clients: tool-server environment values,
+``redacted`` is the form sent to clients: tool-server environment and header values,
 model header values and non-empty model API keys are replaced by ``None``. ``merge_redacted`` is its
 inverse on update: a ``None`` value means "keep what is stored", so a client
 can round-trip settings without ever holding a secret.
@@ -74,8 +128,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .agent_loop import MAX_STEPS
 from .mcp_client import McpServerSpec
+from .routines import RoutineError, validate_routines
+from .tools.workspace import LayoutError, validate_layouts
 from .runtime_paths import APP_DIR_NAME, write_private_file
+from .tools.shell import DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, SUPPORTED_TERMINALS
 
 SETTINGS_VERSION = 1
 PROVIDER_KINDS = ("openai_compatible",)
@@ -84,6 +142,22 @@ APPROVAL_POLICIES = ("danger", "changes", "everything")
 FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 DEFAULT_HISTORY_DAYS = 30
 ROLE_NAMES = ("file_search", "web_search")
+# Built-in action groups the user can switch off; tools/catalog.py builds one
+# list of tools per name (a test keeps the two in step).
+TOOL_GROUPS = ("windows", "apps", "gui", "system", "files", "shell", "phone", "schedule")
+MAX_INSTRUCTIONS_CHARS = 4000
+DEFAULT_NOTIFY_AFTER_SECONDS = 60
+# The starting text of the user's instructions: preferences, not rules the
+# assistant needs to work, so they are shown and editable on the settings page
+# (Behaviour, "Restore suggested") instead of hidden in the system prompt.
+SUGGESTED_INSTRUCTIONS = (
+    "When installing software, use official sources: the distribution's own packages first, then the project's "
+    "official pre-built packages (for example its Flatpak). Build from source only when nothing pre-built exists "
+    "or I ask.\n"
+    "Never install from a third-party build, an unofficial repository or a downloaded install script without asking "
+    "me first: say who publishes it and why the official sources did not work, then wait for my answer.\n"
+    "Never stop or kill a program you started for me unless I ask."
+)
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 
@@ -100,10 +174,20 @@ def config_path() -> Path:
     return config_dir() / "config.json"
 
 
+def default_agent() -> dict[str, Any]:
+    return {
+        "instructions": SUGGESTED_INSTRUCTIONS, "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
+        "command_timeout_seconds": DEFAULT_TIMEOUT_SECONDS, "terminal": "", "disabled_tool_groups": [],
+        "confirm_plans": False, "local_only": False, "fallback_model": "", "monthly_spend_cap": 0,
+        "load_plugins": False, "serve_tools": False,
+    }
+
+
 def default_settings() -> dict[str, Any]:
     return {
         "version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": "",
-        "approval_policy": "danger", "folders": {}, "history_days": DEFAULT_HISTORY_DAYS,
+        "approval_policy": "danger", "folders": {}, "history_days": DEFAULT_HISTORY_DAYS, "agent": default_agent(),
+        "routines": {}, "layouts": {}, "personal": {"notes_file": "", "todo_file": ""},
     }
 
 
@@ -122,14 +206,66 @@ def _string_list(value: Any, where: str) -> list[str]:
     return list(value)
 
 
+def _whole_number(value: Any, low: int, high: int, message: str) -> int:
+    _require(isinstance(value, int) and not isinstance(value, bool) and low <= value <= high, message)
+    return value
+
+
+def _validate_agent(raw: Any) -> dict[str, Any]:
+    _require(isinstance(raw, dict), "'agent' must be an object")
+    defaults = default_agent()
+    _reject_unknown(set(raw) - set(defaults), "'agent': ")
+    merged = {**defaults, **raw}
+    instructions = merged["instructions"]
+    _require(isinstance(instructions, str), "'agent': 'instructions' must be text")
+    _require(len(instructions) <= MAX_INSTRUCTIONS_CHARS,
+             f"'agent': 'instructions' may be at most {MAX_INSTRUCTIONS_CHARS} characters")
+    terminal = merged["terminal"]
+    _require(terminal == "" or terminal in SUPPORTED_TERMINALS,
+             f"'agent': 'terminal' must be empty (automatic) or one of {', '.join(SUPPORTED_TERMINALS)}")
+    for flag in ("confirm_plans", "local_only", "load_plugins", "serve_tools"):
+        _require(isinstance(merged[flag], bool), f"'agent': '{flag}' must be true or false")
+    _require(isinstance(merged["fallback_model"], str), "'agent': 'fallback_model' must be a model name")
+    cap = merged["monthly_spend_cap"]
+    _require(isinstance(cap, (int, float)) and not isinstance(cap, bool) and 0 <= cap <= 1_000_000,
+             "'agent': 'monthly_spend_cap' must be a number, 0 for none")
+    groups = _string_list(merged["disabled_tool_groups"], "'agent': 'disabled_tool_groups'")
+    for group in groups:
+        _require(group in TOOL_GROUPS, f"'agent': unknown tool group '{group}' (known: {', '.join(TOOL_GROUPS)})")
+    return {
+        "instructions": instructions.strip(),
+        "max_steps": _whole_number(merged["max_steps"], 5, 200, "'agent': 'max_steps' must be a whole number from 5 to 200"),
+        "notify_after_seconds": _whole_number(
+            merged["notify_after_seconds"], 0, 3600, "'agent': 'notify_after_seconds' must be a whole number from 0 to 3600"),
+        "command_timeout_seconds": _whole_number(
+            merged["command_timeout_seconds"], 5, MAX_TIMEOUT_SECONDS,
+            f"'agent': 'command_timeout_seconds' must be a whole number from 5 to {MAX_TIMEOUT_SECONDS}"),
+        "terminal": terminal,
+        "disabled_tool_groups": sorted(set(groups)),
+        "confirm_plans": merged["confirm_plans"],
+        "local_only": merged["local_only"],
+        "load_plugins": merged["load_plugins"],
+        "serve_tools": merged["serve_tools"],
+        "fallback_model": merged["fallback_model"].strip(),
+        "monthly_spend_cap": cap,
+    }
+
+
 def _validate_server(name: str, raw: Any) -> dict[str, Any]:
     where = f"tool server '{name}'"
     _require(bool(_NAME_PATTERN.match(name)), f"{where}: names use letters, digits, '_', '.' or '-' (max 64)")
     _require(isinstance(raw, dict), f"{where} must be an object")
-    unknown = set(raw) - {"command", "args", "env", "enabled", "read_only", "tools"}
+    unknown = set(raw) - {"command", "args", "env", "enabled", "read_only", "tools", "url", "headers"}
     _reject_unknown(unknown, f"{where}: ")
-    command = raw.get("command")
-    _require(isinstance(command, str) and bool(command.strip()), f"{where}: 'command' is required")
+    command = raw.get("command", "")
+    url = raw.get("url", "")
+    _require(isinstance(url, str) and (not url or url.startswith(("http://", "https://"))),
+             f"{where}: 'url' must start with http:// or https://")
+    _require(isinstance(command, str) and (bool(command.strip()) != bool(url.strip())),
+             f"{where}: 'command' is required (or give 'url' for an HTTP server, but not both)")
+    headers = raw.get("headers", {})
+    _require(isinstance(headers, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()),
+             f"{where}: 'headers' must map header names to text values")
     env = raw.get("env", {})
     _require(
         isinstance(env, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()),
@@ -140,6 +276,8 @@ def _validate_server(name: str, raw: Any) -> dict[str, Any]:
         _require(isinstance(raw.get(flag, False), bool), f"{where}: '{flag}' must be true or false")
     return {
         "command": command.strip(),
+        "url": url.strip(),
+        "headers": dict(headers),
         "args": _string_list(raw.get("args", []), f"{where}: 'args'"),
         "env": dict(env),
         "enabled": raw.get("enabled", True),
@@ -173,7 +311,12 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
     where = f"model '{name}'"
     _require(bool(_NAME_PATTERN.match(name)), f"{where}: names use letters, digits, '_', '.' or '-' (max 64)")
     _require(isinstance(raw, dict), f"{where} must be an object")
-    _reject_unknown(set(raw) - {"provider", "base_url", "model", "api_key", "headers", "context_window", "vision"}, f"{where}: ")
+    _reject_unknown(set(raw) - {"provider", "base_url", "model", "api_key", "headers", "context_window", "vision",
+                                "input_price", "output_price"}, f"{where}: ")
+    for price in ("input_price", "output_price"):
+        value = raw.get(price, 0)
+        _require(isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 10000,
+                 f"{where}: '{price}' must be a number from 0 (per million tokens)")
     _require(raw.get("provider") in PROVIDER_KINDS, f"{where}: 'provider' must be one of {', '.join(PROVIDER_KINDS)}")
     base_url = raw.get("base_url")
     _require(
@@ -203,13 +346,16 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
         "headers": {key.strip(): value for key, value in headers.items()},
         "context_window": window,
         "vision": raw.get("vision", False),
+        "input_price": raw.get("input_price", 0),
+        "output_price": raw.get("output_price", 0),
     }
 
 
 def validate_settings(raw: Any) -> dict[str, Any]:
     """Return a normalised copy of ``raw`` with defaults filled in, or raise ``SettingsError``."""
     _require(isinstance(raw, dict), "settings must be an object")
-    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders", "history_days"}, "")
+    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders",
+                                "history_days", "agent", "routines", "layouts", "personal"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
     raw_roles = raw.get("roles", {})
@@ -223,6 +369,8 @@ def validate_settings(raw: Any) -> dict[str, Any]:
     models = {name: _validate_model(name, value) for name, value in raw_models.items()}
     _require(isinstance(active_model, str), "'active_model' must be a model name")
     _require(not active_model or active_model in models, f"'active_model': model '{active_model}' is not set up")
+    fallback = (raw.get("agent") or {}).get("fallback_model", "") if isinstance(raw.get("agent"), dict) else ""
+    _require(not fallback or fallback in models, f"'agent': fallback model '{fallback}' is not set up")
     folders = raw.get("folders", {})
     _require(isinstance(folders, dict), "'folders' must be an object")
     for name, path in folders.items():
@@ -231,11 +379,8 @@ def validate_settings(raw: Any) -> dict[str, Any]:
             isinstance(path, str) and path.startswith(("/", "~")),
             f"'folders': {name} must be an absolute path or start with ~",
         )
-    history_days = raw.get("history_days", DEFAULT_HISTORY_DAYS)
-    _require(
-        isinstance(history_days, int) and not isinstance(history_days, bool) and 0 <= history_days <= 3650,
-        "'history_days' must be a whole number of days from 0 to 3650",
-    )
+    history_days = _whole_number(raw.get("history_days", DEFAULT_HISTORY_DAYS), 0, 3650,
+                                 "'history_days' must be a whole number of days from 0 to 3650")
     policy = raw.get("approval_policy", "danger")
     _require(policy in APPROVAL_POLICIES, f"'approval_policy' must be one of {', '.join(APPROVAL_POLICIES)}")
     return {
@@ -247,7 +392,37 @@ def validate_settings(raw: Any) -> dict[str, Any]:
         "approval_policy": policy,
         "folders": {name: os.path.expanduser(path) for name, path in folders.items()},
         "history_days": history_days,
+        "agent": _validate_agent(raw.get("agent", {})),
+        "routines": _validate_routines(raw.get("routines", {})),
+        "layouts": _validate_layouts(raw.get("layouts", {})),
+        "personal": _validate_personal(raw.get("personal", {})),
     }
+
+
+def _validate_personal(raw: Any) -> dict[str, str]:
+    _require(isinstance(raw, dict), "'personal' must be an object")
+    _reject_unknown(set(raw) - {"notes_file", "todo_file"}, "'personal': ")
+    cleaned = {}
+    for key in ("notes_file", "todo_file"):
+        value = raw.get(key, "")
+        _require(isinstance(value, str) and (not value.strip() or value.strip().startswith(("/", "~"))),
+                 f"'personal': '{key}' must be empty or an absolute path")
+        cleaned[key] = os.path.expanduser(value.strip()) if value.strip() else ""
+    return cleaned
+
+
+def _validate_layouts(raw: Any) -> dict[str, Any]:
+    try:
+        return validate_layouts(raw)
+    except LayoutError as error:
+        raise SettingsError(str(error)) from error
+
+
+def _validate_routines(raw: Any) -> dict[str, Any]:
+    try:
+        return validate_routines(raw)
+    except RoutineError as error:
+        raise SettingsError(str(error)) from error
 
 
 def load_settings(path: Path | None = None) -> dict[str, Any]:
@@ -276,6 +451,7 @@ def redacted(settings: dict[str, Any]) -> dict[str, Any]:
     view = copy.deepcopy(settings)
     for server in view.get("tool_servers", {}).values():
         server["env"] = {name: None for name in server.get("env", {})}
+        server["headers"] = {name: None for name in server.get("headers", {})}
     for model in view.get("models", {}).values():
         if model.get("api_key"):
             model["api_key"] = None
@@ -290,17 +466,14 @@ def merge_redacted(incoming: Any, stored: dict[str, Any]) -> Any:
     merged = copy.deepcopy(incoming)
     servers = merged.get("tool_servers")
     for name, server in (servers.items() if isinstance(servers, dict) else ()):
-        if not isinstance(server, dict) or not isinstance(server.get("env"), dict):
+        if not isinstance(server, dict):
             continue
-        previous = stored.get("tool_servers", {}).get(name, {}).get("env", {})
-        kept = {}
-        for key, value in server["env"].items():
-            if value is None:
-                if key in previous:
-                    kept[key] = previous[key]
-            else:
-                kept[key] = value
-        server["env"] = kept
+        for field in ("env", "headers"):
+            if not isinstance(server.get(field), dict):
+                continue
+            previous = stored.get("tool_servers", {}).get(name, {}).get(field, {})
+            server[field] = {key: (previous[key] if value is None else value)
+                             for key, value in server[field].items() if value is not None or key in previous}
     models = merged.get("models")
     for name, model in (models.items() if isinstance(models, dict) else ()):
         if not isinstance(model, dict):
@@ -332,6 +505,8 @@ def server_specs(settings: dict[str, Any]) -> list[McpServerSpec]:
             args=tuple(server["args"]),
             env=tuple(sorted(server["env"].items())),
             read_only=server["read_only"],
+            url=server.get("url", ""),
+            headers=tuple(sorted(server.get("headers", {}).items())),
         )
         for name, server in sorted(settings["tool_servers"].items())
         if server["enabled"]

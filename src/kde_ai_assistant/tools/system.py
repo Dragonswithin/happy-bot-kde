@@ -17,6 +17,10 @@ Risk: everything here is ``change`` except
 - ``write_kde_setting`` aimed at a system path.
 
 ``configure_displays`` refuses a request that would leave no display enabled.
+
+Changes to the volume, colour scheme, a KDE setting and the clipboard record
+the previous value in ``undo_journal`` so they can be undone
+(``tools/undo.py``).
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ import re
 import shutil
 from typing import Any
 
+from .. import undo_journal
 from ..desktop_context import run_command
 from ..shell_risk import SYSTEM_PATHS
 from .registry import RISK_CHANGE, RISK_DANGER, RISK_READ, Tool, ToolFailure, object_schema
@@ -56,25 +61,35 @@ def _text(arguments: dict[str, Any], name: str, required: bool = True) -> str:
     return value
 
 
-def get_volume(arguments: dict[str, Any]) -> str:
+def volume_state() -> tuple[int | None, bool]:
+    """The output volume in percent (None if unreadable) and whether it is muted."""
     output = _run(["wpctl", "get-volume", SINK])
     match = re.search(r"([0-9.]+)", output)
-    level = f"{round(float(match.group(1)) * 100)}%" if match else output
-    return f"Volume {level}" + (", muted" if "MUTED" in output else "")
+    return (round(float(match.group(1)) * 100) if match else None), "MUTED" in output
+
+
+def get_volume(arguments: dict[str, Any]) -> str:
+    percent, muted = volume_state()
+    return f"Volume {percent}%" + (", muted" if muted else "")
 
 
 def set_volume(arguments: dict[str, Any]) -> str:
     percent, mute = arguments.get("percent"), arguments.get("mute")
     if percent is None and mute is None:
         raise ToolFailure("give 'percent' (0 to 150), 'mute' (true or false), or both")
+    if percent is not None and (isinstance(percent, bool) or not isinstance(percent, (int, float))
+                                or not 0 <= percent <= 150):
+        raise ToolFailure("'percent' must be a number from 0 to 150")
+    if mute is not None and not isinstance(mute, bool):
+        raise ToolFailure("'mute' must be true or false")
+    previous, was_muted = volume_state()
     if percent is not None:
-        if isinstance(percent, bool) or not isinstance(percent, (int, float)) or not 0 <= percent <= 150:
-            raise ToolFailure("'percent' must be a number from 0 to 150")
         _run(["wpctl", "set-volume", SINK, f"{percent / 100:.2f}"])
     if mute is not None:
-        if not isinstance(mute, bool):
-            raise ToolFailure("'mute' must be true or false")
         _run(["wpctl", "set-mute", SINK, "1" if mute else "0"])
+    if previous is not None:
+        undo_journal.record("volume", f"Changed the volume from {previous}%{' (muted)' if was_muted else ''}",
+                            {"percent": previous, "mute": was_muted})
     return get_volume({})
 
 
@@ -187,6 +202,7 @@ def set_color_scheme(arguments: dict[str, Any]) -> str:
     if matches[0] == current:
         return f"The colour scheme is already {current}."
     _run(["plasma-apply-colorscheme", matches[0]])
+    undo_journal.record("color_scheme", f"Changed the colour scheme from {current} to {matches[0]}", {"scheme": current})
     return f"Colour scheme changed from {current} to {matches[0]}."
 
 
@@ -203,13 +219,32 @@ def write_kde_setting(arguments: dict[str, Any]) -> str:
     if not isinstance(value, (str, int, float, bool)):
         raise ToolFailure("'value' is required")
     text = str(value).lower() if isinstance(value, bool) else str(value)
+    previous = read_kde_value(file, group, key)
     _run(["kwriteconfig6", "--file", file, "--group", group, "--key", key, text])
+    undo_journal.record("kde_setting", f"Set [{group}] {key} in {file}",
+                        {"file": file, "group": group, "key": key, "previous": previous})
     return f"Set [{group}] {key} = {text} in {file}. Some applications apply it only after a restart."
+
+
+_UNSET = "\x00unset\x00"
+
+
+def read_kde_value(file: str, group: str, key: str) -> str | None:
+    """A KDE setting's current value, or None when it is not set (or cannot be read)."""
+    if not shutil.which("kreadconfig6"):
+        return None
+    result = run_command(["kreadconfig6", "--file", file, "--group", group, "--key", key, "--default", _UNSET], timeout=5)
+    value = result["stdout"].rstrip("\n") if result["ok"] else _UNSET
+    return None if value == _UNSET else value
 
 
 def set_clipboard(arguments: dict[str, Any]) -> str:
     text = _text(arguments, "text")
+    previous = run_command(["qdbus6", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.getClipboardContents"],
+                           timeout=5) if shutil.which("qdbus6") else {"ok": False}
     _run(["qdbus6", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.setClipboardContents", text])
+    if previous["ok"]:
+        undo_journal.record("clipboard", "Replaced the clipboard", {"text": previous["stdout"].rstrip("\n")})
     return f"Clipboard set ({len(text)} characters)."
 
 

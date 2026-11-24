@@ -1,0 +1,16 @@
+# KRunner DBus plugin entry for KDE AI Assistant, installed by scripts/install.sh
+# into ~/.local/share/krunner/dbusplugins/. It tells KRunner to ask the
+# assistant's daemon (src/kde_ai_assistant/krunner_bridge.py) for matches.
+[Desktop Entry]
+Name=AI Assistant
+Comment=Quick results, your files and questions for the AI assistant
+Type=Service
+Icon=tools-wizard
+X-KDE-ServiceTypes=Plasma/Runner
+X-KDE-PluginInfo-Name=kde-ai-assistant
+X-KDE-PluginInfo-Version=0.1.0
+X-KDE-PluginInfo-License=MIT
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=io.github.dragonswithin.KdeAiAssistant.Runner
+X-Plasma-DBusRunner-Path=/runner

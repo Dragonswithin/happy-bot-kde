@@ -11,6 +11,7 @@ application is launched.
 from __future__ import annotations
 
 import json
+import time
 import sys
 import tempfile
 import threading
@@ -21,6 +22,9 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from kde_ai_assistant.daemon_http import AssistantServer  # noqa: E402
 
@@ -132,6 +136,76 @@ class RouteTests(unittest.TestCase):
         self.assertIn("could not start", servers["broken"]["error"])
         only = self.call("GET", "/tools/servers?name=fake")[1]["servers"]
         self.assertEqual([item["name"] for item in only], ["fake"])
+        find_files = next(tool for tool in only[0]["tools"] if tool["name"] == "find_files")
+        self.assertIn({"name": "query", "type": "string", "required": True}, find_files["arguments"])
+        self.assertEqual((find_files["query_argument"], find_files["limit_argument"]), ("query", "limit"))
+
+    def test_quick_results_reminders_and_routine_units_go_through_the_daemon(self) -> None:
+        from unittest import mock
+
+        from kde_ai_assistant.tools import reminders
+
+        reply = self.call("GET", "/quick?q=6*7")[1]
+        self.assertEqual(reply["results"][0]["action"], {"type": "copy", "target": "42"})
+        self.assertEqual(self.call("POST", "/quick/activate", {"action": {"type": "settings", "target": "x;y"}})[0], 400)
+        units = Path(self._tmp.name) / "units"
+        with mock.patch.object(reminders, "_location", return_value=(units, False)):
+            ident = reminders.set_reminder({"text": "Stretch", "in_minutes": 5}).split()[1]
+            listed = self.call("GET", "/reminders")[1]["reminders"]
+            self.assertEqual([(item["id"], item["text"]) for item in listed], [(ident, "Stretch")])
+            self.assertEqual(self.call("POST", "/reminders/cancel", {"id": ident})[0], 200)
+            self.assertEqual(self.call("POST", "/reminders/cancel", {"id": ident})[0], 404)
+        settings = self.call("GET", "/settings")[1]["settings"]
+        settings["routines"] = {"Morning": {"request": "Say hello", "schedule": "daily"}}
+        self.assertEqual(self.call("PUT", "/settings", {"settings": settings})[0], 200)
+        written = sorted(path.suffix for path in self.server.unit_dir.iterdir())
+        self.assertEqual(written, [".service", ".timer"])
+        self.assertFalse(self.server.manage_units)
+
+    def test_export_has_no_secrets_and_import_restores_conversations(self) -> None:
+        self.configure()
+        self.server.conversations.archive.days = 30
+        self.server.conversations.archive.save({"id": "abcdefghij", "title": "Fence quote", "created": time.time(),
+                                                 "updated": time.time(), "events": [], "history": []})
+        data = self.call("GET", "/export")[1]["data"]
+        self.assertNotIn("abc", json.dumps(data["settings"]))  # the tool server's TOKEN value
+        self.assertEqual([record["id"] for record in data["conversations"]], ["abcdefghij"])
+        self.server.conversations.archive.delete("abcdefghij")
+        reply = self.call("POST", "/import", {"data": data})[1]
+        self.assertEqual(reply["conversations_added"], 1)
+        self.assertEqual(json.loads(self.config_file.read_text())["tool_servers"]["fake"]["env"], {"TOKEN": "abc"})
+        self.assertEqual(self.call("POST", "/import", {"data": {"format": "other"}})[0], 400)
+
+    def test_self_check_names_problems_with_fixes(self) -> None:
+        import json as json_module
+
+        from kde_ai_assistant import __version__
+
+        metadata = Path(__file__).resolve().parent.parent / "plasmoid/io.github.dragonswithin.kdeaiassistant/metadata.json"
+        self.assertEqual(json_module.loads(metadata.read_text())["KPlugin"]["Version"], __version__)
+        self.configure()
+        reply = self.call("GET", "/check")[1]
+        checks = {item["name"]: item for item in reply["checks"]}
+        self.assertFalse(reply["healthy"])
+        self.assertEqual((checks["AI model"]["ok"], checks["AI model"]["fix"]),
+                         (False, "Choose or add one on the AI Model page."))
+        self.assertTrue(checks["Tool server fake"]["ok"])
+        self.assertTrue(checks["File search"]["ok"])
+        self.assertIn("Choose a tool", checks["Web search"]["fix"])
+        self.assertTrue(all(item["ok"] or item["fix"] for item in reply["checks"]))
+
+    def test_settings_read_offers_choices_and_agent_settings_round_trip(self) -> None:
+        reply = self.call("GET", "/settings")[1]
+        self.assertIsInstance(reply["terminals"], list)
+        self.assertEqual(reply["suggested_instructions"], reply["settings"]["agent"]["instructions"])
+        self.assertEqual(reply["settings"]["agent"]["max_steps"], 40)
+        reply["settings"]["agent"].update(max_steps=12, disabled_tool_groups=["shell"], instructions="Be brief.")
+        status, stored = self.call("PUT", "/settings", {"settings": reply["settings"]})
+        self.assertEqual((status, stored["settings"]["agent"]["max_steps"]), (200, 12))
+        self.assertEqual(json.loads(self.config_file.read_text())["agent"]["disabled_tool_groups"], ["shell"])
+        reply["settings"]["agent"]["terminal"] = "not-a-terminal"
+        status, refused = self.call("PUT", "/settings", {"settings": reply["settings"]})
+        self.assertEqual((status, refused["code"]), (400, "invalid"))
 
     def test_removing_a_server_stops_its_process(self) -> None:
         self.configure()

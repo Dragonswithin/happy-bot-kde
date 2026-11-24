@@ -39,9 +39,15 @@ import org.kde.plasma.extras as PlasmaExtras
  * to main.qml; this view only draws `selectedIndex` and reports intent:
  *
  * - `queryEdited(text)`: the text changed. `accepted(text)`: Enter (or the
- *   Ask row), trimmed. `selectionMove(delta)`: Down (+1) or Up (-1). Escape
+ *   Ask row), trimmed. `selectionMove(delta)`: Down (+1) or Up (-1).
+ *   `completeRequested()`: Tab, to complete the text from the top result. Escape
  *   clears the text, or closes when it is already empty (`closeRequested`).
- * - `hitActivated(location)`: a clicked result or a link in an answer.
+ * - `resultActivated(hit)`: a clicked file match or quick result.
+ * - `fileActionRequested(hit, action)`: a file match's right-click menu:
+ *   "reveal" (show in folder), "copy" (its path) or "ask" (about it). A
+ *   file match can also be dragged into another application, and files
+ *   dropped onto the popup emit `filesDropped(paths)`.
+ * - `hitActivated(location)`: a link clicked in an answer.
  * - `closeRequested`, `settingsRequested`: the Close and Open settings buttons.
  *
  * The view sets its own width and height: Plasma's popup window follows its
@@ -78,7 +84,23 @@ Item {
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
+    signal completeRequested()
     signal hitActivated(string location)
+    signal resultActivated(var hit)
+    signal fileActionRequested(var hit, string action)
+    signal filesDropped(var paths)
+
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            const paths = (drop.urls || []).map(url => decodeURIComponent(String(url).replace(/^file:\/\//, "")));
+            if (paths.length > 0) {
+                view.filesDropped(paths);
+                drop.accept(Qt.CopyAction);
+            }
+        }
+    }
     signal closeRequested()
     signal settingsRequested()
 
@@ -97,6 +119,10 @@ Item {
 
     function clearInput() {
         inputBar.text = "";
+    }
+
+    function setInput(text) {
+        inputBar.text = text;
     }
 
     // --- header band: title, status and actions ---------------------------
@@ -196,6 +222,7 @@ Item {
             Keys.onEnterPressed: view.accepted(text.trim())
             Keys.onDownPressed: view.selectionMove(1)
             Keys.onUpPressed: view.selectionMove(-1)
+            Keys.onTabPressed: view.completeRequested()
             Keys.onEscapePressed: {
                 if (text.length > 0) {
                     text = "";
@@ -337,7 +364,54 @@ Item {
 
                         Layout.fillWidth: true
                         highlighted: index === view.selectedIndex
-                        onClicked: view.hitActivated(modelData.location)
+                        onClicked: view.resultActivated(modelData)
+
+                        // A file match can be dragged into another application.
+                        Drag.dragType: Drag.Automatic
+                        Drag.supportedActions: Qt.CopyAction
+                        Drag.mimeData: row.modelData.kind === "quick" ? ({})
+                            : ({ "text/uri-list": row.modelData.location.indexOf("://") > 0 ? row.modelData.location
+                                                  : "file://" + encodeURI(row.modelData.location),
+                                 "text/plain": row.modelData.location })
+                        Drag.active: rowDrag.active
+                        DragHandler {
+                            id: rowDrag
+                            enabled: row.modelData.kind !== "quick"
+                            target: null
+                        }
+
+                        // A file match's own actions, on right-click.
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            enabled: row.modelData.kind !== "quick"
+                            onTapped: fileMenu.popup()
+                        }
+
+                        QQC2.Menu {
+                            id: fileMenu
+
+                            QQC2.MenuItem {
+                                text: i18n("Open")
+                                icon.name: "document-open"
+                                onTriggered: view.resultActivated(row.modelData)
+                            }
+                            QQC2.MenuItem {
+                                text: i18n("Show in folder")
+                                icon.name: "document-open-folder"
+                                enabled: row.modelData.kind !== "link"
+                                onTriggered: view.fileActionRequested(row.modelData, "reveal")
+                            }
+                            QQC2.MenuItem {
+                                text: row.modelData.kind === "link" ? i18n("Copy link") : i18n("Copy path")
+                                icon.name: "edit-copy"
+                                onTriggered: view.fileActionRequested(row.modelData, "copy")
+                            }
+                            QQC2.MenuItem {
+                                text: i18n("Ask about this")
+                                icon.name: "tools-wizard"
+                                onTriggered: view.fileActionRequested(row.modelData, "ask")
+                            }
+                        }
 
                         contentItem: RowLayout {
                             spacing: Kirigami.Units.largeSpacing

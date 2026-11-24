@@ -12,10 +12,16 @@ Endpoints:
 - ``GET /context``: desktop context capture (``desktop_context``).
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
+  The read also carries what the settings page needs to offer choices:
+  ``effective_folders`` (where each standard folder is now) and
+  ``terminals`` (supported terminals that are installed) and
+  ``suggested_instructions`` (the default text of ``agent.instructions``).
 - ``GET /tools/discover``: tool servers found in other programs' configs.
 - ``POST /tools/import``: copy one discovered server into the settings.
-- ``GET /tools/servers``: configured servers, their tools and role proposals.
-  This starts the servers, so it can take seconds.
+- ``GET /tools/servers[?name=...]``: configured servers, their tools (with
+  each tool's arguments and its likely query and result-limit arguments) and
+  role proposals. This starts the servers, so it
+  can take seconds.
 - ``POST /open``: open a file, folder or link (``desktop_actions``).
 - ``POST /models/discover``: find model services running on this computer.
 - ``POST /tools/scan``: start each discovered, not yet configured tool
@@ -30,6 +36,22 @@ Endpoints:
 - ``GET /conversation?id=...``: one conversation's display events, for the
   popup to redraw it.
 - ``POST /conversations/delete``: ``{"id": ...}`` or ``{"all": true}``.
+- ``GET /export`` / ``POST /import``: everything the assistant keeps for the
+  user, without secrets (``personal_data``).
+- ``GET /tools/catalog`` / ``POST /tools/run``: the built-in tools lent to
+  other AI programs through ``kde-ai-assistant mcp-serve``, only while the
+  user's ``agent.serve_tools`` setting is on. A call that the approval
+  policy would put to the user is refused (there is no one to ask), and
+  every call is written to the action log.
+- ``GET /spend``: this month's tokens and cost per model (``spend``).
+- ``GET /check``: the self-check (``self_check.run_checks``): every
+  dependency's state with a fix for each problem.
+- ``GET /quick?q=...``: results the bar shows besides files (answers,
+  windows, applications, settings pages, conversations; ``quick_results``).
+- ``POST /quick/activate``: ``{"action": {...}}`` from one of those results.
+- ``GET /reminders``: reminders and timers that are set
+  (``{id, when, text}``, soonest first; ``tools/reminders.py``).
+- ``POST /reminders/cancel``: ``{"id": ...}``.
 - ``POST /approve``: the user's answer to an approval request
   (``{"id", "decision": "allow"|"deny", "remember": bool}``).
 - ``POST /screenshot``.
@@ -44,19 +66,24 @@ to offer (``not_configured``, ``tool_failed``, ``invalid``).
 
 from __future__ import annotations
 
+import json
 import threading
+import time
 from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import desktop_actions, desktop_context, instant_search, mcp_discovery, model_discovery
+from . import desktop_actions, desktop_context, instant_search, mcp_discovery, model_discovery, personal_data, quick_results, self_check, spend
 from . import settings as settings_store
 from .agent_loop import user_folders
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .mcp_client import McpError, McpServerSpec, McpSession
 from .providers import ProviderError, create_provider
 from .providers.openai_compatible import list_models
-from .tool_roles import RoleNotConfigured, propose_role
+from .tool_roles import RoleNotConfigured, find_limit_argument, find_query_argument, propose_role, tool_arguments
+from .tools import reminders
+from .tools.registry import ToolFailure
+from .tools.shell import installed_terminals
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
@@ -118,6 +145,8 @@ def get_settings(server: "AssistantServer", query: dict[str, list[str]], body: d
         "ok": True,
         "settings": settings_store.redacted(server.settings),
         "effective_folders": user_folders(server.settings.get("folders")),
+        "terminals": installed_terminals(),
+        "suggested_instructions": settings_store.SUGGESTED_INSTRUCTIONS,
     }
 
 
@@ -182,7 +211,10 @@ def list_tool_servers(server: "AssistantServer", query: dict[str, list[str]], bo
                 item["error"] = str(exc)
             else:
                 item["tools"] = [
-                    {"name": tool["name"], "description": str(tool.get("description") or "")[:300]} for tool in tools
+                    {"name": tool["name"], "description": str(tool.get("description") or "")[:300],
+                     "arguments": tool_arguments(tool), "query_argument": find_query_argument(tool) or "",
+                     "limit_argument": find_limit_argument(tool) or ""}
+                    for tool in tools
                 ]
                 item["proposals"] = [found for found in (propose_role(name, tool) for tool in tools) if found]
         servers.append(item)
@@ -325,6 +357,95 @@ def approve(server: "AssistantServer", query: dict[str, list[str]], body: dict[s
     return 200, {"ok": True}
 
 
+def export(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "data": personal_data.export_data(server)}
+
+
+def import_(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        return 200, {"ok": True, **personal_data.import_data(server, body.get("data"))}
+    except (personal_data.BadExport, settings_store.SettingsError) as error:
+        return _error(400, str(error), "invalid")
+
+
+def _lent_tools(server: "AssistantServer"):
+    from .tools.catalog import builtin_tools
+    from .tools.registry import ToolRegistry
+
+    return ToolRegistry(builtin_tools(server.settings.get("agent")))
+
+
+def tool_catalog(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    if not server.settings["agent"].get("serve_tools"):
+        return _error(403, "Lending tools to other programs is switched off in the assistant's settings.", "invalid")
+    registry = _lent_tools(server)
+    return 200, {"ok": True, "tools": [{"name": spec.name, "description": spec.description,
+                                        "inputSchema": spec.parameters} for spec in registry.specs()]}
+
+
+def run_tool(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    from .permissions import append_audit, needs_approval
+
+    if not server.settings["agent"].get("serve_tools"):
+        return _error(403, "Lending tools to other programs is switched off in the assistant's settings.", "invalid")
+    name, arguments = str(body.get("name") or ""), body.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return _error(400, "arguments must be an object", "invalid")
+    registry = _lent_tools(server)
+    if registry.get(name) is None:
+        return _error(404, f"there is no tool named {name}", "invalid")
+    risk, summary, detail = registry.assess(name, arguments)
+    outcome = "refused for another program"
+    if needs_approval(server.settings.get("approval_policy", "danger"), risk):
+        result = (False, f"Refused: '{summary}' needs the user's approval ({detail or risk}), which can only be "
+                         "given in the assistant's own bar.")
+    else:
+        impossible = registry.precheck(name, arguments)
+        result = (False, impossible) if impossible else registry.run(name, arguments)
+        outcome = "ran for another program"
+    if risk != "read":
+        append_audit(server.runtime_dir, {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "tool": name, "risk": risk,
+                                          "outcome": outcome, "arguments": json.dumps(arguments)[:2000]})
+    return 200, {"ok": True, "succeeded": result[0], "text": result[1]}
+
+
+def spending(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, **spend.month_summary()}
+
+
+def check(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    results = self_check.run_checks(server)
+    return 200, {"ok": True, "healthy": all(item["ok"] for item in results), "checks": results}
+
+
+def quick(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    text = _first(query, "q").strip()[:MAX_QUERY_CHARS]
+    return 200, {"ok": True, "query": text, "results": quick_results.gather(text, server.conversations.list())}
+
+
+def quick_activate(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    action = body.get("action")
+    if not isinstance(action, dict):
+        return _error(400, "action is required", "invalid")
+    try:
+        return 200, {"ok": True, "message": quick_results.activate(action)}
+    except quick_results.ActivationError as error:
+        return _error(400, str(error), "invalid")
+
+
+def list_reminders(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    items = reminders.upcoming()
+    return 200, {"ok": True, "reminders": [
+        {"id": item["id"], "when": item["when"].strftime("%Y-%m-%d %H:%M"), "text": item["text"]} for item in items]}
+
+
+def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        return 200, {"ok": True, "message": reminders.cancel_reminder({"id": str(body.get("id") or "")})}
+    except ToolFailure as error:
+        return _error(404, str(error), "invalid")
+
+
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
@@ -345,4 +466,14 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/conversations"): list_conversations,
     ("GET", "/conversation"): get_conversation,
     ("POST", "/conversations/delete"): delete_conversations,
+    ("GET", "/check"): check,
+    ("GET", "/spend"): spending,
+    ("GET", "/tools/catalog"): tool_catalog,
+    ("POST", "/tools/run"): run_tool,
+    ("GET", "/export"): export,
+    ("POST", "/import"): import_,
+    ("GET", "/quick"): quick,
+    ("POST", "/quick/activate"): quick_activate,
+    ("GET", "/reminders"): list_reminders,
+    ("POST", "/reminders/cancel"): cancel_reminder,
 }

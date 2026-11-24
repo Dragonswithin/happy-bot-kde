@@ -29,23 +29,27 @@ architecture and phase order are in `docs/ROADMAP.md`.
   and shows an approval card.
 - Long steps show that they are alive: a spinner, how long they have run,
   and the latest line of output. Stop ends a running command at once, and a
-  desktop notification says when a request that took over a minute is done.
+  desktop notification says when a request that took over a minute (your
+  choice, under Behaviour) is done.
 - Installs, builds and anything that needs your password open in a terminal
   window, where you watch the progress and type the password yourself; the
   assistant never handles it. It waits for that window's command to finish
   (the box says it is waiting for you), then reports how it went.
-- When installing, it looks for a pre-built package (official repositories,
-  `-bin` AUR packages, Flatpak) before building from source, asks before
-  using any third-party source, and checks afterwards that the app shows in
-  the launcher, refreshing the launcher (and, if needed, restarting the
+- When installing, it follows your instructions on the Behaviour settings
+  page; the suggested ones say to use official, pre-built packages before
+  building from source, to ask before any third-party source, and never to
+  stop a program it started for you. It checks afterwards that the app shows
+  in the launcher, refreshing the launcher (and, if needed, restarting the
   panel right after the request) when it does not.
-  Everything else runs at once. `kde-ai-assistant policy changes` or
-  `policy everything` makes it ask more often.
+  Everything else runs at once. The Behaviour settings page (or
+  `kde-ai-assistant policy changes` / `policy everything`) makes it ask more
+  often.
 - Conversations are kept: reopening the box returns to the current one, and
   a sidebar lists earlier ones to reopen and continue. They are saved,
   readable only by you, in `~/.local/share/kde-ai-assistant/conversations`
-  and deleted 30 days after their last use (setting `history_days`; 0 saves
-  nothing). They can contain whatever the assistant read for you.
+  and deleted 30 days after their last use (changed on the History & Folders
+  settings page; 0 saves nothing). They can contain whatever the assistant
+  read for you.
 - Every action that changed something is recorded in
   `$XDG_RUNTIME_DIR/kde-ai-assistant/actions.jsonl` until you log out.
 
@@ -55,9 +59,85 @@ architecture and phase order are in `docs/ROADMAP.md`.
   control. Applications that expose no accessibility information cannot be
   operated this way.
 
+## Settings
+
+Right-click the assistant's icon and choose Configure. Every setting has a
+control there; no file needs editing.
+
+- **AI Model:** which model answers; find one running on this computer or
+  add a hosted one; its address, model id, API key, extra request headers,
+  context window and whether it can see images; a live test.
+- **Search & Tools:** the file and web search tools (picked from the scan's
+  suggestions or by hand: server, tool, which argument gets the text, how
+  many results); connected tool servers, each with an on/off switch, a
+  "look-up only" mark, its start command, environment values such as API
+  keys, and which of its tools the assistant may use; a scan for servers
+  set up for other AI programs; connecting one by hand.
+- **Behaviour:** when to ask for approval; which kinds of action the
+  assistant may take at all (windows, applications, other apps' buttons
+  and typing, system settings, files, commands); your own standing
+  instructions; steps per request, how long commands may run, when to
+  notify; which terminal installs open in.
+- **History & Folders:** how long conversations are kept, deleting them
+  all, and where Desktop, Documents, Downloads, Pictures, Music and Videos
+  are.
+- **Search Bar:** live results while typing (on or off, after how many
+  characters, after what pause, how many), the popup's size, and the
+  address of the background service for unusual setups.
+- **Keyboard Shortcuts:** the shortcut that opens the assistant.
+
+API keys and other secrets typed there are stored in the daemon's settings
+file (mode 0600) and never shown again.
+
+## More Things It Does
+
+Besides the bar and the settings above:
+
+- **Quick results while typing**, with no AI model: a calculator, unit
+  conversions (with `qalc`), dates ("3 weeks from friday"), world clocks
+  ("time in Tokyo"), open windows, applications, System Settings pages and
+  earlier conversations. Optional prefixes: `/` files only, `=` answers only,
+  `?` ask the web, `>` run a command. Up and Down recall earlier requests,
+  Tab completes, and file results have a right-click menu and can be dragged.
+- **KRunner** (Alt+Space) shows the same results and an "Ask the assistant"
+  entry whose answer arrives as a notification.
+- **Undo**: "undo that" reverses the last change (file moves, new or
+  replaced files, the trash, volume, brightness, themes, window places and
+  more); "what did you do today?" is answered from the action log; after
+  every answer the popup lists anything that was not done.
+- **Reminders, routines and notes**: "remind me at 4…", saved routines that
+  run by name, on a schedule or when a folder changes, quick notes and a
+  to-do list in Markdown files.
+- **Desktop and devices**: media and sound devices, the phone through KDE
+  Connect, Bluetooth, brightness, night light, Do Not Disturb, power
+  profiles, themes, keyboard layouts, printers, VPNs, removable drives,
+  default applications and autostart, virtual desktops, activities and
+  saved window layouts.
+- **Files and documents**: archives, conversions, picture edits, PDF pages,
+  duplicates, the trash, comparing files, reading text in pictures (OCR),
+  recent files, bookmarks and reading web pages.
+- **For power users**: the system log, user services, processes, Git,
+  containers, network checks, software search across every source and the
+  update history.
+
+Commands:
+
+```bash
+kde-ai-assistant doctor                     # check everything, with fixes
+kde-ai-assistant eval [--model NAME]        # try a model on everyday requests (changes nothing)
+kde-ai-assistant ask --dry-run "…"          # say what it would do, change nothing
+kde-ai-assistant history [ID]               # earlier conversations
+kde-ai-assistant export FILE / import FILE  # move settings (without secrets) and conversations
+kde-ai-assistant mcp-serve                  # let another AI program use the tools (enable in settings)
+```
+
+Global shortcuts for "Explain selected text" and "Ask about this window" are
+under System Settings > Shortcuts > AI Assistant Shortcuts (no keys are set
+by default). An Arch package recipe is in `packaging/arch/`.
+
 ## Setting Up From The Command Line
 
-Everything the settings page does can also be scripted. For a model, any
+The main settings can also be scripted. For a model, any
 service with an OpenAI-compatible chat API works, local or hosted:
 
 ```bash
@@ -89,8 +169,8 @@ kde-ai-assistant search some words
 
 Settings are stored in `~/.config/kde-ai-assistant/config.json` (mode 0600).
 The schema is documented at the top of `src/kde_ai_assistant/settings.py`.
-Change them through the commands above rather than by editing the file; the
-daemon validates and applies changes immediately.
+Change them through the settings dialog or the commands above rather than by
+editing the file; the daemon validates and applies changes immediately.
 
 Useful environment overrides:
 

@@ -132,7 +132,8 @@ panel button plus shortcut that opens a focused popup with the field inside.
 - The daemon starts and supervises the MCP servers it uses as child
   processes. The user never runs them.
 - One config file under `~/.config/kde-ai-assistant`, edited only through the
-  settings page or CLI.
+  settings dialog or CLI. Every value in it, and every option the applet has,
+  has a control in the settings dialog: the user never edits a file.
 - **First-run setup** in the applet, each step skippable and re-runnable:
   pick a model (loopback endpoints are probed and offered; or paste a URL and
   key), pick the file-search tool and the web-search tool (MCP servers found
@@ -369,7 +370,13 @@ a passing acceptance run with no file edited by hand. **This completes the
 first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
 
 **Later.** Native providers, broker-backed privileged actions, packaging
-(AUR, KDE Store), non-stdio MCP transports.
+(AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
+priority order the maintainer chose for after the first release, is in
+`docs/FEATURES.md`; an item there is planned only once it is placed in a
+phase here. Image and voice input, with a local model that can test them,
+were requested by the maintainer on 2026-11-23 for a later phase (see the backlog's
+"Image And Voice Input"); which model to add to the GPU or NPU service is
+his decision.
 
 ## Phase Findings
 
@@ -650,9 +657,10 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
   the exit status and output. Stop leaves the terminal running. The maintainer kept the
   approval rule as is: with tools running one at a time, nothing can kill
   the install while it runs.
-- The maintainer's standing preference, now in the system prompt: install from a
-  pre-built package (repositories, `-bin`, Flatpak) before building from
-  source, and never kill a program started for him unless asked.
+- The maintainer's standing preference, then in the system prompt (since 2026-11-23 in
+  his editable instructions): install from a pre-built package
+  (repositories, `-bin`, Flatpak) before building from source, and never
+  kill a program started for him unless asked.
 - A third attempt installed Ladybird, but from an unofficial nightly
   (github.com/harilvfs) via `curl … | bash`, which ran without approval and
   used sudo to add `/etc/ssl/ladybird-ca-bundle.crt`. Official options
@@ -686,6 +694,96 @@ first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
   Not verified: a real install, and whether the local model describes a
   declined action accurately (in one test it claimed to have opened the
   terminal after the user declined).
+
+**Settings dialog covers everything (2026-11-23, the maintainer: "the end user should
+not need to configure anything in a file").**
+
+- The dialog has five pages: AI Model, Search & Tools, Behaviour, History &
+  Folders, and Search Bar (plus Plasma's Keyboard Shortcuts). Before this,
+  model headers, context window and vision, tool-server environment values,
+  commands, on/off and allowed tools, hand-picked role tools, connecting a
+  server by hand, `history_days` and three of the six folders could be set
+  only through the CLI or the file.
+- New daemon settings, section `agent`: the user's own instructions (added
+  to the system prompt), steps per request, the command time limit, the
+  finish-notification delay, the terminal, and built-in action groups the
+  user switches off. A switched-off group is left out of the tool list
+  altogether, and the model is told so, rather than relying on it to obey.
+- New applet settings: live results on or off, minimum characters, pause
+  and result count.
+- Left as environment variables, because no user needs them: the daemon's
+  host and port, the CLI's daemon address, and the root broker path and
+  group (the broker is only reported, not used, until broker-backed actions
+  are built).
+- The maintainer's standing preferences (official and pre-built install sources first,
+  ask before third-party sources, never stop a program started for him) were
+  hard-coded in the system prompt, so the new Instructions field showed
+  nothing. They moved into `agent.instructions`: new users start from a
+  distribution-neutral suggested text (`settings.SUGGESTED_INSTRUCTIONS`,
+  "Restore suggested" on the page), and the maintainer's own Arch wording (pacman, then
+  the AUR through yay preferring `-bin`, then the project's Flatpak remote)
+  was written to his settings. The system prompt keeps only what the tools
+  need to work (run installs in the terminal, verify an install).
+- Verified: unit and endpoint tests; `qmllint`; every page loaded with
+  `qml6` offscreen; every editor's save path exercised against a fake
+  settings store. Not verified by a person in the real dialog.
+
+**Backlog built (2026-11-23, the maintainer: "add and test all the pending features").**
+
+The maintainer's four priorities came first, then the rest of `docs/FEATURES.md`, whose
+status marks say what is built (●), partial (◐) and deferred (⏸, with the
+reason). Where things live:
+
+- Undo and trust: `undo_journal.py` and `tools/undo.py` (undo_change,
+  recent_activity, tool_usage); the per-turn `actions` and `usage` on the
+  `done` event (`agent_loop.py`), shown as "Not done: …" and model/token
+  lines in the popup; `redaction.py` for hosted models; `agent.confirm_plans`.
+- Media and phone: `session_dbus.py`, `tools/media.py` (MPRIS, sound
+  devices, per-app volume, microphone, music by name, playlists),
+  `tools/phone.py` (KDE Connect; SMS is `danger`, see below).
+- Reminders and routines: `user_timers.py`, `tools/reminders.py`,
+  `routines.py` (setting, prompt lines, unit sync), `tools/routine_tools.py`,
+  the Routines & Reminders settings page, `ask --dry-run --notify`.
+- Bar: `quick_answers.py`, `quick_results.py` (`/quick`), prefixes and
+  recall (`barInput.js`), right-click file actions, drag and drop,
+  `krunner_bridge.py` with `krunner/kde-ai-assistant.desktop`, and the
+  global-shortcut entry `desktop/kde-ai-assistant-shortcuts.desktop`.
+- More tools: `power.py`, `appearance.py`, `devices.py`, `defaults.py`,
+  `documents.py`, `screen.py`, `workspace.py`, `software.py`,
+  `developer.py`, `finding.py`, `notes.py`, `memory.py`, `plugins.py`.
+- Platform: `mcp_http.py` (HTTP tool servers), `mcp_serve.py` (lend the
+  built-in tools to other AI programs), `self_check.py` (`doctor`, "Check
+  everything"), `personal_data.py` (`export`/`import`), `spend.py` (prices,
+  monthly cap), local fallback model, `evaluation.py` (`eval`),
+  `packaging/arch/PKGBUILD`, `plasmoid/…/Messages.sh`.
+
+Checked live on the maintainer's desktop: quick results and KRunner matches over DBus;
+a reminder that fired on time; a folder-watching routine that ran the local
+model and notified; create-then-undo through the local model; `doctor` all
+healthy; `eval` 8 of 8 on the local GPU model; media, phone, devices,
+appearance, power, software and finding read tools; the package build. Not
+checked by a person: every new settings control and popup change in the real
+panel, ringing the phone, sending SMS, Bluetooth pairing, the global
+shortcuts (KDE registers the entry at the next login), drag and drop.
+
+Findings:
+
+- A safety rule had to be added after a live check went wrong: the maintainer's 8 TB
+  data disk is USB-attached and mounted at `/srv/data`, so it looked
+  "removable", and checking the drive tool started a real unmount (it timed
+  out at the password prompt; nothing was unmounted). Drives mounted outside
+  the desktop's media folders are now refused, and mutating tools are no
+  longer tried live against real devices.
+- The test suite wrote into the maintainer's real undo journal and spending record,
+  because tools record under `$XDG_RUNTIME_DIR` and `$XDG_DATA_HOME`.
+  `tests/isolation.py` now gives every test process private folders; the
+  stray entries were removed.
+- Sending a text message (`send_sms`) and deleting saved routines, layouts or
+  remembered facts are classed `danger`. SMS goes beyond the maintainer's two-part
+  definition: a message to another person cannot be taken back.
+- Neither configured model takes images or audio; OCR (`text_from_image`) is
+  the image route for now. Image and voice input, and a local model to test
+  them, are deferred by the maintainer to a later phase.
 
 ## Decisions
 

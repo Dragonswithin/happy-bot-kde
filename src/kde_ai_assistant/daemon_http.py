@@ -21,7 +21,8 @@ clients can find the base URL), the current settings, the conversations, the
 ``ApprovalBroker`` holding approval requests that await the user, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
-manager, under one lock. Unreadable settings at start do not stop the daemon;
+manager and brings the routines' systemd units in step (``routines.sync``),
+under one lock. Unreadable settings at start do not stop the daemon;
 it runs with defaults and reports ``settings_error`` in ``/health``.
 
 Requests are served on one thread each (``ThreadingHTTPServer``). What each
@@ -50,13 +51,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import desktop_context
+from . import desktop_context, routines, user_timers
 from . import settings as settings_store
 from .ask_stream import ClientGone, stream_ask
 from .conversation_archive import ConversationArchive
 from .conversations import ConversationStore
 from .daemon_routes import ROUTES
 from .mcp_client import McpManager
+from .krunner_bridge import KRunnerBridge
 from .permissions import ApprovalBroker
 from .runtime_paths import (
     DEFAULT_HOST,
@@ -158,6 +160,7 @@ class AssistantServer(ThreadingHTTPServer):
         runtime_dir: Path,
         config_file: Path | None = None,
         history_dir: Path | None = None,
+        unit_dir: Path | None = None,
     ) -> None:
         if not is_loopback_host(host):
             raise ValueError(f"refusing to listen on non-loopback address {host!r}")
@@ -168,6 +171,12 @@ class AssistantServer(ThreadingHTTPServer):
         self.allowed_hosts = frozenset({f"{host}:{bound_port}", f"localhost:{bound_port}"})
         self.state = DaemonState(host=host, port=bound_port, runtime_dir=self.runtime_dir)
         self.config_file = config_file or settings_store.config_path()
+        # Routine units go to the user's real systemd directory, and systemctl
+        # is run, only for the real settings file; a test's own config file
+        # gets a directory beside it and never touches the user's manager.
+        self.manage_units = config_file is None and unit_dir is None
+        self.unit_dir = unit_dir or (user_timers.default_unit_dir() if self.manage_units
+                                     else self.config_file.parent / "systemd-user")
         self.mcp = McpManager()
         self.approvals = ApprovalBroker()
         self._settings_lock = threading.Lock()
@@ -180,6 +189,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.mcp.configure(settings_store.server_specs(self.settings))
         self.conversations = ConversationStore(ConversationArchive(history_dir, self.settings["history_days"]))
         self.conversations.archive.prune()
+        self.sync_routines()
         write_private_file(token_path(self.runtime_dir), self.auth_token)
         self.state.persist()
 
@@ -192,7 +202,17 @@ class AssistantServer(ThreadingHTTPServer):
             self.mcp.configure(settings_store.server_specs(stored))
             self.conversations.archive.days = stored["history_days"]
             self.conversations.archive.prune()
+            self.sync_routines()
             return stored
+
+    def sync_routines(self) -> None:
+        """Bring routine timers in step with the settings; problems become the daemon's last error."""
+        try:
+            problems = routines.sync(self.settings.get("routines", {}), self.unit_dir, self.manage_units)
+        except OSError as error:
+            problems = [f"routine units could not be written: {error}"]
+        if problems:
+            self.state.last_error = "; ".join(problems)
 
     def shutdown_tools(self) -> None:
         self.mcp.close_all()
@@ -314,6 +334,8 @@ class Handler(BaseHTTPRequestHandler):
 def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
     server = AssistantServer(host, port, ensure_runtime_root(runtime_dir))
     print(f"KDE AI Assistant daemon listening on {host}:{server.state.port}", flush=True)
+    if not KRunnerBridge(server).start():
+        print("KRunner integration unavailable (no PyGObject or session bus)", flush=True)
 
     def stop_on_signal(signum: int, frame: Any) -> None:
         # systemd stops the unit with SIGTERM; unwind like Ctrl+C so the

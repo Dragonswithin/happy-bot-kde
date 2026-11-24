@@ -10,6 +10,8 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
 
+import "barInput.js" as BarInput
+
 /**
  * Root of the panel applet. It composes the visual parts around one
  * AssistantSession and owns the rules that connect them:
@@ -28,8 +30,16 @@ import org.kde.plasma.plasmoid
  *   if there are any, else shows only the field. Submitting a request clears the matches and shows
  *   the conversation; Enter in an empty field shows the previous one; an
  *   approval request clears the matches so its card is in front of the user.
- * - Typing. Text of two or more characters is sent to the instant file
- *   search after `searchDelay` of no typing. Down/Up move a selection
+ * - Typing. When live results are on (`instantSearch`), text of at least
+ *   `instantMinChars` characters is sent to the instant file search after
+ *   `instantDelayMs` of no typing; these and `instantResults` are the
+ *   applet's own settings (contents/config/main.xml, Search Bar page). The
+ *   same pause also fetches quick results (answers, windows, applications,
+ *   settings pages, conversations), shown above the files; choosing one
+ *   carries out its action (`openHit`). Optional prefixes (barInput.js) narrow
+ *   what is searched (`/` files, `=` answers) or what Enter asks (`?` web,
+ *   `>` a shell command). With no results, Up and Down recall earlier
+ *   requests from this session; Tab completes the top result's name. Down/Up move a selection
  *   through the hits. Enter opens the selected hit; with no selection it
  *   sends the text to the assistant.
  *
@@ -46,6 +56,11 @@ PlasmoidItem {
 
     property bool conversationOpen: false
     property string pendingQuery: ""
+    property string pendingMode: "all"
+    // Requests sent from the bar in this session, oldest first, for Up/Down
+    // recall; `recallIndex` is the one shown (equal to the length: none).
+    property var sentRequests: []
+    property int recallIndex: 0
 
     Plasmoid.icon: "tools-wizard"
     Plasmoid.title: i18n("AI Assistant")
@@ -62,13 +77,14 @@ PlasmoidItem {
     AssistantSession {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
+        searchLimit: Plasmoid.configuration.instantResults
         onHitsChanged: popup.selectedIndex = -1
     }
 
     Timer {
         id: searchDelay
-        interval: 200
-        onTriggered: session.searchFiles(root.pendingQuery)
+        interval: Plasmoid.configuration.instantDelayMs
+        onTriggered: session.searchFiles(root.pendingQuery, root.pendingMode)
     }
 
     ResultsPopup {
@@ -82,7 +98,11 @@ PlasmoidItem {
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
-        onHitActivated: location => root.openHit(location)
+        onCompleteRequested: root.completeFromTop()
+        onHitActivated: location => root.openLocation(location)
+        onResultActivated: hit => root.openHit(hit)
+        onFileActionRequested: (hit, action) => root.fileAction(hit, action)
+        onFilesDropped: paths => popup.setInput(i18n("About %1: ", paths.join(", ")))
         onCloseRequested: root.closePopup()
         onSettingsRequested: root.openSettings()
         onDismissed: {
@@ -164,8 +184,11 @@ PlasmoidItem {
     }
 
     function handleEdited(text) {
-        root.pendingQuery = text.trim();
-        if (root.pendingQuery.length >= 2) {
+        const parsed = BarInput.parse(text);
+        root.pendingQuery = parsed.text;
+        root.pendingMode = parsed.mode;
+        if (Plasmoid.configuration.instantSearch
+                && root.pendingQuery.length >= Plasmoid.configuration.instantMinChars) {
             searchDelay.restart();
         } else {
             searchDelay.stop();
@@ -176,19 +199,64 @@ PlasmoidItem {
     function moveSelection(delta) {
         const count = session.hits.length;
         if (count === 0) {
+            root.recall(delta);
             return;
         }
         popup.selectedIndex = Math.max(-1, Math.min(count - 1, popup.selectedIndex + delta));
     }
 
-    function openHit(location) {
+    function openLocation(location) {
         session.openLocation(location);
         root.closePopup();
     }
 
+    /** A file match opens; a quick result does its action. Opening a conversation keeps the popup. */
+    function openHit(hit) {
+        if (hit.kind === "quick") {
+            session.activateQuick(hit);
+            if (hit.action.type === "conversation") {
+                root.conversationOpen = true;
+                session.clearSearch();
+                popup.clearInput();
+                return;
+            }
+            root.closePopup();
+            return;
+        }
+        root.openLocation(hit.location);
+    }
+
+    /** A file match's menu action: show it in the file manager, copy its path, or start a question about it. */
+    function fileAction(hit, action) {
+        if (action === "ask") {
+            popup.setInput(i18n("About %1: ", hit.location));
+            return;
+        }
+        session.activateQuick({ kind: "quick", title: hit.title, action: { type: action, target: hit.location } });
+        if (action === "reveal") {
+            root.closePopup();
+        }
+    }
+
+    /** Up/Down with no results steps through the requests sent from the bar. */
+    function recall(delta) {
+        if (root.sentRequests.length === 0) {
+            return;
+        }
+        root.recallIndex = Math.max(0, Math.min(root.sentRequests.length, root.recallIndex + delta));
+        popup.setInput(root.recallIndex < root.sentRequests.length ? root.sentRequests[root.recallIndex] : "");
+    }
+
+    /** Tab puts the top result's name in the field (an application, a setting, a file). */
+    function completeFromTop() {
+        if (session.hits.length > 0) {
+            popup.setInput(session.hits[0].title);
+        }
+    }
+
     function handleAccepted(text) {
         if (popup.selectedIndex >= 0 && popup.selectedIndex < session.hits.length) {
-            root.openHit(session.hits[popup.selectedIndex].location);
+            root.openHit(session.hits[popup.selectedIndex]);
             return;
         }
         if (text.length === 0 && session.needsSetup) {
@@ -197,7 +265,9 @@ PlasmoidItem {
         }
         if (text.length === 0) {
             root.conversationOpen = session.hasTranscript;
-        } else if (session.ask(text)) {
+        } else if (session.ask(BarInput.request(BarInput.parse(text)))) {
+            root.sentRequests = root.sentRequests.concat([text]).slice(-50);
+            root.recallIndex = root.sentRequests.length;
             root.conversationOpen = true;
             searchDelay.stop();
             session.clearSearch();

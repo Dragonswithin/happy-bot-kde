@@ -16,6 +16,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
+
 from kde_ai_assistant import settings as settings_store  # noqa: E402
 from kde_ai_assistant.instant_search import extract_hits, search_files  # noqa: E402
 from kde_ai_assistant.mcp_client import McpError, McpManager, ToolResult  # noqa: E402

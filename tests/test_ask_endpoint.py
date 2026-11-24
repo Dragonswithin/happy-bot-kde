@@ -21,6 +21,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402
@@ -34,6 +38,10 @@ from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
 
 FAKE_MCP = str(Path(__file__).resolve().parent / "fake_mcp_server.py")
 
+
+def done_core(event: dict) -> dict:
+    """A ``done`` event without its usage and model details, which vary by model."""
+    return {key: event[key] for key in ("type", "stop", "actions") if key in event}
 
 class AskEndpointTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -93,8 +101,23 @@ class AskEndpointTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         second_request = self.model.requests[1]["messages"]
         self.assertEqual(second_request[-1]["role"], "tool")
-        self.assertEqual(self.model.headers[0]["authorization"], "Bearer sk-secret")
+        self.assertEqual(self.model.headers[-1]["authorization"], "Bearer sk-secret")  # the chat requests, after the /slots check
         self.assertEqual(self.call("GET", "/health")["status"], "idle")
+
+    def test_dry_run_offers_only_look_ups_and_ephemeral_requests_are_not_kept(self) -> None:
+        self.configure()
+        self.model.replies.append(chunks_for("plan"))
+        response = self.request("POST", "/ask", {"message": "tidy my desktop", "dry_run": True, "ephemeral": True})
+        events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
+        offered = events[0]["tools"]
+        self.assertIn("list_directory", offered)
+        self.assertNotIn("trash_path", offered)
+        self.assertNotIn("run_command", offered)
+        self.assertTrue(self.model.requests[0]["messages"][-1]["content"].startswith("Dry run:"))
+        self.assertEqual(self.call("GET", "/conversations")["conversations"], [])
+        self.model.replies.append(chunks_for("x"))
+        response = self.request("POST", "/ask", {"message": "hi", "model": "ghost"})
+        self.assertIn("no model named ghost", response.read().decode())
 
     def test_every_tool_is_offered_and_bridged_risk_follows_what_the_user_declared(self) -> None:
         self.configure(read_only=False)
@@ -133,7 +156,7 @@ class AskEndpointTests(unittest.TestCase):
         self.assertEqual([event["type"] for event in events], ["start", "error"])
         self.assertIn("rejected the API key", events[1]["message"])
         self.model.replies.append(chunks_for("recovered"))
-        self.assertEqual(self.ask("again", events[0]["conversation_id"])[-1], {"type": "done", "stop": "answered"})
+        self.assertEqual(done_core(self.ask("again", events[0]["conversation_id"])[-1]), {"type": "done", "stop": "answered", "actions": []})
 
     def test_broken_tool_server_is_a_warning_and_the_turn_still_runs(self) -> None:
         self.configure()

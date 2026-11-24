@@ -11,13 +11,20 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * "Search and tools" section of ConfigSetup.qml: which tool does file search
- * and web search, which tool servers are connected, and a scan that offers
- * the servers the user already set up for other AI programs.
+ * The "Search & Tools" page's section (ConfigTools.qml): which tool does file
+ * search and web search, which tool servers are connected, a scan that
+ * offers the servers the user already set up for other AI programs, and a
+ * form to connect one by hand.
  *
- * A Kirigami.FormLayout, aligned with the other sections by ConfigSetup.qml.
- * Tool and server names are shown with underscores as spaces; the stored
- * names are unchanged.
+ * Each role row has "Change…", which opens RoleEditor.qml to pick the server,
+ * tool, query argument and result count by hand. Each connected server has a
+ * details button that opens ToolServerDetails.qml (running, read-only, start
+ * command, environment, allowed tools). "Connect by hand…" opens
+ * AddToolServer.qml. Editors are created only when opened, because listing a
+ * server's tools starts it.
+ *
+ * A Kirigami.FormLayout. Tool and server names are shown with underscores as
+ * spaces; the stored names are unchanged.
  *
  * A scan (`POST /tools/scan`) starts each discovered server briefly and
  * returns its tools and the roles it looks suited for. Choosing "Use for…"
@@ -25,8 +32,9 @@ import org.kde.kirigami as Kirigami
  * without a role so the model can use its tools. Role suggestions are
  * guesses from the tool's wording and are only ever applied by the user.
  *
- * Durable changes go through `page.save` or `POST /tools/import`; this
- * component holds only the scan results.
+ * Durable changes go through `page.save` (DaemonSettings.qml) or `POST
+ * /tools/import`; this component holds only the scan results and which
+ * editors are open.
  */
 Kirigami.FormLayout {
     id: section
@@ -39,6 +47,7 @@ Kirigami.FormLayout {
     property var found: []
     property bool scanning: false
     property bool scanned: false
+    property bool addingByHand: false
 
     function readable(name) {
         return String(name || "").replace(/_/g, " ");
@@ -77,42 +86,67 @@ Kirigami.FormLayout {
         });
     }
 
-    component RoleRow: RowLayout {
+    component RoleRow: ColumnLayout {
         id: roleRow
 
         required property string role
         readonly property var config: section.roles[role]
+        property bool editing: false
 
         spacing: Kirigami.Units.smallSpacing
 
-        Kirigami.Icon {
-            source: roleRow.role === "file_search" ? "folder-documents-symbolic" : "globe"
-            opacity: roleRow.config ? 1 : 0.5
-            Layout.preferredWidth: Kirigami.Units.iconSizes.small
-            Layout.preferredHeight: Kirigami.Units.iconSizes.small
+        RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: roleRow.role === "file_search" ? "folder-documents-symbolic" : "globe"
+                opacity: roleRow.config ? 1 : 0.5
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+
+            QQC2.Label {
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 9
+                text: roleRow.config ? section.readable(roleRow.config.tool) : i18n("Not set up")
+                opacity: roleRow.config ? 1 : 0.7
+            }
+
+            QQC2.Label {
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 5
+                text: roleRow.config ? i18n("from %1", section.readable(roleRow.config.server)) : ""
+                font: Kirigami.Theme.smallFont
+                opacity: 0.6
+            }
+
+            QQC2.ToolButton {
+                visible: roleRow.config !== undefined
+                icon.name: "window-close"
+                text: i18n("Stop using this for %1", section.roleLabel(roleRow.role))
+                display: QQC2.AbstractButton.IconOnly
+                QQC2.ToolTip.text: text
+                QQC2.ToolTip.visible: hovered
+                onClicked: section.page.save(function(settings) { delete settings.roles[roleRow.role]; })
+            }
+
+            QQC2.Button {
+                text: i18n("Change…")
+                checkable: true
+                checked: roleRow.editing
+                onToggled: roleRow.editing = checked
+            }
         }
 
-        QQC2.Label {
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 9
-            text: roleRow.config ? section.readable(roleRow.config.tool) : i18n("Not set up")
-            opacity: roleRow.config ? 1 : 0.7
-        }
+        Loader {
+            active: roleRow.editing
+            visible: active
+            Layout.leftMargin: Kirigami.Units.gridUnit
 
-        QQC2.Label {
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 5
-            text: roleRow.config ? i18n("from %1", section.readable(roleRow.config.server)) : ""
-            font: Kirigami.Theme.smallFont
-            opacity: 0.6
-        }
-
-        QQC2.ToolButton {
-            visible: roleRow.config !== undefined
-            icon.name: "window-close"
-            text: i18n("Stop using this for %1", section.roleLabel(roleRow.role))
-            display: QQC2.AbstractButton.IconOnly
-            QQC2.ToolTip.text: text
-            QQC2.ToolTip.visible: hovered
-            onClicked: section.page.save(function(settings) { delete settings.roles[roleRow.role]; })
+            sourceComponent: RoleEditor {
+                page: section.page
+                role: roleRow.role
+                config: roleRow.config
+                onSaved: roleRow.editing = false
+            }
         }
     }
 
@@ -160,48 +194,80 @@ Kirigami.FormLayout {
         Repeater {
             model: section.serverNames
 
-            RowLayout {
+            ColumnLayout {
                 id: connected
 
                 required property string modelData
                 readonly property var entry: section.servers[modelData]
+                property bool open: false
 
                 spacing: Kirigami.Units.smallSpacing
 
-                Kirigami.Icon {
-                    source: "plugins"
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                }
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
 
-                QQC2.Label {
-                    Layout.minimumWidth: Kirigami.Units.gridUnit * 9
-                    text: section.readable(connected.modelData)
-                }
+                    Kirigami.Icon {
+                        source: "plugins"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    }
 
-                QQC2.Label {
-                    Layout.minimumWidth: Kirigami.Units.gridUnit * 5
-                    text: connected.entry !== undefined && connected.entry.read_only ? i18n("look-up only") : ""
-                    font: Kirigami.Theme.smallFont
-                    opacity: 0.6
-                }
+                    QQC2.Label {
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 9
+                        text: section.readable(connected.modelData)
+                        opacity: connected.entry !== undefined && !connected.entry.enabled ? 0.5 : 1
+                    }
 
-                QQC2.ToolButton {
-                    icon.name: "window-close"
-                    text: i18n("Disconnect %1", section.readable(connected.modelData))
-                    display: QQC2.AbstractButton.IconOnly
-                    QQC2.ToolTip.text: text
-                    QQC2.ToolTip.visible: hovered
-                    onClicked: {
-                        const name = connected.modelData;
-                        section.page.save(function(settings) {
-                            delete settings.tool_servers[name];
-                            for (const role of Object.keys(settings.roles)) {
-                                if (settings.roles[role].server === name) {
-                                    delete settings.roles[role];
+                    QQC2.Label {
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 5
+                        text: connected.entry === undefined ? ""
+                            : !connected.entry.enabled ? i18n("switched off")
+                            : connected.entry.read_only ? i18n("look-up only") : ""
+                        font: Kirigami.Theme.smallFont
+                        opacity: 0.6
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "configure"
+                        text: i18n("Settings for %1", section.readable(connected.modelData))
+                        display: QQC2.AbstractButton.IconOnly
+                        checkable: true
+                        checked: connected.open
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        onToggled: connected.open = checked
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "window-close"
+                        text: i18n("Disconnect %1", section.readable(connected.modelData))
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: {
+                            const name = connected.modelData;
+                            section.page.save(function(settings) {
+                                delete settings.tool_servers[name];
+                                for (const role of Object.keys(settings.roles)) {
+                                    if (settings.roles[role].server === name) {
+                                        delete settings.roles[role];
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
+                    }
+                }
+
+                Loader {
+                    active: connected.open && connected.entry !== undefined
+                    visible: active
+                    Layout.leftMargin: Kirigami.Units.gridUnit
+                    Layout.bottomMargin: Kirigami.Units.largeSpacing
+
+                    sourceComponent: ToolServerDetails {
+                        page: section.page
+                        name: connected.modelData
+                        entry: connected.entry
                     }
                 }
             }
@@ -216,6 +282,14 @@ Kirigami.FormLayout {
             icon.name: "edit-find"
             enabled: !section.scanning
             onClicked: section.scan()
+        }
+
+        QQC2.Button {
+            text: i18n("Connect by hand…")
+            icon.name: "list-add"
+            checkable: true
+            checked: section.addingByHand
+            onToggled: section.addingByHand = checked
         }
 
         QQC2.BusyIndicator {
@@ -298,6 +372,19 @@ Kirigami.FormLayout {
                     font: Kirigami.Theme.smallFont
                     color: Kirigami.Theme.negativeTextColor
                 }
+            }
+        }
+    }
+
+    Loader {
+        active: section.addingByHand
+        visible: active
+
+        sourceComponent: AddToolServer {
+            page: section.page
+            onAdded: name => {
+                section.addingByHand = false;
+                section.page.report(i18n("Connected %1. Open its settings to add API keys or choose its tools.", section.readable(name)), false);
             }
         }
     }

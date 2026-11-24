@@ -9,8 +9,20 @@ directory (see ``runtime_paths``).
 ``ask`` streams: the assistant's text is printed as it arrives and tool
 activity is reported on stderr, so stdout holds only the answer. When an
 action needs approval it asks on the terminal; without a terminal it declines
-at once, so a script can never approve a dangerous action by accident. Every other
-command prints one JSON reply.
+at once, so a script can never approve a dangerous action by accident.
+``ask --dry-run`` lets the model only look things up and list its steps;
+``ask --notify`` also shows the answer and anything not done as a desktop
+notification, which is how routines started by a systemd timer report back
+(``routines.py``). Every other command prints one JSON reply.
+
+``eval`` runs ``evaluation.SCENARIOS`` as dry runs against a model and
+prints pass or fail with timings.
+``mcp-serve`` speaks MCP on stdin and stdout so another AI program can use
+the built-in tools (``mcp_serve.py``).
+``doctor`` runs the daemon's self-check and prints each result with its fix.
+``history`` lists saved conversations or prints one (continue it with ``ask
+--conversation ID``); ``export`` writes settings without secrets plus all
+conversations to a new 0600 file, and ``import`` loads such a file.
 
 Besides the basic commands it is the scriptable way to do what the settings
 page does: ``tools`` discovers, imports and removes tool servers, ``role``
@@ -30,6 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -92,13 +105,21 @@ def request_json(
         return body
 
 
-def stream_ask(message: str, conversation_id: str = "") -> int:
-    """Send one request and print the streamed turn. Returns the process exit status."""
-    payload = json.dumps({"message": message, "conversation_id": conversation_id}).encode("utf-8")
+def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, notify: bool = False) -> int:
+    """Send one request and print the streamed turn. Returns the process exit status.
+
+    ``dry_run`` offers the model only look-up tools and asks for the steps it
+    would take. ``notify`` also shows the answer (or the error) as a desktop
+    notification; routines started by a timer use it, since nobody watches
+    their output.
+    """
+    payload = json.dumps({"message": message, "conversation_id": conversation_id, "dry_run": dry_run}).encode("utf-8")
     headers = {"Authorization": f"Bearer {read_token()}", "Content-Type": "application/json"}
     request = Request(f"{base_url()}/ask", data=payload, method="POST", headers=headers)
     status = 0
     wrote_text = False
+    answer: list[str] = []
+    problems: list[str] = []
     with urlopen(request, timeout=900.0) as response:
         for raw in response:
             line = raw.decode("utf-8", errors="replace").strip()
@@ -110,6 +131,7 @@ def stream_ask(message: str, conversation_id: str = "") -> int:
                 sys.stdout.write(event["text"])
                 sys.stdout.flush()
                 wrote_text = True
+                answer.append(event["text"])
             elif kind == "start":
                 for warning in event.get("warnings", []):
                     print(f"[warning] {warning}", file=sys.stderr)
@@ -124,12 +146,31 @@ def stream_ask(message: str, conversation_id: str = "") -> int:
                 print(f"[tool failed] {event['name']}: {event['text'][:200]}", file=sys.stderr)
             elif kind == "error":
                 print(f"[error] {event['message']}", file=sys.stderr)
+                problems.append(event["message"])
                 status = 1
-            elif kind == "done" and event.get("stop") != "answered":
-                print(f"[stopped: {event.get('stop')}]", file=sys.stderr)
+            elif kind == "done":
+                if event.get("stop") != "answered":
+                    print(f"[stopped: {event.get('stop')}]", file=sys.stderr)
+                problems += [f"Not done: {action['summary']} ({action['outcome']})"
+                             for action in event.get("actions", []) if action.get("outcome") != "done"]
     if wrote_text:
         sys.stdout.write("\n")
+    if notify and shutil.which("notify-send"):
+        body = ("".join(answer).strip() + ("\n" + "\n".join(problems) if problems else "")).strip()
+        subprocess.run(["notify-send", "--app-name=AI Assistant", "--icon=tools-wizard", "--",
+                        "Assistant: " + message[:80], body[:1500] or "Done."], check=False, timeout=10)
     return status
+
+
+def ask_events(message: str, model: str = "") -> Any:
+    """Send one dry-run request in a new conversation and yield its events (for ``eval``)."""
+    payload = json.dumps({"message": message, "dry_run": True, "model": model, "ephemeral": True}).encode("utf-8")
+    headers = {"Authorization": f"Bearer {read_token()}", "Content-Type": "application/json"}
+    with urlopen(Request(f"{base_url()}/ask", data=payload, method="POST", headers=headers), timeout=900.0) as response:
+        for raw in response:
+            line = raw.decode("utf-8", errors="replace").strip()
+            if line.startswith("data:"):
+                yield json.loads(line[5:])
 
 
 def answer_approval(event: dict[str, Any]) -> None:
@@ -179,6 +220,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     sub.add_parser("endpoint", help="Print the daemon base URL.")
     sub.add_parser("status", help="Show daemon health/status.")
+    sub.add_parser("doctor", help="Check the model, tools and everything else the assistant needs, with fixes.")
+    export = sub.add_parser("export", help="Save settings (without secrets) and conversations to a file.")
+    export.add_argument("file")
+    import_cmd = sub.add_parser("import", help="Load settings and conversations from an export file.")
+    import_cmd.add_argument("file")
+    evaluate = sub.add_parser("eval", help="Try a model on everyday requests as dry runs (nothing changes) and "
+                              "report which pass and how long they take.")
+    evaluate.add_argument("--model", default="", help="A configured model; default is the active one.")
+    sub.add_parser("mcp-serve", help="Run as an MCP server (stdio) lending the built-in tools to another AI "
+                   "program; needs 'Let other AI programs use these tools' in the settings.")
+    history = sub.add_parser("history", help="List saved conversations, or print one by id.")
+    history.add_argument("id", nargs="?", default="")
 
     context = sub.add_parser("context", help="Capture KDE desktop context.")
     context.add_argument("--kind", choices=CONTEXT_KINDS, default="combined")
@@ -186,6 +239,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ask = sub.add_parser("ask", help="Send a request to the assistant and print its answer as it arrives.")
     ask.add_argument("message", nargs="+")
     ask.add_argument("--conversation", default="", help="Continue the conversation with this id.")
+    ask.add_argument("--dry-run", action="store_true",
+                     help="Only look things up and list the steps that would be taken; change nothing.")
+    ask.add_argument("--notify", action="store_true", help="Also show the answer as a desktop notification.")
 
     model = sub.add_parser("model", help="Manage the AI models the assistant can use.")
     model_sub = model.add_subparsers(dest="model_command", required=True)
@@ -366,8 +422,59 @@ def main(argv: list[str] | None = None) -> int:
             reply = request_json("GET", "/health")
         elif args.command == "context":
             reply = request_json("GET", f"/context?kind={args.kind}")
+        elif args.command == "doctor":
+            reply = request_json("GET", "/check", timeout=120.0)
+            if reply.get("ok") is not False and not args.pretty:
+                for item in reply["checks"]:
+                    mark = "ok  " if item["ok"] else "FAIL"
+                    print(f"{mark} {item['name']}: {item['detail']}" + (f"\n     Fix: {item['fix']}" if item["fix"] else ""))
+                return 0 if reply["healthy"] else 1
+        elif args.command == "eval":
+            from . import evaluation
+            from .tools.mcp_bridge import bridged_name
+
+            role = current_settings().get("roles", {}).get("file_search")
+            results = evaluation.run(ask_events, args.model, bridged_name(role["server"], role["tool"]) if role else "")
+            for item in results:
+                mark = "pass" if item["passed"] else "FAIL"
+                print(f"{mark} {item['seconds']:>5}s  {item['request']}  [{', '.join(item['tools']) or 'no tools'}]"
+                      + (f"  {item['problem']}" if item["problem"] else ""))
+            print(f"{sum(item['passed'] for item in results)} of {len(results)} passed")
+            return 0 if all(item["passed"] for item in results) else 1
+        elif args.command == "mcp-serve":
+            from .mcp_serve import serve
+
+            return serve(request_json)
+        elif args.command == "export":
+            reply = request_json("GET", "/export", timeout=60.0)
+            if reply.get("ok") is not False:
+                descriptor = os.open(args.file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    json.dump(reply["data"], handle, ensure_ascii=False, indent=1)
+                reply = {"ok": True, "file": os.path.abspath(args.file),
+                         "conversations": len(reply["data"]["conversations"]), "secrets_included": False}
+        elif args.command == "import":
+            with open(args.file, encoding="utf-8") as handle:
+                reply = request_json("POST", "/import", {"data": json.load(handle)}, timeout=60.0)
+        elif args.command == "history":
+            if args.id:
+                reply = request_json("GET", f"/conversation?id={quote(args.id)}")
+                if reply.get("ok") is not False:
+                    for event in reply.get("events", []):
+                        if event.get("type") == "user":
+                            print(f"\n> {event.get('text', '')}")
+                        elif event.get("type") == "text_delta":
+                            print(event.get("text", ""), end="")
+                    print()
+                    return 0
+            else:
+                reply = request_json("GET", "/conversations")
+                if reply.get("ok") is not False and not args.pretty:
+                    for item in reply["conversations"]:
+                        print(f"{item['id']}  {time.strftime('%Y-%m-%d %H:%M', time.localtime(item['updated']))}  {item['title']}")
+                    return 0
         elif args.command == "ask":
-            return stream_ask(" ".join(args.message), args.conversation)
+            return stream_ask(" ".join(args.message), args.conversation, args.dry_run, args.notify)
         elif args.command == "model":
             reply = run_model(args)
         elif args.command == "folders":
