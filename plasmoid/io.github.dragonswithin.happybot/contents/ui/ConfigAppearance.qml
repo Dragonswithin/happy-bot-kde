@@ -28,18 +28,25 @@ import org.kde.plasma.plasmoid
  *   stored in `saveConfig` when the user applies, as on Plasma's Keyboard
  *   Shortcuts page. It opens the floating Happy Bot knowing which
  *   application the user is in.
- * - The daemon's address (`daemonUrl`, this copy's Plasma setting, written
- *   on Apply), for unusual setups.
+ * - The panel widget's look (`GET`/`POST /panel`, src/happy_bot/panel_widget.py):
+ *   the icon or a search bar, and the bar's width. They are that widget's own
+ *   Plasma settings, changed at once through the Plasma shell, so Happy Bot
+ *   has this one settings dialog; the widget's own page only points here.
  *
- * The page keeps only what it shows: the values read and the app's state.
+ * `cfg_daemonUrl` (no field: the address is found by itself) is only read, so
+ * this page talks to the daemon the copy was set up for. The page keeps only
+ * what it shows: the values read, the app's state and the panel widgets.
  */
 KCM.SimpleKCM {
     id: page
 
-    property alias cfg_daemonUrl: daemonUrl.text
+    property string cfg_daemonUrl: ""
     property bool unsavedChanges: false
     property var ui: null
     property bool appAutostart: false
+    property var panelWidgets: []  // [{id, search_bar, bar_width, vertical}], from GET /panel
+    readonly property bool onPanel: panelWidgets.length > 0
+    readonly property bool searchBar: panelWidgets.some(widget => widget.search_bar)
     property string problem: ""
 
     function saveConfig() {
@@ -65,6 +72,20 @@ KCM.SimpleKCM {
         });
     }
 
+    function readPanel() {
+        client.request("GET", "/panel", null, data => page.panelWidgets = data.widgets || [], () => page.panelWidgets = []);
+    }
+
+    function changePanel(changes) {
+        client.request("POST", "/panel", changes, function(data) {
+            page.panelWidgets = data.widgets || [];
+            page.problem = "";
+        }, function(data) {
+            page.problem = data.error || i18n("The panel could not be changed");
+            page.readPanel();
+        });
+    }
+
     function readApp() {
         client.request("GET", "/app", null, data => page.appAutostart = data.autostart === true, () => {});
     }
@@ -74,7 +95,10 @@ KCM.SimpleKCM {
         configuredUrl: page.cfg_daemonUrl || ""
     }
 
-    Component.onCompleted: page.read()
+    Component.onCompleted: {
+        page.read();
+        page.readPanel();
+    }
 
     Timer {
         interval: 2000
@@ -207,14 +231,31 @@ KCM.SimpleKCM {
 
         Item {
             Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Advanced")
+            Kirigami.FormData.label: i18n("Panel")
         }
 
-        QQC2.TextField {
-            id: daemonUrl
-            Kirigami.FormData.label: i18n("Assistant address:")
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 16
-            placeholderText: i18n("Automatic")
+        QQC2.RadioButton {
+            Kirigami.FormData.label: i18n("In the panel, show:")
+            enabled: page.onPanel
+            text: i18n("Happy Bot's icon")
+            checked: page.onPanel && !page.searchBar
+            onToggled: if (checked) page.changePanel({ search_bar: false })
+        }
+
+        QQC2.RadioButton {
+            enabled: page.onPanel
+            text: i18n("A search bar")
+            checked: page.searchBar
+            onToggled: if (checked) page.changePanel({ search_bar: true })
+        }
+
+        QQC2.SpinBox {
+            Kirigami.FormData.label: i18n("Search bar width:")
+            enabled: page.searchBar
+            from: 8
+            to: 60
+            value: page.onPanel ? page.panelWidgets[0].bar_width : 18
+            onValueModified: page.changePanel({ bar_width: value })
         }
 
         QQC2.Label {
@@ -222,7 +263,9 @@ KCM.SimpleKCM {
             wrapMode: Text.Wrap
             font: Kirigami.Theme.smallFont
             opacity: 0.7
-            text: i18n("Leave empty. Only needed when the assistant's background service was started on a different port.")
+            text: page.onPanel
+                ? i18n("While you type in the search bar, Plasma outlines the panel in its focus colour; the icon avoids that. A vertical panel always shows the icon. The width is in multiples of the desktop's font size.")
+                : i18n("Happy Bot is not on a panel. To add it, right-click the panel, choose Add Widgets…, and drag Happy Bot onto it.")
         }
     }
 }

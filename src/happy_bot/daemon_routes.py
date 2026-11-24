@@ -20,6 +20,10 @@ Endpoints:
 - ``POST /app/show``, ``GET /app/wait?seen=N``: a second launch asks the
   running app to open (``happy-bot app show``); the app waits on
   ``/app/wait``, which answers when a request arrives or after 25 seconds.
+- ``GET /panel``, ``POST /panel``: the Happy Bot widgets on the user's panels,
+  whether they show a search bar or the icon and the bar's width;
+  ``{"search_bar": bool}`` and/or ``{"bar_width": 8..60}`` change them all
+  (``panel_widget``), for the app's Appearance page.
 - ``GET /context/app``: the application the user is working in (name, class,
   window title, icon name), noted by the popup when it is opened from the floating
   button or the hotkey and sent with its requests as background
@@ -103,7 +107,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from . import (app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
-               model_presets, model_setup, quick_results, search_choices, search_setup, self_check, spend)
+               model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
 from .mcp_client import McpError
@@ -182,6 +186,30 @@ def app_change(server: "AssistantServer", query: dict[str, list[str]], body: dic
     except OSError as error:
         return _error(500, f"Could not change how the Happy Bot app starts: {error}", "invalid")
     return app_status(server, query, body)
+
+
+def panel_status(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        return 200, {"ok": True, "widgets": panel_widget.panel_widgets()}
+    except panel_widget.PanelWidgetError as error:
+        return _error(503, f"Could not read the panel: {error}", "unreachable")
+
+
+def panel_change(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """``{"search_bar": bool, "bar_width": int}`` (either or both) for every Happy Bot panel widget."""
+    search_bar, bar_width = body.get("search_bar"), body.get("bar_width")
+    if search_bar is not None and not isinstance(search_bar, bool):
+        return _error(400, "search_bar must be true or false", "invalid")
+    low, high = panel_widget.BAR_WIDTH_RANGE
+    if bar_width is not None and (isinstance(bar_width, bool) or not isinstance(bar_width, int)
+                                  or not low <= bar_width <= high):
+        return _error(400, f"bar_width must be a whole number from {low} to {high}", "invalid")
+    if search_bar is None and bar_width is None:
+        return _error(400, "give search_bar and/or bar_width", "invalid")
+    try:
+        return 200, {"ok": True, "widgets": panel_widget.change(search_bar, bar_width)}
+    except panel_widget.PanelWidgetError as error:
+        return _error(503, f"Could not change the panel: {error}", "unreachable")
 
 
 def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -545,6 +573,8 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,
     ("POST", "/app/show"): app_show,
+    ("GET", "/panel"): panel_status,
+    ("POST", "/panel"): panel_change,
     ("GET", "/app/wait"): app_wait,
     ("GET", "/search"): search,
     ("GET", "/settings"): get_settings,

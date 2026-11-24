@@ -87,11 +87,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
 ## Settings
 
 Right-click the floating Happy Bot (or the panel widget) and choose
-**Configure Happy Bot…**. Every setting has a control there; no file needs
-editing. Settings belong to Happy Bot itself, so the floating Happy Bot and
-the panel widget always look and behave the same; the panel widget's own
-settings ("Panel widget settings…") are only the icon or search bar and the
-bar's width.
+**Configure Happy Bot…**. It is Happy Bot's one settings dialog: every
+setting has a control there, including whether the panel shows Happy Bot's
+icon or a search bar; no file needs editing. The floating Happy Bot and the
+panel widget always look and behave the same.
 
 - **AI Model:** your AIs in one list, in the order they are asked: the
   first answers, and if it fails the next one does. Arrows change the order;
@@ -124,8 +123,8 @@ bar's width.
   are.
 - **Appearance:** the robot mascot or the wand, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
-  back in its corner, the popup's size, and the address of the background
-  service for unusual setups.
+  back in its corner, the popup's size, and in the panel Happy Bot's icon
+  or a search bar, and the bar's width.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.

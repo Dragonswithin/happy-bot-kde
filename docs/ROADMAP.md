@@ -1059,6 +1059,15 @@ Findings:
   welcome screen, and "Desktop help" names the application in use ("Help
   with Kate", from `/context/app`, now with the icon from its desktop
   entry), so the application awareness is visible where it is offered.
+- The maintainer could not find how to get the panel search bar back: it
+  was behind a second right-click entry, "Panel widget settings…", beside
+  "Configure Happy Bot…", and the Appearance and Panel pages each had an
+  "Advanced" daemon address that said not to use it. Happy Bot now has one
+  settings dialog: the app's Appearance page sets the panel widget's icon
+  or search bar and the bar's width through the Plasma shell
+  (`panel_widget.py`, `/panel`), the second menu entry is gone, the
+  widget's own Plasma page only points to the app's settings, and the
+  address has no field (it stays a hand-edited setting).
 
 ## Decisions
 

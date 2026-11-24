@@ -88,8 +88,10 @@ import "barInput.js" as BarInput
  * look and feel in `session.ui`), so the panel widget follows the app.
  * In the panel, "Configure Happy Bot…" (and every "open settings" in the
  * popup) opens the app's settings, starting the app if needed
- * (`openAppSettings`); "Panel widget settings…" opens this widget's own:
- * search bar or icon, and the bar's width (contents/config/config.qml).
+ * (`openAppSettings`). That is Happy Bot's one settings dialog: even this
+ * widget's icon-or-search-bar and bar width are set there (Appearance,
+ * through the daemon's `/panel`); the widget's own Plasma page, reached only
+ * from Plasma's panel edit mode, points there (contents/config/config.qml).
  *
  * A right-click on the icon or the bar opens the applet's own small menu
  * (settings, new conversation, remove).
@@ -310,13 +312,6 @@ PlasmoidItem {
             text: i18n("Configure Happy Bot…")
             icon: "configure"
             onClicked: root.openSettings()
-        }
-
-        PlasmaExtras.MenuItem {
-            text: i18n("Panel widget settings…")
-            icon: "configure"
-            visible: !root.standalone
-            onClicked: Plasmoid.internalAction("configure").trigger()
         }
 
         PlasmaExtras.MenuItem {

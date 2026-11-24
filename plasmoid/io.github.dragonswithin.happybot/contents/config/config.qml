@@ -15,12 +15,14 @@ import org.kde.plasma.plasmoid
  * the copy:
  *
  * - The app: Appearance (ConfigAppearance.qml: the mascot, the hotkey, the
- *   floating Happy Bot, search while typing, the popup's size) and the five
+ *   floating Happy Bot, the popup's size, and the panel widget's icon or
+ *   search bar and its width) and the five
  *   pages for what the daemon stores (src/happy_bot/settings.py, each
  *   loaded and saved at once through DaemonSettings.qml): the AI models,
  *   search and tool servers, behaviour, history and folders, routines.
- * - The panel widget: only Panel (ConfigPanel.qml: search bar or icon, the
- *   bar's width), with a button that opens the app's settings.
+ * - The panel widget: only Panel (ConfigPanel.qml), which says that all of
+ *   Happy Bot's settings are in the app and opens them. Plasma shows it only
+ *   from its panel edit mode; the widget's own menu opens the app's.
  *
  * The first page is the one the dialog opens on, even when hidden, so it is
  * a single entry that is Appearance in the app and Panel in the panel.

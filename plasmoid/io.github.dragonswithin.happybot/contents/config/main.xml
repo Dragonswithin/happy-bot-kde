@@ -6,9 +6,13 @@
   <group name="General">
     <!-- This copy of the widget's own Plasma settings. Only three are still
          used: daemonUrl, and, in the panel widget, inputInPanel and
-         barWidth. Happy Bot's other settings belong to the app and are kept
-         by the daemon (src/happy_bot/ui_settings.py), so the panel widget
-         and the app match. The entries marked "earlier" were where each copy
+         barWidth. None has a field on this widget's own settings page: the
+         panel widget's two are changed from the app's Appearance page
+         through the Plasma shell (src/happy_bot/panel_widget.py), and
+         daemonUrl is edited by hand in the rare setups that need it. Happy
+         Bot's other settings belong to the app and are kept by the daemon
+         (src/happy_bot/ui_settings.py), so the panel widget and the app
+         match. The entries marked "earlier" were where each copy
          kept them before; main.qml reads them once to hand any changed value
          over to the daemon, and they are not used otherwise. -->
     <!-- Earlier: which picture stands for the assistant on the panel and beside its
@@ -19,7 +23,10 @@
     </entry>
     <!-- Address of the per-user daemon. Empty (default) means the loopback
          port derived from the user's uid: http://127.0.0.1:(19000 + uid - 1000).
-         Set only to reach a daemon started on a non-default port. -->
+         Set only to reach a daemon started on a non-default port; it has no
+         field in the settings, so it is set in this widget's section of
+         ~/.config/plasma-org.kde.plasma.desktop-appletsrc (or the app's
+         plasmawindowed config). -->
     <entry name="daemonUrl" type="String">
       <default></default>
     </entry>
