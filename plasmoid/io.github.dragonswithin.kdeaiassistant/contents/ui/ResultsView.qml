@@ -48,7 +48,8 @@ import org.kde.plasma.extras as PlasmaExtras
  *   file match can also be dragged into another application, and files
  *   dropped onto the popup emit `filesDropped(paths)`.
  * - `hitActivated(location)`: a link clicked in an answer.
- * - `closeRequested`, `settingsRequested`: the Close and Open settings buttons.
+ * - `closeRequested`, `settingsRequested`: the Close button, and the Settings
+ *   (gear) button in the header or an "Open settings" button on a setup card.
  *
  * The view sets its own width and height: Plasma's popup window follows its
  * content's actual size, not its implicit size.
@@ -185,6 +186,15 @@ Item {
                 PlasmaComponents3.ToolTip.text: text
                 PlasmaComponents3.ToolTip.visible: hovered
                 onClicked: view.session.newChat()
+            }
+
+            PlasmaComponents3.ToolButton {
+                icon.name: "configure"
+                text: i18n("Settings")
+                display: QQC2.AbstractButton.IconOnly
+                PlasmaComponents3.ToolTip.text: text
+                PlasmaComponents3.ToolTip.visible: hovered
+                onClicked: view.settingsRequested()
             }
 
             PlasmaComponents3.ToolButton {
