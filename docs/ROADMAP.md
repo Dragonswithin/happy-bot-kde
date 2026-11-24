@@ -989,6 +989,12 @@ Findings:
   its close button. While it is open it is main.qml's `surface` for the
   keyboard handlers. With the button on, the hotkey opens it too. A test
   copy started open showed the field and AI picker in place.
+- The floating button's right-click first opened the widget's own menu,
+  whose "Remove from panel" removes the whole widget, floating button
+  included; the maintainer's widget was removed that way (2026-11-23,
+  23:41) and was put back with its search bar, mascot and floating button
+  switched on. The floating button now has its own menu (settings, new
+  conversation, hide the floating button) without that entry.
 
 ## Decisions
 

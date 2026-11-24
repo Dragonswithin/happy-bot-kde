@@ -73,6 +73,9 @@ import "barInput.js" as BarInput
  * panel clears the application note. The button's position is saved in
  * `floatingX`/`floatingY` when it is dragged.
  *
+ * The floating button's right-click opens its own menu (settings, new
+ * conversation, hide the floating button), without "Remove from panel",
+ * which there would remove the floating button along with the widget.
  * A right-click on the icon or the bar opens the applet's own small menu
  * (settings, new conversation, remove).
  *
@@ -204,7 +207,7 @@ PlasmoidItem {
             widthInGridUnits: Plasmoid.configuration.popupWidth
             heightInGridUnits: Plasmoid.configuration.popupHeight
             onClicked: root.openForApplication()
-            onMenuRequested: contextMenu.openRelative()
+            onMenuRequested: floatingMenu.openRelative()
             onMoved: (x, y) => {
                 Plasmoid.configuration.floatingX = x;
                 Plasmoid.configuration.floatingY = y;
@@ -297,6 +300,31 @@ PlasmoidItem {
             text: i18n("Remove from panel")
             icon: "edit-delete"
             onClicked: Plasmoid.internalAction("remove").trigger()
+        }
+    }
+
+    // The floating button's own menu. It has no "Remove from panel": from the floating button that
+    // would remove the whole widget, floating button included, which is not what a user expects there.
+    PlasmaExtras.Menu {
+        id: floatingMenu
+        visualParent: root
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Configure Happy Bot…")
+            icon: "configure"
+            onClicked: root.openSettings()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("New conversation")
+            icon: "document-new"
+            onClicked: session.newChat()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Hide the floating button")
+            icon: "view-hidden"
+            onClicked: Plasmoid.configuration.floatingButton = false
         }
     }
 
