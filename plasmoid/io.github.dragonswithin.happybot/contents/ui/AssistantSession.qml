@@ -11,7 +11,7 @@ import QtQuick
  *
  * Holds everything CompactRepresentation.qml and
  * ResultsPopup.qml display: the conversation `entries`, the busy flag, the
- * daemon status and the current instant file-search hits. It talks to the
+ * daemon status and the file finder's current matches. It talks to the
  * daemon (`/health`, `/search`, `/open`, `/ask`, `/cancel`, `/approve`)
  * through its own DaemonClient.qml, which owns the address and the bearer
  * token. main.qml creates exactly one instance and supplies `configuredUrl`.
@@ -32,8 +32,9 @@ import QtQuick
  * `/context/app`) when the popup was opened from the floating button or the
  * hotkey (`captureApplication`), or null. While set, it is sent with every
  * request as `about_window`, so the user never has to say which application
- * they mean; nothing about it is shown, and it does not limit what they can
- * ask about (src/happy_bot/ask_stream.py words it as background). Opening
+ * they mean; the welcome screen's help shortcut names it (AssistantWelcome.qml),
+ * and it does not limit what they can ask about (src/happy_bot/ask_stream.py
+ * words it as background). Opening
  * from the panel clears it (`forgetApplication`).
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
@@ -79,12 +80,12 @@ import QtQuick
  * `deleteConversation` removes one; deleting the open one starts a new one. `cancel` aborts
  * the request, which makes the daemon stop the turn.
  *
- * Instant search: `searchFiles` may be called on every keystroke. It asks the
- * daemon for quick results (`/quick`: answers, windows, applications,
- * settings pages, conversations; `quickHits`) and for at most `searchLimit`
- * file matches (`/search`; `fileHits`) at once; `hits` is both, quick first.
- * A quick hit has `kind` "quick" and an `action`; `activateQuick` carries it
- * out. Replies
+ * The file finder: nothing is searched while the user types a request or a
+ * reply. Only after they choose "Find a file" (`startFindingFiles`, which
+ * sets `findingFiles` until `stopFindingFiles`) does typing call
+ * `searchFiles`, which asks the daemon for at most `searchLimit` file
+ * matches (`/search`; `hits`). `activateQuick` carries out a file match's
+ * actions (show in the file manager, copy the path) through the daemon. Replies
  * can arrive out of order, so each request carries a sequence number and a
  * reply is applied only if it is the newest one sent. `hits` is a list of
  * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
@@ -108,9 +109,10 @@ Item {
     property var models: []
     property string chatModel: ""
     property var helpWith: null
+    property string helpWithIcon: ""  // the application's icon name, for the welcome screen only
     property var ui: ({
-        robot_mascot: false, popup_width: 30, popup_height: 26, instant_search: true, instant_min_chars: 2,
-        instant_delay_ms: 200, instant_results: 8, floating_opacity: 40, floating_x: -1, floating_y: -1, imported: []
+        robot_mascot: false, popup_width: 30, popup_height: 26, floating_opacity: 40, floating_x: -1, floating_y: -1,
+        imported: []
     })
     property bool uiLoaded: false
 
@@ -120,9 +122,8 @@ Item {
     property int pendingApprovals: 0
 
     property int searchLimit: 8
-    property var quickHits: []
-    property var fileHits: []
-    readonly property var hits: quickHits.concat(fileHits)
+    property bool findingFiles: false
+    property var hits: []
     property string searchError: ""
     property string searchErrorCode: ""
     property int searchSequence: 0
@@ -218,14 +219,23 @@ Item {
 
     function clearSearch() {
         session.searchSequence += 1;
-        session.quickHits = [];
-        session.fileHits = [];
+        session.hits = [];
         session.searchError = "";
         session.searchErrorCode = "";
     }
 
-    /** `mode` "files" asks only for file matches, "answer" only for quick results; anything else both. */
-    function searchFiles(text, mode) {
+    /** "Find a file": typing now shows matching files, until `stopFindingFiles`. */
+    function startFindingFiles() {
+        clearSearch();
+        session.findingFiles = true;
+    }
+
+    function stopFindingFiles() {
+        session.findingFiles = false;
+        clearSearch();
+    }
+
+    function searchFiles(text) {
         const query = (text || "").trim();
         if (query.length === 0) {
             clearSearch();
@@ -233,51 +243,25 @@ Item {
         }
         session.searchSequence += 1;
         const sequence = session.searchSequence;
-        if (mode === "files") {
-            session.quickHits = [];
-        } else {
-            request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
-                if (sequence === session.searchSequence) {
-                    session.quickHits = data.results || [];
-                }
-            }, function(data) {
-                if (sequence === session.searchSequence) {
-                    session.quickHits = [];
-                }
-            });
-        }
-        if (mode === "answer") {
-            session.fileHits = [];
-            session.searchError = "";
-            return;
-        }
         request("GET", "/search?limit=" + session.searchLimit + "&q=" + encodeURIComponent(query), null, function(data) {
             if (sequence !== session.searchSequence) {
                 return;
             }
             session.searchError = "";
             session.searchErrorCode = "";
-            session.fileHits = data.hits || [];
+            session.hits = data.hits || [];
         }, function(data) {
             if (sequence !== session.searchSequence) {
                 return;
             }
-            session.fileHits = [];
+            session.hits = [];
             session.searchError = data.error || i18n("Search failed");
             session.searchErrorCode = data.code || "tool_failed";
         });
     }
 
-    /** Pins or unpins a saved conversation, then reloads the list (pinned ones come first). */
-    function pinConversation(id, pinned) {
-        request("POST", "/conversations/pin", { id: id, pinned: pinned }, function(data) {
-            session.refreshHistory();
-        }, function(data) {
-            session.refreshHistory();
-        });
-    }
-
-    /** Carries out a quick result: a conversation is opened here, anything else by the daemon. */
+    /** Carries out an action (`{type, target}`) through the daemon's `/quick/activate`, such as a file match's
+     *  "show in the file manager" or "copy path"; a conversation is opened here instead. */
     function activateQuick(hit) {
         if (hit.action.type === "conversation") {
             openConversation(hit.action.target);
@@ -355,13 +339,16 @@ Item {
     function captureApplication() {
         request("GET", "/context/app", null, function(data) {
             session.helpWith = data.app || data.title ? { app: data.app, "class": data["class"], title: data.title } : null;
+            session.helpWithIcon = session.helpWith ? data.icon || "" : "";
         }, function(data) {
             session.helpWith = null;
+            session.helpWithIcon = "";
         });
     }
 
     function forgetApplication() {
         session.helpWith = null;
+        session.helpWithIcon = "";
     }
 
     function newChat() {

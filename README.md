@@ -29,8 +29,15 @@ architecture and phase order are in `docs/ROADMAP.md`.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.
-- Live file search while typing, through a search tool you already have,
-  with no AI model involved. Down and Enter, or a click, opens a result.
+- Nothing is searched while you type a request or a reply. "Find a file"
+  on the welcome screen opens a file finder that shows matching files as
+  you type, through a search tool you already have, with no AI model
+  involved; Down and Enter, or a click, opens one. Otherwise Happy Bot
+  searches files or the web when your request needs it.
+- The welcome screen's help shortcut names the application you were in
+  ("Help with Kate") when you open Happy Bot from the floating button or
+  the hotkey. "Close chat" goes back to the welcome screen; the chat stays
+  in your saved ones.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones
   you already configured for other AI programs can be imported.
 - Desktop context capture: active window (KWin), clipboard (Klipper),
@@ -117,9 +124,8 @@ bar's width.
   are.
 - **Appearance:** the robot mascot or the wand, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
-  back in its corner, live results while typing (on or off, after how many
-  characters, after what pause, how many), the popup's size, and the
-  address of the background service for unusual setups.
+  back in its corner, the popup's size, and the address of the background
+  service for unusual setups.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.
@@ -128,12 +134,13 @@ file (mode 0600) and never shown again.
 
 Besides the bar and the settings above:
 
-- **Quick results while typing**, with no AI model: a calculator, unit
+- **Quick results in KRunner**, with no AI model: a calculator, unit
   conversions (with `qalc`), dates ("3 weeks from friday"), world clocks
   ("time in Tokyo"), open windows, applications, System Settings pages and
-  earlier conversations. Optional prefixes: `/` files only, `=` answers only,
-  `?` ask the web, `>` run a command. Up and Down recall earlier requests,
-  Tab completes, and file results have a right-click menu and can be dragged.
+  earlier conversations. In Happy Bot's own field, optional prefixes say
+  what Enter asks: `?` the web, `>` run a command. Up and Down recall
+  earlier requests; in the file finder Tab completes, and files have a
+  right-click menu and can be dragged.
 - **KRunner** (Alt+Space) shows the same results and an "Ask the assistant"
   entry whose answer arrives as a notification.
 - **Undo**: "undo that" reverses the last change (file moves, new or

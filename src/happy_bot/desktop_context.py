@@ -101,11 +101,11 @@ def active_window_context() -> dict[str, Any]:
     return {"available": True, "source": "kwin", "window": window, "error": ""}
 
 
-def application_name(resource_class: str) -> str:
-    """A window's application as people know it: the ``Name`` of its desktop entry, else its class."""
+def _desktop_entry(resource_class: str) -> dict[str, str]:
+    """``Name`` and ``Icon`` from the main group of the desktop entry named after a window class, or {}."""
     cls = (resource_class or "").strip()
     if not cls:
-        return ""
+        return {}
     dirs = [os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
             *(os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":")]
     for directory in dirs:
@@ -113,24 +113,44 @@ def application_name(resource_class: str) -> str:
             path = os.path.join(directory, "applications", f"{candidate}.desktop")
             try:
                 with open(path, encoding="utf-8", errors="replace") as handle:
+                    entry: dict[str, str] = {}
+                    in_main = False
                     for line in handle:
-                        if line.startswith("Name="):
-                            return line[5:].strip()
+                        if line.startswith("["):
+                            if in_main:
+                                break  # actions groups have their own Name and Icon
+                            in_main = line.strip() == "[Desktop Entry]"
+                            continue
+                        key, _, value = line.partition("=")
+                        if in_main and key in ("Name", "Icon") and key not in entry:
+                            entry[key] = value.strip()
+                    return entry
             except OSError:
                 continue
-    return cls.rsplit(".", 1)[-1].replace("-", " ").capitalize()
+    return {}
+
+
+def application_name(resource_class: str) -> str:
+    """A window's application as people know it: the ``Name`` of its desktop entry, else its class."""
+    cls = (resource_class or "").strip()
+    if not cls:
+        return ""
+    return _desktop_entry(cls).get("Name") or cls.rsplit(".", 1)[-1].replace("-", " ").capitalize()
 
 
 def current_application() -> dict[str, str]:
-    """``{"app", "class", "title"}`` of the window the user is working in, or empty strings.
+    """``{"app", "class", "title", "icon"}`` of the window the user is working in, or empty strings.
 
     The popup asks for this when it is opened from the floating button or the hotkey, so the
-    assistant knows which application the question is about (``ask_stream`` adds it to the request).
+    assistant knows which application the question is about (``ask_stream`` adds app, class and
+    title to the request) and the welcome screen can name it, with ``icon`` (its desktop entry's
+    icon name), on its help shortcut.
     """
     context = active_window_context()
     window = context.get("window") or {}
     cls = str(window.get("app") or "")
-    return {"app": application_name(cls), "class": cls, "title": str(window.get("title") or "")[:200]}
+    return {"app": application_name(cls), "class": cls, "title": str(window.get("title") or "")[:200],
+            "icon": _desktop_entry(cls).get("Icon", "")}
 
 
 def session_context() -> dict[str, Any]:

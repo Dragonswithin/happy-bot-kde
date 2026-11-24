@@ -234,15 +234,17 @@ class CurrentApplicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as data:
             apps = Path(data) / "applications"
             apps.mkdir()
-            (apps / "org.example.notes.desktop").write_text("[Desktop Entry]\nName=Notes Pro\nExec=notes\n")
+            (apps / "org.example.notes.desktop").write_text("[Desktop Entry]\nName=Notes Pro\nIcon=notes-pro\nExec=notes\n"
+                                                              "[Desktop Action new]\nName=New Note\nIcon=list-add\n")
             window = {"available": True, "window": {"app": "org.example.notes", "title": "todo.md — Notes Pro"}}
             with mock.patch.dict("os.environ", {"XDG_DATA_HOME": data, "XDG_DATA_DIRS": data}), \
                     mock.patch.object(desktop_context, "active_window_context", return_value=window):
                 self.assertEqual(desktop_context.current_application(),
-                                 {"app": "Notes Pro", "class": "org.example.notes", "title": "todo.md — Notes Pro"})
+                                 {"app": "Notes Pro", "class": "org.example.notes", "title": "todo.md — Notes Pro",
+                                  "icon": "notes-pro"})
             self.assertEqual(desktop_context.application_name("org.example.unknown-app"), "Unknown app")
             with mock.patch.object(desktop_context, "active_window_context", return_value={"available": False}):
-                self.assertEqual(desktop_context.current_application(), {"app": "", "class": "", "title": ""})
+                self.assertEqual(desktop_context.current_application(), {"app": "", "class": "", "title": "", "icon": ""})
 
 
 if __name__ == "__main__":

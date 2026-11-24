@@ -21,7 +21,7 @@ Endpoints:
   running app to open (``happy-bot app show``); the app waits on
   ``/app/wait``, which answers when a request arrives or after 25 seconds.
 - ``GET /context/app``: the application the user is working in (name, class,
-  window title), noted by the popup when it is opened from the floating
+  window title, icon name), noted by the popup when it is opened from the floating
   button or the hotkey and sent with its requests as background
   (``desktop_context.current_application``).
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.

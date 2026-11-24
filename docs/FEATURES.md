@@ -58,8 +58,13 @@ text-only models and stays as an option afterwards.
 
 ## 1. The Bar
 
-- ✓ Meta+Space popup, live file hits while typing, Enter sends to the
-  assistant.
+- ✓ Meta+Space popup, Enter sends to the assistant. Nothing is searched
+  while the user types a request or a reply (the maintainer found results
+  popping up over replies); "Find a file" on the welcome screen opens a file
+  finder with matches as they type.
+- ✓ The welcome screen's help shortcut names the application in use ("Help
+  with Kate", with its icon) when opened from the floating button or the
+  hotkey; "Close chat" returns to the welcome screen, keeping the chat.
 - ● Happy Bot as an app of its own: "Happy Bot" in the application menu runs
   the widget outside the panel (`happy-bot-app`, Plasma's plasmawindowed),
   where it is only the floating Happy Bot; launching it again opens or
@@ -85,12 +90,12 @@ text-only models and stays as an option afterwards.
   comes back when it is reopened.
 - ● Instant results that are not files: apps, System Settings pages, open
   windows, recent conversations and calculator results, all with no model.
-  (quick results; also in KRunner)
+  (quick results, in KRunner only since typing no longer searches)
 - ● Inline calculator, unit, currency, time-zone and date arithmetic ("3 weeks
   from friday") with no model. (currency is not done: qalc's rates need a
   network fetch)
-- ● Optional prefix shortcuts for power users (`?` web, `/` files, `>` shell,
-  `=` calc); never required, so the bar still has no modes.
+- ● Optional prefix shortcuts for power users (`?` web, `>` shell); never
+  required. (`/` files and `=` calc went with searching while typing)
 - ● Up arrow recalls earlier requests; Tab completes app and file names. (Tab
   completes the top result's name)
 - ● Action chips on results: Open, Open with, Show in folder, Copy path, Send
@@ -128,11 +133,11 @@ text-only models and stays as an option afterwards.
 
 ## 2. Finding Things
 
-- ✓ File search through the user's index (lexical while typing, hybrid when
-  the model asks).
+- ✓ File search through the user's index (lexical in the file finder,
+  hybrid when the model asks).
 - ✓ Open a result with its default app.
 - ⏸ Meaning-based matching in the instant path when the index can answer fast
-  enough. (the user's index answers lexically while typing; the hybrid search
+  enough. (the user's index answers lexically in the file finder; the hybrid search
   stays a model tool)
 - ● Filters typed in plain words: "pdfs from last month", "images over 5 MB",
   "edited today". (find_files by size, age and type)

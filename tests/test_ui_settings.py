@@ -44,6 +44,12 @@ class FakeDaemon:
 
 
 class ChangeUiRouteTests(unittest.TestCase):
+    def test_retired_typing_settings_are_dropped_not_refused(self) -> None:
+        # Settings saved before files stopped being searched while typing still load.
+        ui = validate_ui({"instant_search": False, "instant_min_chars": 3, "instant_delay_ms": 0,
+                          "instant_results": 5, "robot_mascot": True})
+        self.assertEqual(ui, {**UI_DEFAULTS, "robot_mascot": True})
+
     def test_changes_merge_and_a_refused_one_changes_nothing(self) -> None:
         daemon = FakeDaemon()
         status, reply = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_mascot": True, "floating_x": 300}})

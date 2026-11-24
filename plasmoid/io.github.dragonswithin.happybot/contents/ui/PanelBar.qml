@@ -56,6 +56,8 @@ Item {
     property bool offline: false
     property string iconName: "search"
     property int widthInGridUnits: 18
+    // The file finder is open ("Find a file"): the field asks for part of a file name.
+    property bool findingFiles: false
     // Focused means the field has focus AND its panel window is the active
     // window. A click anywhere outside deactivates the panel; focus is then
     // dropped explicitly so the popup closes and the next click on the
@@ -101,7 +103,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         height: Math.min(parent.height, implicitHeight)
 
-        placeholderText: bar.offline ? bar.statusText : i18n("Ask or search anything…")
+        placeholderText: bar.offline ? bar.statusText
+            : bar.findingFiles ? i18n("Type part of a file name…") : i18n("Ask or search anything…")
         leftPadding: icon.width + Kirigami.Units.smallSpacing * 2
         rightPadding: spinner.visible ? spinner.width + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing
         Accessible.name: i18n("Ask or search anything")

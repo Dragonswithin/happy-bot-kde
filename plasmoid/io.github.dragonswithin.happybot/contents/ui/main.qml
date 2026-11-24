@@ -43,24 +43,23 @@ import "barInput.js" as BarInput
  *   the typed text; Escape on an empty bar, or the close button, closes the
  *   conversation too.
  * - What the popup shows. Files and the conversation take turns (see
- *   ResultsView.qml): file matches while there are any for the typed text,
+ *   ResultsView.qml): the file finder while the user is finding a file,
  *   otherwise the conversation when `conversationOpen`. Opening the popup
  *   returns to the current conversation, or shows the saved conversations
  *   if there are any, else shows only the field. Submitting a request clears the matches and shows
  *   the conversation; Enter in an empty field shows the previous one; an
  *   approval request clears the matches so its card is in front of the user.
- * - Typing. When live results are on (`instant_search`), text of at least
- *   `instant_min_chars` characters is sent to the instant file search after
- *   `instant_delay_ms` of no typing; these and `instant_results` are the
- *   shared look-and-feel settings (`session.ui`, the app's Appearance page). The
- *   same pause also fetches quick results (answers, windows, applications,
- *   settings pages, conversations), shown above the files; choosing one
- *   carries out its action (`openHit`). Optional prefixes (barInput.js) narrow
- *   what is searched (`/` files, `=` answers) or what Enter asks (`?` web,
- *   `>` a shell command). With no results, Up and Down recall earlier
- *   requests from this session; Tab completes the top result's name. Down/Up move a selection
- *   through the hits. Enter opens the selected hit; with no selection it
- *   sends the text to the assistant.
+ * - Typing. Nothing is searched while the user types a request or a reply;
+ *   Enter sends it to the assistant, which searches when the request needs
+ *   it. Only the file finder ("Find a file" on the welcome screen,
+ *   `session.findingFiles`) shows matching files as the user types, after a
+ *   short pause (`searchDelay`). There Down/Up move a selection, Tab
+ *   completes the top match's name, and Enter opens the selected match or,
+ *   with none selected, asks the assistant to find the file. Leaving
+ *   (Back, Escape on an empty field, closing, sending) ends the finder.
+ *   Optional prefixes (barInput.js) say what Enter asks (`?` web, `>` a shell
+ *   command). With no matches, Up and Down recall earlier requests from this
+ *   session.
  *
  * Happy Bot also runs as an app of its own (`standalone`): `happy-bot-app`
  * starts this widget in Plasma's plasmawindowed, and the "Happy Bot" entry
@@ -108,7 +107,6 @@ PlasmoidItem {
     property bool wantsInput: false
     property bool conversationOpen: false
     property string pendingQuery: ""
-    property string pendingMode: "all"
     // Requests sent from the bar in this session, oldest first, for Up/Down
     // recall; `recallIndex` is the one shown (equal to the length: none).
     property var sentRequests: []
@@ -155,7 +153,6 @@ PlasmoidItem {
     AssistantSession {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
-        searchLimit: session.ui.instant_results
         onHitsChanged: {
             popup.selectedIndex = -1;
             if (root.floating) {
@@ -168,8 +165,8 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        interval: session.ui.instant_delay_ms
-        onTriggered: session.searchFiles(root.pendingQuery, root.pendingMode)
+        interval: 200  // ms of no typing before the file finder searches
+        onTriggered: session.searchFiles(root.pendingQuery)
     }
 
     ResultsPopup {
@@ -202,7 +199,7 @@ PlasmoidItem {
         onDismissed: {
             if (!root.barMode) {
                 searchDelay.stop();
-                session.clearSearch();
+                session.stopFindingFiles();
                 popup.clearInput();
             }
         }
@@ -252,7 +249,7 @@ PlasmoidItem {
             onSettingsRequested: root.openSettings()
             onDismissed: {
                 searchDelay.stop();
-                session.clearSearch();
+                session.stopFindingFiles();
                 clearInput();
             }
         }
@@ -268,6 +265,7 @@ PlasmoidItem {
             : session.statusText
         offline: session.status === "offline" || session.pendingApprovals > 0 || session.needsSetup
         iconName: Plasmoid.icon
+        findingFiles: session.findingFiles
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: {
@@ -285,7 +283,7 @@ PlasmoidItem {
             if (!inputFocused) {
                 root.wantsInput = false;
                 searchDelay.stop();
-                session.clearSearch();
+                session.stopFindingFiles();
                 // Clicking away also closes the conversation view, so focusing the
                 // bar again to type does not bring it back (the logo does).
                 root.conversationOpen = false;
@@ -441,9 +439,7 @@ PlasmoidItem {
             const config = Plasmoid.configuration;
             const old = {
                 robot_mascot: [config.useRobotMascot, false], popup_width: [config.popupWidth, 30],
-                popup_height: [config.popupHeight, 26], instant_search: [config.instantSearch, true],
-                instant_min_chars: [config.instantMinChars, 2], instant_delay_ms: [config.instantDelayMs, 200],
-                instant_results: [config.instantResults, 8], floating_opacity: [config.floatingOpacity, 40],
+                popup_height: [config.popupHeight, 26], floating_opacity: [config.floatingOpacity, 40],
                 floating_x: [config.floatingX, -1], floating_y: [config.floatingY, -1]
             };
             const changes = { imported: (ui.imported || []).concat([copy]) };
@@ -475,6 +471,7 @@ PlasmoidItem {
     }
 
     function closePopup() {
+        session.stopFindingFiles();
         if (root.floating) {
             root.floating.close();
         }
@@ -493,7 +490,8 @@ PlasmoidItem {
         // Read the bar directly: this runs from the bar's own focus handler,
         // before any binding on its focus would have re-evaluated.
         const focused = root.fullRepresentationItem ? root.fullRepresentationItem.inputFocused : false;
-        const somethingToShow = root.conversationOpen || session.hits.length > 0 || session.searchError.length > 0;
+        const somethingToShow = root.conversationOpen || session.findingFiles || session.hits.length > 0
+            || session.searchError.length > 0;
         popup.visible = focused && somethingToShow;
     }
 
@@ -565,11 +563,10 @@ PlasmoidItem {
         }
     }
 
+    /** Only the file finder searches while typing; a request or a reply is left alone until Enter. */
     function handleEdited(text) {
-        const parsed = BarInput.parse(text);
-        root.pendingQuery = parsed.text;
-        root.pendingMode = parsed.mode;
-        if (session.ui.instant_search && root.pendingQuery.length >= session.ui.instant_min_chars) {
+        root.pendingQuery = String(text || "").trim();
+        if (session.findingFiles && root.pendingQuery.length > 0) {
             searchDelay.restart();
         } else {
             searchDelay.stop();
@@ -591,19 +588,7 @@ PlasmoidItem {
         root.closePopup();
     }
 
-    /** A file match opens; a quick result does its action. Opening a conversation keeps the popup. */
     function openHit(hit) {
-        if (hit.kind === "quick") {
-            session.activateQuick(hit);
-            if (hit.action.type === "conversation") {
-                root.conversationOpen = true;
-                session.clearSearch();
-                root.clearInput();
-                return;
-            }
-            root.closePopup();
-            return;
-        }
         root.openLocation(hit.location);
     }
 
@@ -640,6 +625,12 @@ PlasmoidItem {
             root.openHit(session.hits[root.surface.selectedIndex]);
             return;
         }
+        if (session.findingFiles && text.length > 0) {
+            // No match chosen: the assistant searches harder (other words, the whole index).
+            searchDelay.stop();
+            session.stopFindingFiles();
+            text = "Find the file: " + text;
+        }
         if (text.length === 0 && session.needsSetup) {
             root.openSettings();
             return;
@@ -651,7 +642,7 @@ PlasmoidItem {
             root.recallIndex = root.sentRequests.length;
             root.conversationOpen = true;
             searchDelay.stop();
-            session.clearSearch();
+            session.stopFindingFiles();
             root.clearInput();
         }
     }

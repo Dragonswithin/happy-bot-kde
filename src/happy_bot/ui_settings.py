@@ -13,15 +13,15 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "robot_mascot": false,      # the robot picture instead of the wand, on the panel and in replies
       "popup_width": 30,          # the popup's size, in grid units: width 20 to 70,
       "popup_height": 26,         #   height 12 to 50
-      "instant_search": true,     # show matching files while typing
-      "instant_min_chars": 2,     # characters typed before searching, 1 to 10
-      "instant_delay_ms": 200,    # pause in typing before a search is sent, 0 to 2000 ms
-      "instant_results": 8,       # matches shown, 1 to 20
       "floating_opacity": 40,     # how visible the floating Happy Bot is while not in use, 15 to 100 percent
       "floating_x": -1,           # its place, logical pixels from the screen's top left;
       "floating_y": -1,           #   -1 = near the bottom right
       "imported": []              # which copies ("panel", "app") have handed over their old Plasma
     }                             #   settings, so each does that only once (widget main.qml)
+
+Files are no longer searched while the user types (only in the "Find a file" finder, with fixed
+timings), so the old ``instant_*`` settings are gone: ``RETIRED_UI_KEYS`` are dropped from stored
+settings instead of being refused as unknown.
 
 The hotkey belongs to the app too, but it is a desktop shortcut of the app's own copy (set on its
 Appearance page), so it is not kept here.
@@ -33,14 +33,13 @@ from typing import Any
 
 UI_DEFAULTS: dict[str, Any] = {
     "robot_mascot": False, "popup_width": 30, "popup_height": 26,
-    "instant_search": True, "instant_min_chars": 2, "instant_delay_ms": 200, "instant_results": 8,
     "floating_opacity": 40, "floating_x": -1, "floating_y": -1, "imported": [],
 }
 UI_RANGES: dict[str, tuple[int, int]] = {
-    "popup_width": (20, 70), "popup_height": (12, 50), "instant_min_chars": (1, 10),
-    "instant_delay_ms": (0, 2000), "instant_results": (1, 20), "floating_opacity": (15, 100),
+    "popup_width": (20, 70), "popup_height": (12, 50), "floating_opacity": (15, 100),
     "floating_x": (-1, 100_000), "floating_y": (-1, 100_000),
 }
+RETIRED_UI_KEYS = ("instant_search", "instant_min_chars", "instant_delay_ms", "instant_results")
 COPIES = ("panel", "app")
 
 
@@ -52,6 +51,7 @@ def validate_ui(raw: Any) -> dict[str, Any]:
     """A complete, checked ``ui`` group: missing keys get their defaults, unknown ones are refused."""
     if not isinstance(raw, dict):
         raise UiSettingsError("'ui' must be an object")
+    raw = {key: value for key, value in raw.items() if key not in RETIRED_UI_KEYS}
     unknown = sorted(set(raw) - set(UI_DEFAULTS))
     if unknown:
         raise UiSettingsError(f"'ui': unknown setting '{unknown[0]}'")

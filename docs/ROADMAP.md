@@ -1049,6 +1049,16 @@ Findings:
   desktop shell or KWin is now `danger`, its reason naming
   `systemctl --user restart plasma-plasmashell.service`; and the
   instructions say a change is done only once seen to take.
+- The maintainer found file results popping up over a reply typed into an
+  open conversation, and over "Search the web". Typing no longer searches
+  at all (the `instant_*` settings are retired and dropped from stored
+  settings); only "Find a file" on the welcome screen opens a file finder
+  (`AssistantSession.findingFiles`) with matches as the user types; a click
+  (or Down and Enter) opens one, Enter alone asks the assistant to find it. The labelled
+  "Close chat" button replaces the bare "+" that already went back to the
+  welcome screen, and "Desktop help" names the application in use ("Help
+  with Kate", from `/context/app`, now with the icon from its desktop
+  entry), so the application awareness is visible where it is offered.
 
 ## Decisions
 

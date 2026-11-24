@@ -14,18 +14,29 @@ import org.kde.plasma.components as PlasmaComponents3
  * (ResultsView.qml shows it while the conversation is open and empty): a
  * greeting with Happy Bot's picture (`assistantIcon`, tinted with `accent`),
  * a line on what it can do, and a few starting points (find a file, search
- * the web, desktop help). Choosing one emits `promptChosen` with the start
- * of a request ("Find a file named "), which ResultsView.qml puts in the
- * field the user types in (the popup's own, or the panel bar's through
- * `panelPromptChosen`) for them to finish; nothing is sent until they press
- * Enter. The component keeps no state.
+ * the web, desktop help). "Find a file" emits `findFilesChosen`, which
+ * ResultsView.qml turns into the file finder (`AssistantSession.findingFiles`:
+ * matching files show as the user types). The others emit `promptChosen`
+ * with the start of a request ("Search the web for "), which ResultsView.qml
+ * puts in the field the user types in (the popup's own, or the panel bar's
+ * through `panelPromptChosen`) for them to finish; nothing is sent until
+ * they press Enter. The help shortcut names the application the user was in
+ * (`helpWith`, `AssistantSession.helpWith`: "Help with Kate", with its
+ * icon), so it is plain that Happy Bot knows which one; with none (opened
+ * from the panel, or from the desktop itself) it is "Desktop help". The
+ * component keeps no state.
  */
 ColumnLayout {
     id: welcome
 
     required property string assistantIcon
     required property color accent
+    // The application Happy Bot was opened from ({app, class, title}), or null.
+    property var helpWith: null
+    property string helpWithIcon: ""
+    readonly property string appName: helpWith && helpWith.app ? helpWith.app : ""
     signal promptChosen(string prompt)
+    signal findFilesChosen()
 
     spacing: Kirigami.Units.largeSpacing
 
@@ -120,9 +131,12 @@ ColumnLayout {
 
         Repeater {
             model: [
-                { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: i18n("Find a file named") },
+                { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: "" },
                 { label: i18n("Search the web"), icon: "globe", prompt: i18n("Search the web for") },
-                { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
+                welcome.appName
+                    ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
+                        appIcon: true, prompt: i18n("In %1, help me", welcome.appName) }
+                    : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
             ]
 
             PlasmaComponents3.ItemDelegate {
@@ -133,7 +147,7 @@ ColumnLayout {
                 Layout.minimumWidth: 0
                 padding: Kirigami.Units.largeSpacing * 1.5
                 text: modelData.label
-                onClicked: welcome.promptChosen(modelData.prompt + " ")
+                onClicked: modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
 
                 background: Rectangle {
                     radius: Kirigami.Units.cornerRadius * 2
@@ -147,7 +161,9 @@ ColumnLayout {
                     columnSpacing: Kirigami.Units.largeSpacing
                     Kirigami.Icon {
                         source: shortcut.modelData.icon
-                        isMask: true
+                        fallback: "computer-symbolic"
+                        // An application's own icon keeps its colours; the symbolic ones take the accent.
+                        isMask: !shortcut.modelData.appIcon
                         color: Qt.tint(Kirigami.Theme.textColor, Qt.alpha(welcome.accent, 0.55))
                         Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                         Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium

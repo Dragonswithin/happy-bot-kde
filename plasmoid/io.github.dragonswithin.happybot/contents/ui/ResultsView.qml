@@ -83,7 +83,7 @@ Item {
 
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
-    readonly property bool filesVisible: hasHits || hasSearchError
+    readonly property bool filesVisible: hasHits || hasSearchError || session.findingFiles
     readonly property bool conversationVisible: showConversation && !filesVisible
     readonly property bool bodyHasContent: filesVisible || conversationVisible
     readonly property bool sidebarVisible: bodyHasContent && session.history.length > 0
@@ -183,7 +183,7 @@ Item {
             }
 
             PlasmaComponents3.Label {
-                text: view.filesVisible ? i18n("Search results") : i18n("Happy Bot")
+                text: view.filesVisible ? i18n("Find a file") : i18n("Happy Bot")
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
                 font.weight: Font.DemiBold
             }
@@ -220,16 +220,22 @@ Item {
                 onClicked: view.session.cancel()
             }
 
+            // Leaves this chat for the welcome screen; the chat stays in the saved ones.
             PlasmaComponents3.ToolButton {
-                icon.name: "list-add"
-                text: i18n("New conversation")
-                display: titleBar.width >= Kirigami.Units.gridUnit * 32 && view.showField
-                    ? QQC2.AbstractButton.TextBesideIcon : QQC2.AbstractButton.IconOnly
-                enabled: view.conversationVisible
-                opacity: view.conversationVisible ? 1 : 0
-                PlasmaComponents3.ToolTip.text: text
+                icon.name: "go-home"
+                text: i18n("Close chat")
+                visible: view.conversationVisible && view.session.hasTranscript
+                PlasmaComponents3.ToolTip.text: i18n("Back to the start. This chat stays in your saved chats.")
                 PlasmaComponents3.ToolTip.visible: hovered
                 onClicked: view.session.newChat()
+            }
+
+            // Leaves the file finder for the welcome screen or the chat.
+            PlasmaComponents3.ToolButton {
+                icon.name: "go-previous"
+                text: i18n("Back")
+                visible: view.session.findingFiles
+                onClicked: view.session.stopFindingFiles()
             }
 
             PlasmaComponents3.ToolButton {
@@ -297,19 +303,13 @@ Item {
                 }
                 rightActions: [
                     Kirigami.Action {
-                        text: i18n("Clear search")
-                        icon.name: field.effectiveHorizontalAlignment === TextInput.AlignRight ? "edit-clear-locationbar-rtl" : "edit-clear-locationbar-ltr"
-                        visible: field.length > 0
-                        onTriggered: field.clear()
-                    },
-                    Kirigami.Action {
                         text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
                         icon.name: "go-next"
                         enabled: field.text.trim().length > 0
                         onTriggered: view.accepted(field.text.trim())
                     }
                 ]
-                placeholderText: i18n("Ask or search anything…")
+                placeholderText: view.session.findingFiles ? i18n("Type part of a file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
                 Keys.onEnterPressed: view.accepted(text.trim())
@@ -327,6 +327,8 @@ Item {
                 Keys.onEscapePressed: {
                     if (text.length > 0) {
                         text = "";
+                    } else if (view.session.findingFiles) {
+                        view.session.stopFindingFiles();
                     } else {
                         view.closeRequested();
                     }
@@ -616,6 +618,15 @@ Item {
                     }
                 }
 
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    Layout.margins: Kirigami.Units.largeSpacing
+                    visible: view.session.findingFiles && !view.hasHits && !view.hasSearchError
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
+                    text: i18n("Type part of a file's name and matching files show here; click one to open it. Enter asks Happy Bot to look for it.")
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.margins: Kirigami.Units.smallSpacing
@@ -665,7 +676,8 @@ Item {
 
                             PlasmaComponents3.Label {
                                 Layout.fillWidth: true
-                                text: i18n("Ask the assistant: “%1”", view.query)
+                                text: view.session.findingFiles ? i18n("Ask Happy Bot to find “%1”", view.query)
+                                    : i18n("Ask the assistant: “%1”", view.query)
                                 elide: Text.ElideRight
                                 textFormat: Text.PlainText
                             }
@@ -768,6 +780,17 @@ Item {
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
                         assistantIcon: view.assistantIcon
                         accent: view.accent
+                        helpWith: view.session.helpWith
+                        helpWithIcon: view.session.helpWithIcon
+                        onFindFilesChosen: {
+                            view.session.startFindingFiles();
+                            if (view.showField) {
+                                view.setInput("");
+                                view.focusInput();
+                            } else {
+                                view.panelPromptChosen("");
+                            }
+                        }
                         onPromptChosen: prompt => {
                             if (view.showField) {
                                 view.setInput(prompt);
