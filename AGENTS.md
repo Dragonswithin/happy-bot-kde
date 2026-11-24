@@ -10,11 +10,11 @@
   or coding.
 - No model, vendor or endpoint is assumed in code. Local services are offered
   as suggestions; the user chooses.
-- This repo is a standalone KDE Plasma assistant surface, not AIControl's
-  machine-plumbing repo.
-- Keep the UI/backend bridge reusable. AIControl may be
-  the first backend, but new code should avoid hard-coded AIControl paths when
-  a user-configurable path or environment variable is reasonable.
+- This repo is a standalone KDE Plasma assistant surface, not a machine-setup
+  repo for any one computer.
+- Keep the UI/backend bridge reusable. New code should avoid hard-coded
+  backend paths when a user-configurable path or environment variable is
+  reasonable.
 - Prefer user-local install paths for the desktop assistant:
   `~/.local/bin`, `~/.config/systemd/user`, and KDE's per-user Plasma applet
   package store.

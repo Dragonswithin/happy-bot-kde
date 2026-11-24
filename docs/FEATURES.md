@@ -43,7 +43,7 @@ text-only models and stays as an option afterwards.
 
 - ⏸ Choose and set up a local model that takes images, and one for speech to
   text, on the GPU (llama.cpp) or NPU (FastFlowLM) service, so both can be
-  tested locally. This changes AIControl's model services and needs the maintainer's
+  tested locally. This changes the development machine's model services and needs the maintainer's
   go-ahead on which model; candidates seen in the NPU catalogue include
   ``qwen3vl-it:4b``, ``qwen2.5vl-it:3b``, ``minicpm-v-4.7-moe:35b-a3b`` and
   the Gemma 4 models.

@@ -75,8 +75,8 @@ setup:
 |---|---|
 | Plasma / Qt | 6.8.3 / 6.12.0, Wayland session |
 | Python | 3.14; `requests`, `dbus`, `gi`, `pydantic` present; no `aiohttp`/`httpx` |
-| Local GPU model | `127.0.0.1:52626`, OpenAI-compatible, **tool calls supported**, parallel tool calls, 131072 ctx, **text only (no vision)**, one slot |
-| Local NPU model | `127.0.0.1:52625`, OpenAI-compatible; tool-call support unverified |
+| Local GPU model | loopback llama.cpp service, OpenAI-compatible, **tool calls supported**, parallel tool calls, 131072 ctx, **text only (no vision)**, one slot |
+| Local NPU model | loopback FastFlowLM service, OpenAI-compatible; tool-call support unverified |
 | KWin DBus | `queryWindowInfo`, `getWindowInfo`, `/Scripting` `loadScript`, `ScreenShot2` |
 | Portals | `RemoteDesktop`, `ScreenCast`, `Screenshot`, `GlobalShortcuts`, `Clipboard` |
 | Accessibility | `org.a11y.Bus` present, `at-spi2-core` and `libei` installed |
@@ -768,8 +768,8 @@ shortcuts (KDE registers the entry at the next login), drag and drop.
 
 Findings:
 
-- A safety rule had to be added after a live check went wrong: the maintainer's 8 TB
-  data disk is USB-attached and mounted at `/srv/data`, so it looked
+- A safety rule had to be added after a live check went wrong: a large
+  data disk on the test machine is USB-attached and mounted under `/srv`, so it looked
   "removable", and checking the drive tool started a real unmount (it timed
   out at the password prompt; nothing was unmounted). Drives mounted outside
   the desktop's media folders are now refused, and mutating tools are no
@@ -797,7 +797,7 @@ Findings:
 - File search and web search use the user's existing index and search tools
   through MCP; this project does not build its own index or search engine.
 - It must install and configure in one go and behave as one app.
-- LocalContext was changed for this project (the maintainer, 2026-11-22: "the point of
+- The local file index used in development was changed for this project (the maintainer, 2026-11-22: "the point of
   the index was to support this project"). It now embeds local document
   chunks in the background and offers `machine_context_hybrid_search`. The
   as-you-type role stays on the lexical `machine_context_search`; the hybrid
