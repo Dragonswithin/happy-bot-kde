@@ -16,6 +16,12 @@ import QtQuick
  * through its own DaemonClient.qml, which owns the address and the bearer
  * token. main.qml creates exactly one instance and supplies `configuredUrl`.
  * `needsSetup` is true while the daemon reports that no AI model is chosen.
+ * `models` is the user's AIs in order (`{name, online}`, from `/health`), and
+ * `chatModel` the one picked for this chat in the popup's ModelPicker.qml
+ * ("" = their usual order). It is sent with every request of the chat, the
+ * daemon keeps it with the conversation, and opening a saved chat restores
+ * it; a new chat starts on "", and a pick whose AI was removed falls back
+ * to "".
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
@@ -86,6 +92,8 @@ Item {
     property string statusText: i18n("Starting")
     property bool busy: false
     property string conversationId: ""
+    property var models: []
+    property string chatModel: ""
 
     readonly property ListModel entries: ListModel {}
     property var history: []
@@ -175,6 +183,10 @@ Item {
         }
         request("GET", "/health", null, function(data) {
             session.needsSetup = !(data.setup && data.setup.model);
+            session.models = data.models || [];
+            if (session.chatModel && !session.models.some(item => item.name === session.chatModel)) {
+                session.chatModel = "";
+            }
             session.setStatus("idle", i18n("Ready"));
         }, function(data) {
             session.setStatus("offline", data.error || i18n("The assistant is not running"));
@@ -287,6 +299,7 @@ Item {
         }
         request("GET", "/conversation?id=" + encodeURIComponent(conversationId), null, function(data) {
             session.conversationId = data.id;
+            session.chatModel = session.models.some(item => item.name === data.model) ? data.model : "";
             session.replay(data.events || []);
         }, function(data) {
             session.appendEntry("error", data.error || i18n("That conversation could not be opened"));
@@ -310,6 +323,7 @@ Item {
             cancel();
         }
         session.conversationId = "";
+        session.chatModel = "";
         session.entries.clear();
         refreshStatus();
     }
@@ -356,7 +370,7 @@ Item {
                 session.finishStream();
             }
         };
-        xhr.send(JSON.stringify({ message: text, conversation_id: session.conversationId }));
+        xhr.send(JSON.stringify({ message: text, conversation_id: session.conversationId, model: session.chatModel }));
     }
 
     function consumeStream(xhr) {

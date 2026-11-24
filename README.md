@@ -13,6 +13,9 @@ architecture and phase order are in `docs/ROADMAP.md`.
   text field in the panel itself with results in a popup above it; while
   you type there, Plasma outlines the panel in its focus colour. Vertical
   panels always show the icon.
+- With two or more AIs set up, a drop-down beside the typing field picks the
+  AI for the current chat ("Automatic" follows your order); reopening a
+  chat brings its pick back.
 - Live file search while typing, through a search tool you already have,
   with no AI model involved. Down and Enter, or a click, opens a result.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones

@@ -8,7 +8,8 @@ socket.
 
 Endpoints:
 
-- ``GET /health``: daemon status plus which parts of setup are complete.
+- ``GET /health``: daemon status, which parts of setup are complete, and the
+  user's AIs in order (name and whether online) for the popup's per-chat picker.
 - ``GET /context``: desktop context capture (``desktop_context``).
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
@@ -94,6 +95,7 @@ from . import settings as settings_store
 from .agent_loop import user_folders
 from .mcp_client import McpError
 from .providers import ProviderError
+from .redaction import is_local_address
 from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, find_limit_argument, find_query_argument, propose_role, tool_arguments
 from .tools import reminders
@@ -125,6 +127,9 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
         "web_search": "web_search" in roles,
         "model": settings_store.active_model(server.settings) is not None,
     }
+    # The popup's per-chat picker: names and whether each is online, in the user's order. No secrets.
+    payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"])}
+                         for name in server.settings.get("model_order", [])]
     payload["settings_error"] = server.settings_error
     return 200, payload
 
@@ -357,7 +362,8 @@ def get_conversation(server: "AssistantServer", query: dict[str, list[str]], bod
     conversation = server.conversations.get(_first(query, "id"))
     if conversation is None:
         return _error(404, "That conversation is no longer saved.", "invalid")
-    return 200, {"ok": True, "id": conversation.id, "title": conversation.title, "events": conversation.events}
+    return 200, {"ok": True, "id": conversation.id, "title": conversation.title, "model": conversation.model,
+                 "events": conversation.events}
 
 
 def delete_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:

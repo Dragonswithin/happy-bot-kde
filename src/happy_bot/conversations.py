@@ -9,7 +9,9 @@ conversation survives the popup closing, the daemon restarting and logout,
 for as long as the archive keeps it.
 
 Each ``Conversation`` carries, besides the model history, the display
-``events`` the popup replays to redraw it, a title and timestamps. Its
+``events`` the popup replays to redraw it, a title, timestamps and ``model``:
+the AI the user picked for this chat in the popup ("" = their usual order),
+which the popup restores when the chat is reopened. Its
 ``turn_lock`` is held by the caller for the length of a turn, so one
 conversation never runs two turns at once, and its ``cancel`` event is what
 that turn checks to stop.
@@ -39,6 +41,7 @@ class Conversation:
     created: float = field(default_factory=time.time)
     updated: float = field(default_factory=time.time)
     pinned: bool = False
+    model: str = ""
     turn_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     cancel: threading.Event = field(default_factory=threading.Event, repr=False)
     last_used: float = field(default_factory=time.monotonic)
@@ -60,6 +63,7 @@ class Conversation:
     def to_record(self) -> dict[str, Any]:
         return {
             "id": self.id, "title": self.title, "created": self.created, "updated": self.updated, "pinned": self.pinned,
+            "model": self.model,
             "messages": [message_to_json(message) for message in self.history], "events": self.events,
         }
 
@@ -73,6 +77,7 @@ def conversation_from_record(record: dict[str, Any]) -> Conversation:
         created=float(record.get("created") or time.time()),
         updated=float(record.get("updated") or time.time()),
         pinned=record.get("pinned") is True,
+        model=str(record.get("model") or ""),
     )
 
 

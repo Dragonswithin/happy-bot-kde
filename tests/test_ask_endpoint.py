@@ -206,7 +206,9 @@ class AskEndpointTests(unittest.TestCase):
         view = self.call("GET", "/settings")
         self.assertNotIn("sk-secret", json.dumps(view))
         self.assertIsNone(view["settings"]["models"]["m"]["api_key"])
-        self.assertTrue(self.call("GET", "/health")["setup"]["model"])
+        health = self.call("GET", "/health")
+        self.assertTrue(health["setup"]["model"])
+        self.assertEqual(health["models"], [{"name": "m", "online": False}])  # for the popup's picker; no secrets
         self.call("PUT", "/settings", {"settings": view["settings"]})
         self.assertEqual(self.server.settings["models"]["m"]["api_key"], "sk-secret")
 
@@ -339,7 +341,7 @@ class ConversationHistoryTests(unittest.TestCase):
 
         self.configure(self.server)
         self.model.replies += [chunks_for("It is sunny."), chunks_for("Still sunny.")]
-        first = self.call(self.server, "POST", "/ask", {"message": "what is the weather like today"})
+        first = self.call(self.server, "POST", "/ask", {"message": "what is the weather like today", "model": "m"})
         conversation_id = first[0]["conversation_id"]
         saved = self.root / "history" / f"{conversation_id}.json"
         self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
@@ -351,6 +353,7 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertEqual([(item["id"], item["title"], item["requests"]) for item in listed],
                          [(conversation_id, "what is the weather like today", 1)])
         opened = self.call(restarted, "GET", f"/conversation?id={conversation_id}")
+        self.assertEqual(opened["model"], "m")  # the AI picked for this chat comes back with it
         self.assertEqual([event["type"] for event in opened["events"]], ["user", "text_delta", "done"])
         self.assertEqual(opened["events"][1]["text"], "It is sunny.")
 

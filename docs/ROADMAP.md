@@ -945,6 +945,15 @@ Findings:
   NPU first, GPU second. Verified on a throwaway daemon: with an
   unreachable model first and the GPU model second, the GPU model answered
   after a notice.
+- Per-chat AI picker, at the maintainer's request: `ModelPicker.qml` sits
+  beside the popup's field (in the header when the panel bar is used) and
+  appears only with two or more AIs. "Automatic" follows `model_order`;
+  picking one sends `model` with each request of the chat, the daemon keeps
+  it on the conversation (`Conversation.model`) and returns it with the
+  chat, and `/health` lists the AIs (name, online) for the picker. Plasma's
+  own combo box made binding loops on its implicit size in the popup, which
+  resizes to its content, so the picker uses the standard one at a fixed
+  width. Loads without errors in `plasmawindowed`; not yet used by a person.
 
 ## Decisions
 

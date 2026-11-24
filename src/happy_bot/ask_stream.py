@@ -9,7 +9,9 @@ disconnected.
 
 A body with ``"ephemeral": true`` is not kept in the conversation history
 (``eval`` uses it). A body may name a configured ``model`` to use for this request instead of
-the active one (``happy-bot eval --model``).
+the user's order (the popup's per-chat picker, ``happy-bot eval --model``);
+the name, or "" for the order, is kept on the conversation as its ``model``
+so the popup can show the pick again when the chat is reopened.
 
 Routines and dry runs: the system prompt lists the user's routines, and the
 registry includes the routine tools, which change settings through
@@ -124,6 +126,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
                   + "; ".join(skipped) + ". Change this on the AI Model page."})
             return
         conversation = server.conversations.get_or_create(str(body.get("conversation_id") or ""))
+        conversation.model = chosen
         if not conversation.turn_lock.acquire(blocking=False):
             send({"type": "error", "message": "The assistant is still working on the previous request.", "code": "busy"})
             return

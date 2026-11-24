@@ -244,6 +244,7 @@ PlasmoidItem {
         root.conversationOpen = session.hasTranscript || session.busy || session.pendingApprovals > 0
             || session.history.length > 0;
         session.refreshHistory();
+        session.refreshStatus();  // picks up AIs added in the settings since the last check
         popup.visible = true;
     }
 
@@ -275,6 +276,7 @@ PlasmoidItem {
         }
         root.conversationOpen = true;
         session.refreshHistory();
+        session.refreshStatus();
         // The popup shows only while the bar has focus, so take it; focusing
         // runs updateBarPopup, which now has the conversation to show.
         root.focusBar();

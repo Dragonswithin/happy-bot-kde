@@ -65,6 +65,10 @@ text-only models and stays as an option afterwards.
   accepts Plasma's blue panel focus indicator while it has focus.
 - ✓ Streamed answers, tool activity lines, approval cards, Stop.
 - ✓ Saved conversations sidebar with `history_days` expiry.
+- ● An AI picker for each chat, beside the typing field, shown only when two
+  or more AIs are set up: "Automatic" follows the user's order, or one AI
+  answers every request of that chat; the pick is saved with the chat and
+  comes back when it is reopened.
 - ● Instant results that are not files: apps, System Settings pages, open
   windows, recent conversations and calculator results, all with no model.
   (quick results; also in KRunner)

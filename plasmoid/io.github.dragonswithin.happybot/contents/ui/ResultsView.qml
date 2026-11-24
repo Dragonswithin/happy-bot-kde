@@ -15,7 +15,9 @@ import org.kde.plasma.extras as PlasmaExtras
 /**
  * Everything inside the assistant's popup, laid out like Plasma's own
  * launcher: a header band (title, status, Stop, New, Close), a body, and the
- * input field in a footer band on the side facing the panel. With nothing
+ * input field in a footer band on the side facing the panel, with the
+ * chat's AI picker (ModelPicker.qml) beside it when two or more AIs are set
+ * up (in the header instead when the field is hidden). With nothing
  * to show the view is just the field. When the user types in the panel's
  * search bar instead (PanelBar.qml), `showField` is false, the field is
  * hidden, and `barText` is the text typed there.
@@ -181,6 +183,13 @@ Item {
                 opacity: 0.7
             }
 
+            // When the user types in the panel's search bar this view has no field,
+            // so the chat's AI picker sits here instead.
+            ModelPicker {
+                session: view.session
+                visible: !view.showField && view.conversationVisible && view.session.models.length > 1
+            }
+
             // The actions keep their space in Files mode so the band's height
             // does not change when the body switches.
             PlasmaComponents3.ToolButton {
@@ -240,29 +249,39 @@ Item {
         visible: view.showField
         position: view.fieldAtBottom ? QQC2.ToolBar.Footer : QQC2.ToolBar.Header
 
-        contentItem: PlasmaExtras.SearchField {
-            id: field
-            placeholderText: i18n("Ask or search anything…")
-            onTextChanged: view.queryEdited(text)
-            Keys.onReturnPressed: view.accepted(text.trim())
-            Keys.onEnterPressed: view.accepted(text.trim())
-            Keys.onDownPressed: view.selectionMove(1)
-            Keys.onUpPressed: view.selectionMove(-1)
-            Keys.onTabPressed: view.completeRequested()
-            // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
-            Keys.onMenuPressed: view.openSelectedMenu()
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
-                    view.openSelectedMenu();
-                    event.accepted = true;
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            PlasmaExtras.SearchField {
+                id: field
+                Layout.fillWidth: true
+                placeholderText: i18n("Ask or search anything…")
+                onTextChanged: view.queryEdited(text)
+                Keys.onReturnPressed: view.accepted(text.trim())
+                Keys.onEnterPressed: view.accepted(text.trim())
+                Keys.onDownPressed: view.selectionMove(1)
+                Keys.onUpPressed: view.selectionMove(-1)
+                Keys.onTabPressed: view.completeRequested()
+                // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
+                Keys.onMenuPressed: view.openSelectedMenu()
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                        view.openSelectedMenu();
+                        event.accepted = true;
+                    }
+                }
+                Keys.onEscapePressed: {
+                    if (text.length > 0) {
+                        text = "";
+                    } else {
+                        view.closeRequested();
+                    }
                 }
             }
-            Keys.onEscapePressed: {
-                if (text.length > 0) {
-                    text = "";
-                } else {
-                    view.closeRequested();
-                }
+
+            // Which AI this chat uses; only when more than one is set up.
+            ModelPicker {
+                session: view.session
             }
         }
     }
