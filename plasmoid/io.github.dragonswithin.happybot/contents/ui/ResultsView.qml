@@ -26,10 +26,9 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * The body shows one thing at a time:
  *
- * - FILES while there are file matches (or a search problem) for the typed
- *   text: one row per match (file-type icon, name, folder), then an "Ask the
- *   assistant" row. That row is highlighted while no match is selected, so
- *   it is visible that Enter will ask rather than open a file.
+ * - FILES in the file finder, or while there are file matches or a search
+ *   problem: FileResults.qml (the matches, scrolling, with an "Ask Happy Bot
+ *   to find" row pinned below them).
  * - ASSISTANT otherwise, when `showConversation` is set: the conversation,
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
@@ -91,7 +90,7 @@ Item {
     readonly property string query: (showField ? inputBar.text : barText).trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
     readonly property real contentHeight: filesVisible
-        ? filesColumn.implicitHeight
+        ? fileResults.naturalHeight
         : view.session.entries.count === 0
             ? welcome.implicitHeight + inset * 2
             : transcriptColumn.implicitHeight + view.inset * 2
@@ -146,10 +145,8 @@ Item {
     }
 
     // The selected match's row answers this by opening its own menu.
-    signal selectedMenuRequested()
-
     function openSelectedMenu() {
-        view.selectedMenuRequested();
+        fileResults.openSelectedMenu();
     }
 
     // --- header band: title, status and actions ---------------------------
@@ -503,194 +500,19 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
 
-            ColumnLayout {
-                id: filesColumn
+            FileResults {
+                id: fileResults
 
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
+                anchors.fill: parent
                 visible: view.filesVisible
-                spacing: 0
-
-                Repeater {
-                    model: view.session.hits
-
-                    PlasmaComponents3.ItemDelegate {
-                        id: row
-
-                        required property int index
-                        required property var modelData
-
-                        Connections {
-                            target: view
-                            function onSelectedMenuRequested() {
-                                if (row.index === view.selectedIndex && row.modelData.kind !== "quick") {
-                                    fileMenu.popup(row, 0, row.height);
-                                }
-                            }
-                        }
-
-                        Layout.fillWidth: true
-                        highlighted: index === view.selectedIndex
-                        Accessible.name: Look.hitWhere(modelData).length > 0
-                            ? i18n("%1, in %2", modelData.title, Look.hitWhere(modelData)) : modelData.title
-                        onClicked: view.resultActivated(modelData)
-
-                        // A file match can be dragged into another application.
-                        Drag.dragType: Drag.Automatic
-                        Drag.supportedActions: Qt.CopyAction
-                        Drag.mimeData: row.modelData.kind === "quick" ? ({})
-                            : ({ "text/uri-list": row.modelData.location.indexOf("://") > 0 ? row.modelData.location
-                                                  : "file://" + encodeURI(row.modelData.location),
-                                 "text/plain": row.modelData.location })
-                        Drag.active: rowDrag.active
-                        DragHandler {
-                            id: rowDrag
-                            enabled: row.modelData.kind !== "quick"
-                            target: null
-                        }
-
-                        // A file match's own actions, on right-click.
-                        TapHandler {
-                            acceptedButtons: Qt.RightButton
-                            enabled: row.modelData.kind !== "quick"
-                            onTapped: fileMenu.popup()
-                        }
-
-                        QQC2.Menu {
-                            id: fileMenu
-
-                            QQC2.MenuItem {
-                                text: i18n("Open")
-                                icon.name: "document-open"
-                                onTriggered: view.resultActivated(row.modelData)
-                            }
-                            QQC2.MenuItem {
-                                text: i18n("Show in folder")
-                                icon.name: "document-open-folder"
-                                enabled: row.modelData.kind !== "link"
-                                onTriggered: view.fileActionRequested(row.modelData, "reveal")
-                            }
-                            QQC2.MenuItem {
-                                text: row.modelData.kind === "link" ? i18n("Copy link") : i18n("Copy path")
-                                icon.name: "edit-copy"
-                                onTriggered: view.fileActionRequested(row.modelData, "copy")
-                            }
-                            QQC2.MenuItem {
-                                text: i18n("Ask about this")
-                                icon.name: view.useRobotMascot ? "" : view.assistantIcon
-                                icon.source: view.useRobotMascot ? Look.robotIcon : ""
-                                icon.color: "transparent"
-                                onTriggered: view.fileActionRequested(row.modelData, "ask")
-                            }
-                        }
-
-                        contentItem: RowLayout {
-                            spacing: Kirigami.Units.largeSpacing
-
-                            Kirigami.Icon {
-                                source: Look.hitIcon(row.modelData)
-                                Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                                Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-
-                                PlasmaComponents3.Label {
-                                    Layout.fillWidth: true
-                                    text: row.modelData.title
-                                    elide: Text.ElideRight
-                                    textFormat: Text.PlainText
-                                }
-
-                                PlasmaComponents3.Label {
-                                    Layout.fillWidth: true
-                                    text: Look.hitWhere(row.modelData)
-                                    elide: Text.ElideMiddle
-                                    textFormat: Text.PlainText
-                                    font: Kirigami.Theme.smallFont
-                                    opacity: 0.65
-                                }
-                            }
-                        }
-                    }
-                }
-
-                PlasmaComponents3.Label {
-                    Layout.fillWidth: true
-                    Layout.margins: Kirigami.Units.largeSpacing
-                    visible: view.session.findingFiles && !view.hasHits && !view.hasSearchError
-                    wrapMode: Text.Wrap
-                    opacity: 0.7
-                    text: i18n("Type part of a file's name and matching files show here; click one to open it. Enter asks Happy Bot to look for it.")
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.margins: Kirigami.Units.smallSpacing
-                    visible: view.hasSearchError
-                    spacing: Kirigami.Units.largeSpacing
-
-                    Kirigami.Icon {
-                        source: "dialog-warning"
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                    }
-
-                    PlasmaComponents3.Label {
-                        Layout.fillWidth: true
-                        text: view.session.searchErrorCode === "not_configured"
-                            ? i18n("File search is not set up yet.")
-                            : i18n("File search is not responding. Try again in a moment.")
-                        wrapMode: Text.Wrap
-                        PlasmaComponents3.ToolTip.text: view.session.searchError
-                        PlasmaComponents3.ToolTip.visible: errorHover.hovered && view.session.searchErrorCode !== "not_configured"
-
-                        HoverHandler {
-                            id: errorHover
-                        }
-                    }
-                }
-
-                PlasmaComponents3.ItemDelegate {
-                    Layout.fillWidth: true
-                    visible: view.query.length > 0
-                    highlighted: view.selectedIndex < 0
-                    Accessible.name: i18n("Ask the assistant: %1", view.query)
-                    onClicked: view.accepted(view.query)
-
-                    contentItem: RowLayout {
-                        spacing: Kirigami.Units.largeSpacing
-
-                        Kirigami.Icon {
-                            source: view.assistantIcon
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 0
-
-                            PlasmaComponents3.Label {
-                                Layout.fillWidth: true
-                                text: view.session.findingFiles ? i18n("Ask Happy Bot to find “%1”", view.query)
-                                    : i18n("Ask the assistant: “%1”", view.query)
-                                elide: Text.ElideRight
-                                textFormat: Text.PlainText
-                            }
-
-                            PlasmaComponents3.Label {
-                                Layout.fillWidth: true
-                                text: i18n("Press Enter")
-                                font: Kirigami.Theme.smallFont
-                                opacity: 0.65
-                            }
-                        }
-                    }
-                }
+                session: view.session
+                query: view.query
+                selectedIndex: view.selectedIndex
+                assistantIcon: view.assistantIcon
+                useRobotMascot: view.useRobotMascot
+                onResultActivated: hit => view.resultActivated(hit)
+                onFileActionRequested: (hit, action) => view.fileActionRequested(hit, action)
+                onAskRequested: text => view.accepted(text)
             }
 
             PlasmaComponents3.ScrollView {
