@@ -54,6 +54,7 @@ import QtQuick
  * events through `applyEvent` (`replay`), so a reopened conversation looks
  * exactly as it did and the next request continues it. Anything that was
  * still waiting when it was saved is shown as not completed.
+ * `pinConversation` pins one (listed first, never expired);
  * `deleteConversation` removes one; deleting the open one starts a new one. `cancel` aborts
  * the request, which makes the daemon stop the turn.
  *
@@ -224,6 +225,15 @@ Item {
             session.fileHits = [];
             session.searchError = data.error || i18n("Search failed");
             session.searchErrorCode = data.code || "tool_failed";
+        });
+    }
+
+    /** Pins or unpins a saved conversation, then reloads the list (pinned ones come first). */
+    function pinConversation(id, pinned) {
+        request("POST", "/conversations/pin", { id: id, pinned: pinned }, function(data) {
+            session.refreshHistory();
+        }, function(data) {
+            session.refreshHistory();
         });
     }
 

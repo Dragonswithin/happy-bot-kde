@@ -33,6 +33,8 @@ def describe(name: str, entry: dict[str, Any]) -> str:
         when.append(f"on schedule '{entry['schedule']}'")
     if entry.get("watch_folder"):
         when.append(f"when {entry['watch_folder']} changes")
+    if entry.get("drive_label"):
+        when.append(f"when the drive {entry['drive_label']} is plugged in")
     timing = (" and ".join(when) if when else "only when asked") + ("" if entry.get("enabled", True) else ", paused")
     return f"{name} ({timing}): {entry['request']}"
 
@@ -51,6 +53,7 @@ def routine_tools(read_settings: ReadSettings, update_settings: UpdateSettings) 
             "request": arguments.get("request", existing.get("request", "")),
             "schedule": arguments.get("schedule", existing.get("schedule", "")),
             "watch_folder": arguments.get("watch_folder", existing.get("watch_folder", "")),
+            "drive_label": arguments.get("drive_label", existing.get("drive_label", "")),
             "enabled": arguments.get("enabled", existing.get("enabled", True)),
         }
 
@@ -75,12 +78,14 @@ def routine_tools(read_settings: ReadSettings, update_settings: UpdateSettings) 
         Tool("list_routines", "The user's saved routines: name, when they run on their own, and the request.",
              object_schema(), RISK_READ, list_routines, summarize=lambda a: "List routines"),
         Tool("save_routine", "Save or change a named routine: a request the user can run by name, optionally on a "
-             "schedule (systemd calendar syntax such as 'Mon..Fri 08:30', 'daily', '*-*-01 09:00') or whenever a "
-             "folder changes. Run on their own, routines cannot do anything that needs approval. Omitted fields "
+             "schedule (systemd calendar syntax such as 'Mon..Fri 08:30', 'daily', '*-*-01 09:00'), whenever a "
+             "folder changes, or when a drive is plugged in. Run on their own, routines cannot do anything that needs approval. Omitted fields "
              "keep their current value.",
              object_schema({"name": {"type": "string"}, "request": {"type": "string"},
                             "schedule": {"type": "string", "description": "'' for none"},
                             "watch_folder": {"type": "string", "description": "'' for none"},
+                            "drive_label": {"type": "string", "description": "run when the drive with this label "
+                                            "is plugged in; '' for none"},
                             "enabled": {"type": "boolean", "description": "false pauses it"}}, ["name"]),
              RISK_CHANGE, save_routine, summarize=lambda a: f"Save the routine '{a.get('name', '?')}'"),
         Tool("delete_routine", "Delete a saved routine.", object_schema({"name": {"type": "string"}}, ["name"]),

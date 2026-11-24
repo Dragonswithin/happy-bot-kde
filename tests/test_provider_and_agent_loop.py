@@ -373,7 +373,18 @@ class TrimHistoryTests(unittest.TestCase):
 
     def test_latest_turn_survives_even_when_too_large(self) -> None:
         history = [Message("system", "s"), Message("user", "old"), Message("user", "y" * 100000)]
-        self.assertEqual([m.text[:3] for m in trim_history(history, 1024)], ["s", "yyy"])
+        self.assertEqual([m.text[:3] for m in trim_history(history, 1024)], ["s", "Ear", "yyy"])
+
+    def test_dropped_turns_leave_a_digest_of_requests_tools_and_answers(self) -> None:
+        big = "x" * 3000
+        call = ToolCall("1", "disk_usage", {})
+        history = [Message("system", "s"), Message("user", "How full is my disk?"),
+                   Message("assistant", "", (call,)), Message("tool", big, tool_call_id="1"),
+                   Message("assistant", "It is 61% full. " + big), Message("user", "and now?")]
+        digest = trim_history(history, 1024)[1]
+        self.assertEqual(digest.role, "system")
+        self.assertIn("The user asked: How full is my disk? (tools used: disk_usage); you answered: It is 61% full.",
+                      digest.text)
 
 
 if __name__ == "__main__":

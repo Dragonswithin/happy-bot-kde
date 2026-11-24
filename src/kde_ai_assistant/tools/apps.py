@@ -9,7 +9,10 @@ risk ``change``: something new appears on screen and nothing is lost.
 name match wins; otherwise a single match on the name, generic name or
 keywords is used; several plausible matches fail with the list so the model
 can pick. Launching goes through ``gio launch``, detached so the application
-outlives the daemon.
+outlives the daemon. ``open_folder`` asks the file manager over the
+freedesktop ``FileManager1`` DBus interface to show a folder, or a file
+selected in its folder; ``open_terminal`` opens the user's terminal
+(``tools/shell.terminal_program``) in a folder.
 """
 
 from __future__ import annotations
@@ -132,6 +135,42 @@ def open_location(arguments: dict[str, Any]) -> str:
     return f"Opened {location}."
 
 
+def open_folder(arguments: dict[str, Any]) -> str:
+    """Show a folder, or a file selected in its folder, in the user's file manager."""
+    from .. import session_dbus
+
+    path = os.path.abspath(os.path.expanduser(str(arguments.get("path") or "").strip()))
+    if not os.path.exists(path):
+        raise ToolFailure(f"{path} does not exist")
+    method = "ShowFolders" if os.path.isdir(path) else "ShowItems"
+    try:
+        session_dbus.call("org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
+                          "org.freedesktop.FileManager1", method, "ass", ([Path(path).as_uri()], ""))
+    except (session_dbus.DBusUnavailable, session_dbus.DBusError) as error:
+        raise ToolFailure(f"the file manager could not be asked to show it ({error})") from error
+    return f"Showing {path} in the file manager."
+
+
+def open_terminal(arguments: dict[str, Any]) -> str:
+    """Open the user's terminal in a folder, optionally running a command they will see."""
+    from .shell import terminal_program
+
+    folder = os.path.abspath(os.path.expanduser(str(arguments.get("folder") or "~")))
+    if not os.path.isdir(folder):
+        raise ToolFailure(f"{folder} is not a folder")
+    terminal = terminal_program()
+    name = os.path.basename(terminal)
+    if name == "konsole":
+        command = [terminal, "--workdir", folder]
+    elif name in ("gnome-terminal", "kgx"):
+        command = [terminal, f"--working-directory={folder}"]
+    else:
+        command = [terminal]
+    subprocess.Popen(command, cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    return f"Opened a terminal in {folder}."
+
+
 def app_tools() -> list[Tool]:
     return [
         Tool("list_applications", "List installed applications, optionally filtered by a query.",
@@ -139,6 +178,12 @@ def app_tools() -> list[Tool]:
         Tool("launch_application", "Start an installed application by name, for example 'Firefox' or 'Konsole'.",
              object_schema({"name": {"type": "string"}}, ["name"]), RISK_CHANGE, launch_application,
              summarize=lambda arguments: f"Start {arguments.get('name', '')}"),
+        Tool("open_folder", "Show a folder, or a file selected inside its folder, in the file manager (Dolphin).",
+             object_schema({"path": {"type": "string"}}, ["path"]), RISK_CHANGE, open_folder,
+             summarize=lambda arguments: f"Show {arguments.get('path', '')} in the file manager"),
+        Tool("open_terminal", "Open a terminal window in a folder for the user to work in.",
+             object_schema({"folder": {"type": "string"}}), RISK_CHANGE, open_terminal,
+             summarize=lambda arguments: f"Open a terminal in {arguments.get('folder') or 'the home folder'}"),
         Tool("open_location", "Open a file or folder with its default application, or a web link in the browser.",
              object_schema({"location": {"type": "string", "description": "Absolute path, ~ path, or http(s) URL"}},
                            ["location"]), RISK_CHANGE, open_location,

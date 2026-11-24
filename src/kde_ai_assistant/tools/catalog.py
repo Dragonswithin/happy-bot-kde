@@ -26,14 +26,14 @@ Groups and their modules (all under ``tools/``):
 
 - ``observe`` (always offered): ``observe.py``, ``undo.py``, the
   clipboard-history and selected-text tools of ``screen.py``,
-  remember/forget (``memory.py``), and ``finding.py`` (recent files,
-  bookmarks, reading a web page)
+  remember/forget (``memory.py``), ``finding.py`` (recent files,
+  bookmarks, reading a web page) and ``weather.py``
 
 With ``agent.load_plugins`` on, the user's plugin files add tools after
 the tool servers' (``tools/plugins.py``).
 
 With the user's "local only" setting (``agent.local_only``) the web-search
-role's tool and ``read_web_page`` are left out, so nothing is looked up on
+role's tool, ``read_web_page`` and ``weather`` are left out, so nothing is looked up on
 the internet.
 - ``windows``: ``windows.py``, ``workspace.py`` (desktops, activities, layouts)
 - ``apps``: ``apps.py``, ``app_visibility.py``, ``defaults.py`` (default
@@ -81,6 +81,7 @@ from .software import software_tools
 from .summaries import with_read_summaries
 from .system import system_tools
 from .undo import undo_tools
+from .weather import weather_tools
 from .windows import window_tools
 from .workspace import layout_tools, workspace_tools
 
@@ -110,7 +111,8 @@ def _group_builders(
     notes = (lambda: note_tools(read_settings)) if read_settings else list
     return {
         "observe": lambda: [*observe_tools(), *undo_tools(), *[tool for tool in screen_tools() if tool.risk == "read"],
-                            *memory(), *finding_tools(bool(agent.get("local_only")))],
+                            *memory(), *finding_tools(bool(agent.get("local_only"))),
+                            *([] if agent.get("local_only") else weather_tools())],
         "windows": lambda: [*window_tools(), *workspace_tools(), *layouts()],
         "gui": lambda: [*gui_tools(), *[tool for tool in screen_tools() if tool.risk != "read"]],
         "apps": lambda: [*app_tools(), *app_visibility_tools(), *defaults_tools(), *software_tools()],

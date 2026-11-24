@@ -8,6 +8,7 @@ this module validates it and owns what it means)::
         "request": "Open Kate and Konsole side by side and turn on Do Not Disturb",
         "schedule": "Mon..Fri 08:30",   # default ""; a systemd OnCalendar expression, "" = never on its own
         "watch_folder": "",             # default ""; run when something in this folder changes
+        "drive_label": "",              # default ""; run when a drive with this label is plugged in
         "enabled": true                 # default true; false keeps it but never runs it on its own
       }
     }
@@ -22,7 +23,8 @@ How routines run:
   (``prompt_lines``), so "start work" typed in the bar is carried out.
 - On their own: ``sync`` keeps one pair of systemd user units per trigger in
   step with the setting (a ``.timer`` for ``schedule``, a ``.path`` for
-  ``watch_folder``), whose service runs ``kde-ai-assistant ask --notify``
+  ``watch_folder``, and for ``drive_label`` a service the drive's device unit
+  wants, so it runs when that drive is plugged in), whose service runs ``kde-ai-assistant ask --notify``
   with the request. That command has no terminal, so any step needing
   approval is declined, never taken; the answer arrives as a notification.
 
@@ -62,7 +64,7 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
             raise RoutineError(f"{where}: names use letters, digits, spaces, '_', '.' or '-' (max 60)")
         if not isinstance(entry, dict):
             raise RoutineError(f"{where} must be an object")
-        unknown = set(entry) - {"request", "schedule", "watch_folder", "enabled"}
+        unknown = set(entry) - {"request", "schedule", "watch_folder", "drive_label", "enabled"}
         if unknown:
             raise RoutineError(f"{where}: unknown setting {sorted(unknown)[0]!r}")
         request = entry.get("request")
@@ -78,6 +80,9 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
         folder = entry.get("watch_folder", "")
         if not isinstance(folder, str) or (folder.strip() and not folder.strip().startswith(("/", "~"))):
             raise RoutineError(f"{where}: 'watch_folder' must be empty or an absolute path")
+        label = entry.get("drive_label", "")
+        if not isinstance(label, str) or len(label) > 64 or "/" in label or "\n" in label:
+            raise RoutineError(f"{where}: 'drive_label' must be a drive's label (no '/')")
         enabled = entry.get("enabled", True)
         if not isinstance(enabled, bool):
             raise RoutineError(f"{where}: 'enabled' must be true or false")
@@ -85,6 +90,7 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
             "request": request.strip(),
             "schedule": schedule.strip(),
             "watch_folder": os.path.expanduser(folder.strip()) if folder.strip() else "",
+            "drive_label": label.strip(),
             "enabled": enabled,
         }
     return routines
@@ -120,6 +126,9 @@ def desired_units(routines: dict[str, dict[str, Any]]) -> dict[str, tuple[str, l
             wanted[user_timers.unit_name(KIND, _ident(name, "schedule"))] = (description, command, "timer", entry["schedule"])
         if entry["watch_folder"]:
             wanted[user_timers.unit_name(KIND, _ident(name, "watch"))] = (description, command, "path", entry["watch_folder"])
+        if entry.get("drive_label"):
+            device = user_timers.device_unit(f"/dev/disk/by-label/{entry['drive_label']}")
+            wanted[user_timers.unit_name(KIND, _ident(name, "drive"))] = (description, command, "device", device)
     return wanted
 
 
@@ -141,6 +150,8 @@ def sync(routines: dict[str, dict[str, Any]], unit_dir: Path, manage: bool) -> l
             for path in paths:
                 if path.suffix in (".timer", ".path"):
                     user_timers.systemctl("disable", "--now", path.name)
+                elif path.suffix == ".service" and len(paths) == 1:
+                    user_timers.systemctl("disable", path.name)
     for paths in removed.values():
         user_timers.remove_units(paths)
     if manage and (changed or removed):
@@ -148,7 +159,9 @@ def sync(routines: dict[str, dict[str, Any]], unit_dir: Path, manage: bool) -> l
         if not ok:
             problems.append(f"systemd did not reload the routines: {message}")
         for name, trigger in changed:
-            ok, message = user_timers.systemctl("enable", "--now", f"{name}.{trigger}")
+            # A device routine's service is only enabled (linked into the device's wants), never started now.
+            command = ("enable", f"{name}.service") if trigger == "device" else ("enable", "--now", f"{name}.{trigger}")
+            ok, message = user_timers.systemctl(*command)
             if not ok:
                 problems.append(f"routine unit {name} could not be started: {message}")
     return problems

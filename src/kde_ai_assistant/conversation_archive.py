@@ -9,6 +9,7 @@ Each conversation is one JSON file, written 0600 in
 - ``messages``: the model-level history (``conversation.Message`` objects,
   tool calls and results included), so a reopened conversation continues
   with full context;
+- ``pinned``: the user pinned it: listed first and never expired;
 - ``events``: what the popup needs to redraw it, in order: the user's
   requests, text, tool calls and results, approvals, errors. Consecutive
   text pieces are stored joined.
@@ -17,7 +18,8 @@ Conversations can contain whatever the assistant read for the user
 (clipboard text, file contents, web pages), which is why the files are
 private to the user and kept only for ``days`` days after their last use:
 older files are deleted on start, on every save, and when the setting
-changes. ``days`` 0 means nothing is saved and existing files are removed.
+changes, except ``pinned`` ones, which the user chose to keep. ``days`` 0
+means nothing is saved and existing files are removed.
 
 Conversation ids are checked against the id alphabet before they are used
 in a path. Reads skip unreadable or malformed files rather than fail.
@@ -134,6 +136,7 @@ class ConversationArchive:
                 "title": str(record.get("title") or ""),
                 "created": float(record.get("created") or 0),
                 "updated": float(record.get("updated") or 0),
+                "pinned": record.get("pinned") is True,
                 "requests": sum(1 for event in events if isinstance(event, dict) and event.get("type") == "user"),
             })
         summaries.sort(key=lambda item: item["updated"], reverse=True)
@@ -169,9 +172,10 @@ class ConversationArchive:
             try:
                 record = json.loads(path.read_text(encoding="utf-8"))
                 updated = float(record.get("updated") or 0) if isinstance(record, dict) else 0
+                pinned = isinstance(record, dict) and record.get("pinned") is True
             except (OSError, ValueError):
-                updated = path.stat().st_mtime if path.exists() else 0
-            if updated < cutoff:
+                updated, pinned = (path.stat().st_mtime if path.exists() else 0), False
+            if updated < cutoff and not pinned:
                 try:
                     path.unlink()
                     removed += 1

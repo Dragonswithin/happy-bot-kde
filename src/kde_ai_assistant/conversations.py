@@ -38,6 +38,7 @@ class Conversation:
     title: str = ""
     created: float = field(default_factory=time.time)
     updated: float = field(default_factory=time.time)
+    pinned: bool = False
     turn_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     cancel: threading.Event = field(default_factory=threading.Event, repr=False)
     last_used: float = field(default_factory=time.monotonic)
@@ -58,7 +59,7 @@ class Conversation:
 
     def to_record(self) -> dict[str, Any]:
         return {
-            "id": self.id, "title": self.title, "created": self.created, "updated": self.updated,
+            "id": self.id, "title": self.title, "created": self.created, "updated": self.updated, "pinned": self.pinned,
             "messages": [message_to_json(message) for message in self.history], "events": self.events,
         }
 
@@ -71,6 +72,7 @@ def conversation_from_record(record: dict[str, Any]) -> Conversation:
         title=str(record.get("title") or ""),
         created=float(record.get("created") or time.time()),
         updated=float(record.get("updated") or time.time()),
+        pinned=record.get("pinned") is True,
     )
 
 
@@ -141,10 +143,22 @@ class ConversationStore:
                 if conversation.id not in listed and conversation.events:
                     listed[conversation.id] = {
                         "id": conversation.id, "title": conversation.title, "created": conversation.created,
-                        "updated": conversation.updated,
+                        "updated": conversation.updated, "pinned": conversation.pinned,
                         "requests": sum(1 for event in conversation.events if event.get("type") == "user"),
                     }
-        return sorted(listed.values(), key=lambda item: item["updated"], reverse=True)
+        return sorted(listed.values(), key=lambda item: (bool(item.get("pinned")), item["updated"]), reverse=True)
+
+    def set_pinned(self, conversation_id: str, pinned: bool) -> bool:
+        """Pin or unpin a conversation and save it; False if it is unknown."""
+        conversation = self.get(conversation_id)
+        if conversation is None:
+            return False
+        conversation.pinned = pinned
+        try:
+            self.archive.save(conversation.to_record())
+        except OSError:
+            return False
+        return True
 
     def delete(self, conversation_id: str) -> bool:
         with self._lock:

@@ -320,6 +320,20 @@ Item {
                                     }
 
                                     PlasmaComponents3.ToolButton {
+                                        icon.name: "pin"
+                                        text: saved.modelData.pinned ? i18n("Unpin") : i18n("Pin: keep it at the top and never expire it")
+                                        display: QQC2.AbstractButton.IconOnly
+                                        checkable: true
+                                        checked: saved.modelData.pinned === true
+                                        visible: saved.hovered || saved.highlighted || checked
+                                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+                                        PlasmaComponents3.ToolTip.text: text
+                                        PlasmaComponents3.ToolTip.visible: hovered
+                                        onToggled: view.session.pinConversation(saved.modelData.id, checked)
+                                    }
+
+                                    PlasmaComponents3.ToolButton {
                                         icon.name: "edit-delete"
                                         text: i18n("Delete this conversation")
                                         display: QQC2.AbstractButton.IconOnly

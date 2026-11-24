@@ -7,6 +7,11 @@ and ``plasma-changeicons`` (in ``/usr/lib``). The current wallpaper is read
 through the Plasma shell's scripting interface so a change can be undone;
 the keyboard layout goes through ``org.kde.keyboard`` on the session DBus.
 
+Mice and touchpads (speed, natural scrolling, tap to click) are KWin's
+input devices on DBus (``/org/kde/KWin/InputDevice``), changed live as the
+Mouse and Touchpad pages do; key repeat is written to ``kcminputrc`` and
+KWin is asked to reload its settings.
+
 Wallpaper and the cursor and Plasma themes record their previous value in
 ``undo_journal`` (kinds ``wallpaper`` and ``theme``). Everything that
 changes is ``change``; the lists are ``read``.
@@ -124,6 +129,87 @@ def set_keyboard_layout(arguments: dict[str, Any]) -> str:
                       "in System Settings, Keyboard.")
 
 
+INPUT = ("org.kde.KWin", "/org/kde/KWin/InputDevice", "org.kde.KWin.InputDeviceManager")
+_INPUT_FIELDS = {"tap_to_click": ("tapToClick", "b"), "natural_scroll": ("naturalScroll", "b"),
+                 "pointer_speed": ("pointerAcceleration", "d")}
+
+
+def _input_devices() -> list[dict[str, Any]]:
+    names = session_dbus.properties(*INPUT).get("devicesSysNames") or []
+    devices = []
+    for sysname in names:
+        try:
+            state = session_dbus.properties("org.kde.KWin", f"/org/kde/KWin/InputDevice/{sysname}", "org.kde.KWin.InputDevice")
+        except session_dbus.DBusError:
+            continue
+        if state.get("pointer") or state.get("touchpad"):
+            devices.append({"sysname": sysname, **state})
+    return devices
+
+
+def _dbus_devices() -> list[dict[str, Any]]:
+    try:
+        return _input_devices()
+    except (session_dbus.DBusUnavailable, session_dbus.DBusError) as error:
+        raise ToolFailure(f"input devices are not available ({error})") from error
+
+
+def input_devices(arguments: dict[str, Any]) -> str:
+    lines = []
+    for device in _dbus_devices():
+        kind = "touchpad" if device.get("touchpad") else "mouse"
+        extra = [f"speed {device.get('pointerAcceleration', 0):+.1f}"]
+        if "naturalScroll" in device:
+            extra.append(f"natural scrolling {'on' if device['naturalScroll'] else 'off'}")
+        if device.get("touchpad") and "tapToClick" in device:
+            extra.append(f"tap to click {'on' if device['tapToClick'] else 'off'}")
+        lines.append(f"{device.get('name', device['sysname'])} ({kind}): {', '.join(extra)}")
+    return "\n".join(lines) or "No mouse or touchpad was found."
+
+
+def set_input_device(arguments: dict[str, Any]) -> str:
+    wanted = str(arguments.get("device") or "").strip().lower()
+    devices = _dbus_devices()
+    if wanted in ("touchpad", "mouse"):
+        chosen = [device for device in devices if bool(device.get("touchpad")) == (wanted == "touchpad")]
+    else:
+        chosen = [device for device in devices if wanted and wanted in str(device.get("name", "")).lower()]
+    if not chosen:
+        raise ToolFailure(f"no matching device. {input_devices({})}")
+    changes = {key: arguments[key] for key in _INPUT_FIELDS if arguments.get(key) is not None}
+    if not changes:
+        raise ToolFailure("give at least one of tap_to_click, natural_scroll, pointer_speed")
+    speed = changes.get("pointer_speed")
+    if speed is not None and (isinstance(speed, bool) or not isinstance(speed, (int, float)) or not -1 <= speed <= 1):
+        raise ToolFailure("'pointer_speed' must be a number from -1 (slowest) to 1 (fastest)")
+    for key in ("tap_to_click", "natural_scroll"):
+        if key in changes and not isinstance(changes[key], bool):
+            raise ToolFailure(f"'{key}' must be true or false")
+    for device in chosen:
+        for key, value in changes.items():
+            prop, signature = _INPUT_FIELDS[key]
+            if prop in device:
+                session_dbus.set_property("org.kde.KWin", f"/org/kde/KWin/InputDevice/{device['sysname']}",
+                                          "org.kde.KWin.InputDevice", prop, signature,
+                                          float(value) if signature == "d" else value)
+    return "Changed " + ", ".join(device.get("name", device["sysname"]) for device in chosen) + "."
+
+
+def set_key_repeat(arguments: dict[str, Any]) -> str:
+    delay, rate = arguments.get("delay_ms"), arguments.get("rate")
+    if delay is None and rate is None:
+        raise ToolFailure("give 'delay_ms' (100 to 2000), 'rate' (keys per second, 1 to 100), or both")
+    for name, value, low, high in (("delay_ms", delay, 100, 2000), ("rate", rate, 1, 100)):
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high):
+            raise ToolFailure(f"'{name}' must be a number from {low} to {high}")
+    for key, value in (("RepeatDelay", delay), ("RepeatRate", rate)):
+        if value is not None:
+            run_checked(["kwriteconfig6", "--file", "kcminputrc", "--group", "Keyboard", "--key", key, str(round(value))])
+    run_checked(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"])
+    return "Key repeat updated" + (f": delay {round(delay)} ms" if delay is not None else "") + \
+        (f", {round(rate)} per second" if rate is not None else "") + "."
+
+
 def appearance_tools() -> list[Tool]:
     return [
         Tool("set_wallpaper", "Set the desktop wallpaper to an image file.",
@@ -138,6 +224,16 @@ def appearance_tools() -> list[Tool]:
              object_schema({"kind": {"type": "string", "enum": ["cursor", "plasma", "icons"]},
                             "name": {"type": "string"}}, ["kind", "name"]), RISK_CHANGE, set_theme,
              summarize=lambda a: f"Switch the {a.get('kind', '?')} theme to {a.get('name', '?')}"),
+        Tool("input_devices", "Mice and touchpads with their speed, natural scrolling and tap-to-click.",
+             object_schema(), RISK_READ, input_devices, summarize=lambda a: "List mice and touchpads"),
+        Tool("set_input_device", "Change a mouse's or touchpad's speed, natural scrolling or tap-to-click.",
+             object_schema({"device": {"type": "string", "description": "touchpad, mouse, or part of its name"},
+                            "pointer_speed": {"type": "number", "description": "-1 slowest to 1 fastest"},
+                            "natural_scroll": {"type": "boolean"}, "tap_to_click": {"type": "boolean"}}, ["device"]),
+             RISK_CHANGE, set_input_device, summarize=lambda a: f"Change the {a.get('device', '?')} settings"),
+        Tool("set_key_repeat", "Set how soon a held key starts repeating and how fast it repeats.",
+             object_schema({"delay_ms": {"type": "number"}, "rate": {"type": "number"}}), RISK_CHANGE, set_key_repeat,
+             summarize=lambda a: "Change key repeat"),
         Tool("keyboard_layouts", "The configured keyboard layouts and which one is active.", object_schema(),
              RISK_READ, keyboard_layouts, summarize=lambda a: "List keyboard layouts"),
         Tool("set_keyboard_layout", "Switch to one of the configured keyboard layouts.",

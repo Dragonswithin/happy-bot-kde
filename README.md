@@ -106,11 +106,13 @@ Besides the bar and the settings above:
   more); "what did you do today?" is answered from the action log; after
   every answer the popup lists anything that was not done.
 - **Reminders, routines and notes**: "remind me at 4…", saved routines that
-  run by name, on a schedule or when a folder changes, quick notes and a
-  to-do list in Markdown files.
+  run by name, on a schedule, when a folder changes or when a drive is
+  plugged in, quick notes and a to-do list in Markdown files. Conversations
+  can be pinned in the sidebar to keep them.
 - **Desktop and devices**: media and sound devices, the phone through KDE
   Connect, Bluetooth, brightness, night light, Do Not Disturb, power
-  profiles, themes, keyboard layouts, printers, VPNs, removable drives,
+  profiles, themes, keyboard layouts, key repeat, mice and touchpads,
+  printers, VPNs, removable drives, the weather,
   default applications and autostart, virtual desktops, activities and
   saved window layouts.
 - **Files and documents**: archives, conversions, picture edits, PDF pages,

@@ -781,6 +781,17 @@ Findings:
 - Sending a text message (`send_sms`) and deleting saved routines, layouts or
   remembered facts are classed `danger`. SMS goes beyond the maintainer's two-part
   definition: a message to another person cannot be taken back.
+- A second round built weather (`tools/weather.py`, Open-Meteo), mice,
+  touchpads and key repeat (`appearance.py`), pinned conversations, routines
+  that run when a drive is plugged in (a service the drive's device unit
+  wants), finding a window by what it shows (`workspace.py`), opening
+  folders and terminals (`apps.py`), a digest of turns dropped from long
+  conversations (`conversation.trim_history`), media downloads with the
+  user's yt-dlp, and an Open button on the "finished" notification.
+  `desktop_actions.open_assistant_popup` opens the popup by invoking the
+  applet's "activate widget" shortcut action through KGlobalAccel; the maintainer saw
+  the popup open when it was tried. The maintainer also confirmed the popup's settings
+  gear works.
 - Neither configured model takes images or audio; OCR (`text_from_image`) is
   the image route for now. Image and voice input, and a local model to test
   them, are deferred by the maintainer to a later phase.

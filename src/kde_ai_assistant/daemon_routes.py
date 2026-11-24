@@ -36,6 +36,8 @@ Endpoints:
 - ``GET /conversation?id=...``: one conversation's display events, for the
   popup to redraw it.
 - ``POST /conversations/delete``: ``{"id": ...}`` or ``{"all": true}``.
+- ``POST /conversations/pin``: ``{"id": ..., "pinned": bool}``; pinned ones
+  are listed first and kept past ``history_days``.
 - ``GET /export`` / ``POST /import``: everything the assistant keeps for the
   user, without secrets (``personal_data``).
 - ``GET /tools/catalog`` / ``POST /tools/run``: the built-in tools lent to
@@ -349,6 +351,12 @@ def delete_conversations(server: "AssistantServer", query: dict[str, list[str]],
     return 200, {"ok": True, "deleted": 1}
 
 
+def pin_conversation(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    if not server.conversations.set_pinned(str(body.get("id") or ""), body.get("pinned") is True):
+        return _error(404, "That conversation is no longer saved.", "invalid")
+    return 200, {"ok": True}
+
+
 def approve(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     accepted = server.approvals.resolve(
         str(body.get("id") or ""), str(body.get("decision") or ""), bool(body.get("remember", False)))
@@ -466,6 +474,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/conversations"): list_conversations,
     ("GET", "/conversation"): get_conversation,
     ("POST", "/conversations/delete"): delete_conversations,
+    ("POST", "/conversations/pin"): pin_conversation,
     ("GET", "/check"): check,
     ("GET", "/spend"): spending,
     ("GET", "/tools/catalog"): tool_catalog,

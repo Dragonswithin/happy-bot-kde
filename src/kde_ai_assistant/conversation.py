@@ -83,11 +83,36 @@ def message_chars(message: Message) -> int:
     return size
 
 
+DIGEST_TURNS = 20
+DIGEST_CHARS = 160
+
+
+def _digest(dropped: list[list[Message]]) -> Message:
+    """A short system note of the turns left out: each request, the tools it used and how the answer began."""
+    lines = ["Earlier in this conversation (shortened to fit; the details are no longer available):"]
+    for turn in dropped[-DIGEST_TURNS:]:
+        request = next((message.text for message in turn if message.role == "user"), "")
+        tools = sorted({call.name for message in turn for call in message.tool_calls})
+        answer = next((message.text for message in reversed(turn) if message.role == "assistant" and message.text), "")
+        line = f"- The user asked: {' '.join(request.split())[:DIGEST_CHARS]}"
+        if tools:
+            line += f" (tools used: {', '.join(tools)})"
+        if answer:
+            line += f"; you answered: {' '.join(answer.split())[:DIGEST_CHARS]}"
+        lines.append(line)
+    if len(dropped) > DIGEST_TURNS:
+        lines.insert(1, f"- ({len(dropped) - DIGEST_TURNS} earlier requests not listed)")
+    return Message("system", "\n".join(lines))
+
+
 def trim_history(history: list[Message], context_window: int) -> list[Message]:
     """Drop the oldest whole user turns until the history fits about 70% of the window.
 
-    System messages and the most recent turn are always kept, so one oversized
-    turn is sent as is and the provider reports the failure.
+    The dropped turns are replaced by one short digest (``_digest``: each
+    request, its tools and the start of the answer) after the system
+    messages, so the model still knows what came before. System messages and
+    the most recent turn are always kept, so one oversized turn is sent as is
+    and the provider reports the failure.
     """
     budget = int(context_window * CHARS_PER_TOKEN * 0.7)
     system = [message for message in history if message.role == "system"]
@@ -98,6 +123,9 @@ def trim_history(history: list[Message], context_window: int) -> list[Message]:
             turns.append([])
         turns[-1].append(message)
     total = sum(message_chars(message) for message in history)
+    dropped: list[list[Message]] = []
     while len(turns) > 1 and total > budget:
-        total -= sum(message_chars(message) for message in turns.pop(0))
-    return system + [message for turn in turns for message in turn]
+        dropped.append(turns.pop(0))
+        total -= sum(message_chars(message) for message in dropped[-1])
+    digest = [_digest(dropped)] if dropped else []
+    return system + digest + [message for turn in turns for message in turn]

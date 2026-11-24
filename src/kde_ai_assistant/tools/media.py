@@ -9,6 +9,10 @@ Audio devices and application streams come from ``pactl``'s JSON output
 (``pactl --format=json``, served by PipeWire's PulseAudio layer), and the
 microphone is muted with ``wpctl`` like the output volume is.
 
+``download_media`` saves a video, or only its sound, from a web address into
+Downloads with the user's own ``yt-dlp`` (when installed), reporting its
+progress lines and recording each saved file for undo.
+
 Music in the user's Music folder is found by file and folder names: playing
 writes a temporary ``.m3u`` and opens it with the default player; a saved
 playlist goes to ``Music/Playlists`` (recorded for undo).
@@ -25,6 +29,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -292,6 +297,44 @@ def make_playlist(arguments: dict[str, Any]) -> str:
     return f"Saved the playlist {path} with {len(tracks)} tracks."
 
 
+def download_media(arguments: dict[str, Any]) -> str:
+    """Download a video or its sound from a web address with the user's yt-dlp, into Downloads."""
+    from .. import undo_journal
+    from ..agent_loop import user_folders
+    from .registry import cancel_requested, report_progress
+
+    url = str(arguments.get("url") or "").strip()
+    if not re.match(r"^https?://\S+$", url):
+        raise ToolFailure("'url' must be an http(s) web address")
+    program = shutil.which("yt-dlp")
+    if not program:
+        raise ToolFailure("yt-dlp is not installed, so media cannot be downloaded")
+    folder = Path(user_folders().get("Downloads", str(Path.home() / "Downloads")))
+    command = [program, "--no-playlist", "--newline", "--restrict-filenames", "-P", str(folder),
+               "--print", "after_move:filepath", "-o", "%(title)s.%(ext)s"]
+    if arguments.get("audio_only"):
+        command += ["-x", "--audio-format", "mp3"]
+    process = subprocess.Popen([*command, "--", url], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                               stdin=subprocess.DEVNULL, start_new_session=True)
+    saved, tail = [], []
+    for line in process.stdout:
+        line = line.strip()
+        if line.startswith(str(folder)) and os.path.exists(line):
+            saved.append(line)
+        elif line:
+            tail = (tail + [line])[-5:]
+            report_progress(line)
+        if cancel_requested():
+            process.kill()
+            raise ToolFailure("stopped at the user's request")
+    process.wait()
+    if process.returncode != 0 or not saved:
+        raise ToolFailure("the download failed: " + " | ".join(tail)[-500:])
+    for path in saved:
+        undo_journal.record("file_created", f"Downloaded {path}", {"path": path})
+    return "Saved " + ", ".join(saved) + "."
+
+
 def media_tools() -> list[Tool]:
     player = {"type": "string", "description": "Part of the player's name; default is the first running player"}
     return [
@@ -303,6 +346,10 @@ def media_tools() -> list[Tool]:
                                                           "include": {"type": "array", "items": {"type": "string"}}},
                                                          ["name", "include"]),
              RISK_CHANGE, make_playlist, summarize=lambda a: f"Make the playlist {a.get('name', '?')}"),
+        Tool("download_media", "Download a video, or only its sound as MP3, from a web address into Downloads "
+             "(with the user's yt-dlp).", object_schema({"url": {"type": "string"}, "audio_only": {"type": "boolean"}},
+                                                       ["url"]),
+             RISK_CHANGE, download_media, summarize=lambda a: f"Download {a.get('url', '?')}"),
         Tool("now_playing", "What each media player (including a connected phone) is playing: status, title, "
              "artist, album and position.", object_schema(), RISK_READ, now_playing,
              summarize=lambda a: "Check what is playing"),

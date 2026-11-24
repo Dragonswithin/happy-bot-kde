@@ -16,7 +16,8 @@ import org.kde.plasma.plasma5support as P5Support
  *
  * Routines: every entry of the daemon's `routines` setting (its meaning is in
  * src/kde_ai_assistant/routines.py), each with its request, an optional
- * schedule (systemd calendar syntax), an optional folder to watch, a pause
+ * schedule (systemd calendar syntax), an optional folder to watch, an
+ * optional drive label (it runs when that drive is plugged in), a pause
  * switch and Delete; a form adds one. Edits are saved when a field is left;
  * the daemon validates the schedule and keeps the routine's timers in step.
  * "Try it" runs the request as a dry run (`kde-ai-assistant ask --dry-run
@@ -168,6 +169,13 @@ Kirigami.FormLayout {
                         placeholderText: i18n("Or watch a folder, e.g. ~/Inbox")
                         onEditingFinished: section.update(routine.modelData, "watch_folder", text.trim())
                     }
+
+                    QQC2.TextField {
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 9
+                        text: routine.entry.drive_label || ""
+                        placeholderText: i18n("Or when this drive is plugged in")
+                        onEditingFinished: section.update(routine.modelData, "drive_label", text.trim())
+                    }
                 }
             }
         }
@@ -206,7 +214,8 @@ Kirigami.FormLayout {
             && section.routines[newName.text.trim()] === undefined
         onClicked: {
             const name = newName.text.trim();
-            const entry = { request: newRequest.text.trim(), schedule: newSchedule.text.trim(), watch_folder: "", enabled: true };
+            const entry = { request: newRequest.text.trim(), schedule: newSchedule.text.trim(), watch_folder: "",
+                            drive_label: "", enabled: true };
             section.page.save(function(settings) {
                 settings.routines = settings.routines || {};
                 settings.routines[name] = entry;

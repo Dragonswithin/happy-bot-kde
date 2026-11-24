@@ -78,23 +78,25 @@ text-only models and stays as an option afterwards.
 - ● Drag a result out to another app; drop files onto the bar to ask about
   them. (not tried by a person)
 - ✓ Follow-ups in the same thread ("now do the same for Pictures").
-- ◐ Pin a conversation; search across saved conversations. (earlier
-  conversations appear in quick results by title; pinning is deferred)
+- ● Pin a conversation; search across saved conversations. (pinned ones are
+  listed first and never expire; earlier conversations also appear in quick
+  results by title)
 - ● Continue a conversation from the CLI and back. (kde-ai-assistant history,
   ask --conversation)
-- ◐ A notification when a long task finishes (done for long requests);
-  clicking it reopens the thread. (reopening the thread from the notification
-  is deferred: Plasma gives a daemon no way to open an applet's popup)
+- ● A notification when a long task finishes (done for long requests);
+  clicking it reopens the thread. (its Open button opens the popup through the
+  applet's shortcut action, which the maintainer saw open the popup; the button itself
+  not yet clicked)
 - ● A global "ask about selection" shortcut: highlighted text in any app
   becomes the request's context. (Explain selected text, answered as a
   notification; KDE registers it at the next login, not yet verified)
 - ● A global "ask about this window" shortcut. (same entry; keys are assigned
   in System Settings)
-- ⏸ Compact answer cards for common results: weather, definition, conversion,
-  a file list with thumbnails. (the quick results cover conversions; richer
-  cards are deferred)
-- ◐ Markdown, code blocks with Copy, and tables in answers. (answers render
-  Markdown; a Copy button on code blocks is deferred)
+- ◐ Compact answer cards for common results: weather, definition, conversion,
+  a file list with thumbnails. (quick results show computed answers and conversions as
+  cards in the bar; richer cards in answers are deferred)
+- ◐ Markdown, code blocks with Copy, and tables in answers. (Markdown and a
+  Copy button for the whole answer; a Copy button per code block is deferred)
 - ● A KRunner plugin so the same assistant answers from KRunner. (checked live
   over DBus)
 - ⏸ Push-to-talk voice input through a speech-to-text endpoint the user
@@ -130,8 +132,8 @@ text-only models and stays as an option afterwards.
   (public addresses only, checked live)
 - ✓ Offline reference through MCP (for example ZIM archives) when there is no
   network or for privacy. (any MCP server the user connects)
-- ◐ Weather and sunrise/sunset for a configured location. (through the
-  web-search tool; no built-in weather service)
+- ● Weather and sunrise/sunset for a configured location. (Open-Meteo, no key;
+  off with local only)
 - ✓ Definitions, translation, spelling, synonyms. (the model, with web search
   when needed)
 - ● Explain an error message pasted into the bar or found in the journal.
@@ -151,8 +153,8 @@ text-only models and stays as an option afterwards.
 - ● "Close everything except Firefox", with unsaved work protected.
 - ⏸ Restore yesterday's window session. (Plasma's own session restore does
   this; saved layouts cover the rest)
-- ◐ Find a window by its content ("the window with the invoice"). (by title
-  and application; by content through ui_get_text)
+- ● Find a window by its content ("the window with the invoice"). (titles,
+  then what each window shows through its accessibility tree)
 - ✓ Arrange windows across several monitors. (arrange_window takes a screen)
 
 ## 5. System Settings And Hardware
@@ -169,8 +171,8 @@ text-only models and stays as an option afterwards.
 - ● Do Not Disturb with an end time ("quiet until 3pm").
 - ● Wallpaper, accent colour, fonts, cursor and icon theme. (fonts are
   deferred)
-- ◐ Keyboard layout, input methods, key repeat, touchpad settings. (switching
-  layouts; key repeat and touchpad stay with write_kde_setting)
+- ● Keyboard layout, input methods, key repeat, touchpad settings. (layouts,
+  key repeat, mouse and touchpad speed, natural scrolling, tap to click)
 - ● Printers: list, set default, show the queue, cancel a job.
 - ● VPN connect and disconnect through NetworkManager.
 - ● Battery health and charge limit on laptops. (health and charge; a charge
@@ -213,9 +215,9 @@ text-only models and stays as an option afterwards.
   cache.
 - ⏸ Pointer input and screenshot-and-click for models with vision. (see Image
   And Voice Input)
-- ◐ KDE apps through their DBus interfaces: Dolphin tabs, Kate at a line,
-  Okular at a page, Konsole tab with a command. (Kate at a line and Okular at
-  a page; Dolphin and Konsole through run_command)
+- ● KDE apps through their DBus interfaces: Dolphin tabs, Kate at a line,
+  Okular at a page, Konsole tab with a command. (Kate at a line, Okular at a
+  page, folders in Dolphin, a terminal in a folder)
 - ⏸ Browser control: open and list tabs, read the current page, through an
   extension or MCP. (needs a browser extension or an MCP server)
 - ◐ Fill a web or desktop form from saved personal details, with a preview.
@@ -281,16 +283,13 @@ text-only models and stays as an option afterwards.
 - ● Build a playlist from a description.
 - ⏸ Cast to a TV or speaker when a tool exists for it. (needs a casting tool
   server)
-- ⏸ Download audio or video from a URL when the user has a tool for it. (needs
-  a tool the user has)
-
-## 12. Automation And Routines
-
+- ● Download audio or video from a URL when the user has a tool for it. (with
+  the user's yt-dlp, into Downloads)
 - ● Scheduled requests ("every weekday at 8, summarise my calendar and the
   weather") as user systemd timers.
 - ◐ Triggers: a file appears, a device connects, the battery is low, a network
-  joins, a time arrives. (times and folders; devices, battery and networks are
-  deferred)
+  joins, a time arrives. (times, folders and a drive being plugged in; battery
+  and network changes need system-level hooks and are deferred)
 - ● Named routines ("start work" opens apps, applies a layout, sets Do Not
   Disturb). (a folder-watching routine ran end to end)
 - ● Save a successful multi-step request as a routine.
@@ -343,8 +342,8 @@ text-only models and stays as an option afterwards.
   would send data off the machine. (only a local fallback is used
   automatically)
 - ● Token and cost display for hosted models, and a monthly spend cap.
-- ◐ Context management: summarise long threads, trim large tool results. (long
-  conversations are trimmed and tool results cut; summarising is deferred)
+- ● Context management: summarise long threads, trim large tool results.
+  (dropped turns are replaced by a short digest; large tool results are cut)
 - ● Show which model answered each message.
 
 ## 16. Tools And Extensibility
@@ -357,8 +356,8 @@ text-only models and stays as an option afterwards.
   sources)
 - ● Per-tool enable and disable, and per-server risk overrides. (built-in
   groups and each server's tools)
-- ◐ Tool usage statistics: which tools the model uses and which fail.
-  (recent_activity reads the action log; no totals view)
+- ● Tool usage statistics: which tools the model uses and which fail.
+  (tool_usage totals the action log)
 - ● Offer the assistant's desktop tools as an MCP server to other agents,
   under the same approval rules. (kde-ai-assistant mcp-serve)
 - ● Small Python tools dropped into a folder as plugins.
@@ -391,7 +390,8 @@ text-only models and stays as an option afterwards.
   installer restarts it and says to reload the panel)
 - ● An evaluation run of the acceptance scenarios against a chosen model, with
   timings and pass/fail. (8 of 8 passed live on the local GPU model)
-- ⏸ Tell the user when a single-slot model is busy with another client.
+- ● Tell the user when a single-slot model is busy with another client. (a
+  notice when every slot of a local service is busy)
 
 ## 19. Install, Setup And Reach
 
@@ -401,7 +401,8 @@ text-only models and stays as an option afterwards.
   (an Arch PKGBUILD builds from the checkout; publishing to the AUR, the KDE
   Store or Flatpak is deferred)
 - ● Move settings between machines through an export file.
-- ⏸ Translations through i18n catalogues.
+- ◐ Translations through i18n catalogues. (Messages.sh extracts the 291 applet
+  strings for translators; no translations exist yet)
 - ◐ Accessibility of the assistant's own UI: screen-reader labels, high
   contrast, full keyboard use. (every icon button has a text label for screen
   readers; a full review is deferred)

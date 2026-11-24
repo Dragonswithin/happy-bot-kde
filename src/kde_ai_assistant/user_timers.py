@@ -6,7 +6,9 @@ must survive a reboot, so each is a pair of unit files in the user's systemd
 directory (``$XDG_CONFIG_HOME/systemd/user``): a ``.service`` that does the
 work and a ``.timer`` (``OnCalendar=``, ``Persistent=true`` so a time missed
 while the computer was off fires at the next start) or ``.path``
-(``PathChanged=``) that starts it. Every unit this project writes is named
+(``PathChanged=``) that starts it, or, for a device, a service the device's
+own unit wants (it starts when the device is plugged in; ``device_unit``
+names the unit as ``systemd-escape --path`` would). Every unit this project writes is named
 ``kde-ai-assistant-<kind>-<id>`` and carries ``X-KdeAiAssistant=`` in its
 ``[Unit]`` section, so nothing else in the directory is ever touched.
 
@@ -68,6 +70,20 @@ def check_calendar(expression: str) -> str:
     return (completed.stderr.strip().splitlines() or ["not a valid schedule"])[-1]
 
 
+def device_unit(path: str) -> str:
+    """systemd's ``.device`` unit name for a device path, as ``systemd-escape --path`` makes it."""
+    escaped = []
+    for index, part in enumerate(path.strip("/").split("/")):
+        out = ""
+        for position, character in enumerate(part):
+            if character.isascii() and (character.isalnum() or character in ":_" or (character == "." and position)):
+                out += character
+            else:
+                out += "".join(f"\\x{byte:02x}" for byte in character.encode())
+        escaped.append(out)
+    return "-".join(escaped) + ".device"
+
+
 def unit_name(kind: str, ident: str) -> str:
     return PREFIX + kind + "-" + re.sub(r"[^A-Za-z0-9_-]", "-", ident)
 
@@ -80,13 +96,19 @@ def write_units(
     trigger: str,
     trigger_value: str,
 ) -> None:
-    """Write ``<name>.service`` and its trigger: ``timer`` (``OnCalendar``) or ``path`` (``PathChanged``)."""
+    """Write ``<name>.service`` and its trigger: ``timer`` (``OnCalendar``), ``path`` (``PathChanged``), or
+    ``device`` (no trigger file: the service is wanted by the device unit ``trigger_value``, so it starts
+    when that device appears)."""
     unit_dir.mkdir(parents=True, exist_ok=True)
     one_line = description.replace("\n", " ")[:200].replace("%", "%%")  # % starts a systemd specifier
+    after = f"After={trigger_value}\n" if trigger == "device" else ""
+    install = f"\n[Install]\nWantedBy={trigger_value}\n" if trigger == "device" else ""
     (unit_dir / f"{name}.service").write_text(
-        f"[Unit]\nDescription={one_line}\n{MARKER}=yes\n\n"
-        f"[Service]\nType=oneshot\nExecStart={' '.join(quote_exec(part) for part in exec_start)}\n",
+        f"[Unit]\nDescription={one_line}\n{MARKER}=yes\n{after}\n"
+        f"[Service]\nType=oneshot\nExecStart={' '.join(quote_exec(part) for part in exec_start)}\n{install}",
         encoding="utf-8")
+    if trigger == "device":
+        return
     if trigger == "timer":
         body = f"[Timer]\nOnCalendar={trigger_value}\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
     elif trigger == "path":

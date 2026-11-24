@@ -39,7 +39,8 @@ abilities they switched off go into a new conversation's system prompt, the
 switched-off tool groups are left out of the registry, and ``max_steps``
 caps the model requests. A turn that takes longer than
 ``notify_after_seconds`` (0: never) ends with a desktop notification, so the
-user learns it finished even with the popup closed.
+user learns it finished even with the popup closed; its Open button opens
+the popup again.
 
 Models: a priced model is refused once this month's spending reaches
 ``agent.monthly_spend_cap`` (``spend``). Every finished turn's tokens and
@@ -65,10 +66,12 @@ from __future__ import annotations
 import copy
 import json
 import shutil
+import threading
 import urllib.request
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
+from . import desktop_actions
 from . import settings as settings_store
 from . import spend
 from .agent_loop import run_turn, system_prompt
@@ -240,7 +243,22 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
 
 
 def notify_finished(title: str) -> None:
-    """Desktop notification that a long request finished; failures are ignored."""
-    if shutil.which("notify-send"):
-        run_command(["notify-send", "--app-name=AI Assistant", "--icon=tools-wizard", "--",
-                     "The assistant finished", title or "Your request is done."], timeout=5)
+    """Desktop notification that a long request finished, with an Open button; failures are ignored.
+
+    ``notify-send --wait`` blocks until the notification is used or closed,
+    so it runs on its own thread; choosing Open opens the popup on the
+    conversation (``desktop_actions.open_assistant_popup``).
+    """
+    if not shutil.which("notify-send"):
+        return
+
+    def show() -> None:
+        result = run_command(["notify-send", "--app-name=AI Assistant", "--icon=tools-wizard", "--action=open=Open",
+                              "--wait", "--", "The assistant finished", title or "Your request is done."], timeout=3600)
+        if result.get("stdout", "").strip() == "open":
+            try:
+                desktop_actions.open_assistant_popup()
+            except desktop_actions.DesktopActionError:
+                pass
+
+    threading.Thread(target=show, name="finished-notification", daemon=True).start()

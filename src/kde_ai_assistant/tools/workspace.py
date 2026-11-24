@@ -14,7 +14,11 @@ the model can start them and restore again. The layout tools change
 settings, so like the routine tools they are built with the daemon's
 ``read_settings`` and ``update_settings`` (``layout_tools``).
 
-Risk: listing is ``read``; everything else is ``change``. Closing windows
+``find_window_with_text`` looks for words in window titles and then in what
+each window shows, read through the accessibility tree (``accessibility``,
+at most ``MAX_SEARCHED_WINDOWS`` windows).
+
+Risk: listing and finding are ``read``; everything else is ``change``. Closing windows
 asks each application to close, so ones with unsaved work show their own
 prompt; deleting a saved layout is ``danger``.
 """
@@ -233,6 +237,32 @@ def layout_tools(read_settings: Callable[[], dict[str, Any]], update_settings) -
     ]
 
 
+MAX_SEARCHED_WINDOWS = 15
+
+
+def find_window_with_text(arguments: dict[str, Any]) -> str:
+    """Windows whose title, or any text their application shows, contains the words."""
+    from .. import accessibility
+
+    wanted = " ".join(str(arguments.get("text") or "").split()).lower()
+    if len(wanted) < 2:
+        raise ToolFailure("'text' is required: words that appear in the window")
+    found = []
+    for window in _kwin(kwin_bridge.LIST_WINDOWS_JS)[:MAX_SEARCHED_WINDOWS]:
+        if wanted in f"{window['title']} {window['app']}".lower():
+            found.append(f"id {window['id']}  {window['app']}  \"{window['title']}\"  (in its title)")
+            continue
+        try:
+            snapshot = accessibility.take_snapshot(int(window["pid"]), window["title"])
+        except Exception:  # noqa: BLE001 - an app without an accessibility tree is simply skipped
+            continue
+        hit = next((element for element in snapshot.elements if wanted in f"{element.name} {element.value}".lower()), None)
+        if hit is not None:
+            shown = (hit.value or hit.name)[:80]
+            found.append(f"id {window['id']}  {window['app']}  \"{window['title']}\"  (shows: {shown})")
+    return "\n".join(found) or f"No open window shows '{wanted}'."
+
+
 def workspace_tools() -> list[Tool]:
     return [
         Tool("list_workspaces", "Virtual desktops and activities, and which are current.", object_schema(),
@@ -246,6 +276,9 @@ def workspace_tools() -> list[Tool]:
              object_schema({"action": {"type": "string", "enum": ["switch", "create"]}, "name": {"type": "string"}},
                            ["action", "name"]), RISK_CHANGE, activity_action,
              summarize=lambda a: f"Activity: {a.get('action', '?')} {a.get('name', '')}"),
+        Tool("find_window_with_text", "Find the open window that shows some text (in its title or its "
+             "contents), for example 'the window with the invoice'.", object_schema({"text": {"type": "string"}}, ["text"]),
+             RISK_READ, find_window_with_text, summarize=lambda a: f"Look for the window showing '{a.get('text', '?')}'"),
         Tool("show_desktop", "Minimise everything to show the desktop, or bring the windows back.",
              object_schema({"show": {"type": "boolean"}}), RISK_CHANGE, show_desktop,
              summarize=lambda a: "Show the desktop" if a.get("show", True) else "Bring the windows back"),
