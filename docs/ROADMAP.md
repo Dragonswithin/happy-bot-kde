@@ -668,7 +668,10 @@ his decision.
   field (`PanelBar.qml`), and the popup then only shows results, as a
   tooltip-type window that never takes focus. The icon stays the default
   and vertical panels always use it. It loads without QML errors in
-  `plasmawindowed`; not yet tried by a person in a real panel.
+  `plasmawindowed`; not yet tried by a person in a real panel. At the
+  maintainer's request the logo at the bar's left end is a button of its
+  own: a click opens the popup on the current conversation and the saved
+  ones with nothing typed, and a second click closes it.
 - File matches and the conversation take turns in the popup instead of
   sharing it; saved conversations are listed in a sidebar and kept for
   `history_days` (default 30) in `$XDG_DATA_HOME/happy-bot`.

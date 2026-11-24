@@ -31,6 +31,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `selectionMove(delta)`: Down (+1) or Up (-1).
  * - `completeRequested`: Tab, to complete the text from the top result.
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
+ * - `iconClicked`: a left click on the logo at the bar's left end. It works
+ *   with nothing typed, so saved conversations are always one click away.
  * - `menuRequested`: a right-click anywhere on the bar. The text field
  *   would otherwise swallow it, so Plasma's own widget menu never appears.
  * - `inputFocusedChanged`: so the popup can close when focus leaves,
@@ -74,6 +76,7 @@ Item {
     signal completeRequested()
     signal dismissed()
     signal menuRequested()
+    signal iconClicked()
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * widthInGridUnits
     Layout.preferredWidth: Layout.minimumWidth
@@ -152,5 +155,24 @@ Item {
         acceptedButtons: Qt.RightButton
         cursorShape: Qt.IBeamCursor
         onClicked: bar.menuRequested()
+    }
+
+    // The logo is a button of its own, above the click-to-type areas; right
+    // clicks fall through to the menu area below.
+    MouseArea {
+        x: field.x
+        width: icon.width + Kirigami.Units.smallSpacing * 2
+        height: parent.height
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: bar.iconClicked()
+        Accessible.role: Accessible.Button
+        Accessible.name: i18n("Show conversations")
+        Accessible.onPressAction: bar.iconClicked()
+
+        QQC2.ToolTip.text: i18n("Show conversations")
+        QQC2.ToolTip.visible: containsMouse
+        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
 }

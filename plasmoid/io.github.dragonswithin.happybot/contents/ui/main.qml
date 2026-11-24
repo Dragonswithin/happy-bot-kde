@@ -34,8 +34,11 @@ import "barInput.js" as BarInput
  *   its blue panel focus indicator; the user accepted that by choosing this
  *   form. The popup is visible while the bar has focus and there is
  *   something to show (matches, a search problem, or a conversation opened
- *   by submitting a request or pressing Enter in the empty bar). Focusing
- *   the bar alone opens nothing, unless an action waits for approval.
+ *   by submitting a request or pressing Enter in the empty bar, or by
+ *   clicking the logo at the bar's left end, which shows the current and
+ *   saved conversations with nothing typed and closes them on a second
+ *   click). Focusing the bar alone opens nothing, unless an action waits
+ *   for approval.
  *   Leaving the bar hides the popup and keeps the typed text; Escape on an
  *   empty bar, or the close button, closes the conversation.
  * - What the popup shows. Files and the conversation take turns (see
@@ -179,6 +182,7 @@ PlasmoidItem {
         onCompleteRequested: root.completeFromTop()
         onDismissed: root.closePopup()
         onMenuRequested: contextMenu.openRelative()
+        onIconClicked: root.toggleConversationsFromBar()
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
@@ -257,6 +261,20 @@ PlasmoidItem {
         const focused = root.fullRepresentationItem ? root.fullRepresentationItem.inputFocused : false;
         const somethingToShow = root.conversationOpen || session.hits.length > 0 || session.searchError.length > 0;
         popup.visible = focused && somethingToShow;
+    }
+
+    /** Search-bar form, the logo: show the conversation and saved ones with nothing typed, or close them. */
+    function toggleConversationsFromBar() {
+        if (popup.visible && root.conversationOpen) {
+            root.closePopup();
+            return;
+        }
+        root.conversationOpen = true;
+        session.refreshHistory();
+        // The popup shows only while the bar has focus, so take it; focusing
+        // runs updateBarPopup, which now has the conversation to show.
+        root.focusBar();
+        root.updateBarPopup();
     }
 
     function focusBar() {
