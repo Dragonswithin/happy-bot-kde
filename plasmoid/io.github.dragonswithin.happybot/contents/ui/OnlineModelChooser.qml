@@ -19,9 +19,12 @@ import org.kde.kirigami as Kirigami
  * src/happy_bot/model_presets.py): each with a plain description, where the
  * user's words go, the page where its keys are made, short directions, and
  * suggested models (a strong one and a fast one). Pasting a key asks the
- * service which models it offers (`POST /models/probe`); the suggested ones
- * are listed first, and the box also takes a model id typed by hand, for a
- * service that does not list its models. "Add and test" sends
+ * service which models it offers (`POST /models/probe`). Step 3 shows the
+ * service's suggested models as plain choices, the first picked; "Another
+ * model…" opens a search field over the service's own list, kept short
+ * (eight rows that scroll) and without models that cannot chat (speech,
+ * transcription, pictures, embeddings), and takes a model name typed by
+ * hand for a service that does not list its models. "Add and test" sends
  * `POST /models/use` (src/happy_bot/model_setup.py), which adds the model,
  * makes it the one asked first when "Ask this one first" is ticked, and
  * tests it; on success `added(name, message)` is emitted, on failure the
@@ -42,13 +45,20 @@ ColumnLayout {
     property bool loadingModels: false
     property bool adding: false
     property string error: ""
-    readonly property var modelChoices: {
-        if (!selected) {
-            return [];
-        }
-        const suggested = selected.models.map(item => item.id);
-        const listed = offered.filter(id => suggested.indexOf(id) === -1).sort();
-        return suggested.concat(listed);
+    // The model that will be added: a suggested one, or with "Another model" one from the list or typed.
+    property string chosenId: ""
+    property bool otherModel: false
+    property string search: ""
+    // Services list every model they have, including ones that cannot chat (speech, transcription,
+    // pictures, embeddings); those are left out of "Another model".
+    readonly property var chatModels: {
+        const notChat = /(tts|transcri|whisper|embed|image|dall-e|audio|realtime|moderation|speech|diariz|vision-preview|search-preview|computer-use|codex-mini)/i;
+        const suggested = selected ? selected.models.map(item => item.id) : [];
+        return offered.filter(id => !notChat.test(id) && suggested.indexOf(id) === -1).sort();
+    }
+    readonly property var shownModels: {
+        const words = search.trim().toLowerCase();
+        return words.length === 0 ? chatModels : chatModels.filter(id => id.toLowerCase().indexOf(words) !== -1);
     }
 
     signal added(string name, string message)
@@ -59,12 +69,11 @@ ColumnLayout {
         chooser.selectedId = id;
         chooser.offered = [];
         chooser.error = "";
+        chooser.otherModel = false;
+        chooser.search = "";
         keyField.text = "";
-    }
-
-    function labelFor(id) {
-        const suggested = chooser.selected ? chooser.selected.models.find(item => item.id === id) : null;
-        return suggested ? i18n("%1 (%2)", id, suggested.label) : id;
+        const preset = chooser.presets.find(item => item.id === id);
+        chooser.chosenId = preset && preset.models.length > 0 ? preset.models[0].id : "";
     }
 
     function loadModels() {
@@ -92,7 +101,7 @@ ColumnLayout {
         chooser.adding = true;
         chooser.error = "";
         chooser.page.client.request("POST", "/models/use", {
-            preset: chooser.selectedId, api_key: keyField.text.trim(), model: modelBox.editText.trim(),
+            preset: chooser.selectedId, api_key: keyField.text.trim(), model: chooser.chosenId.trim(),
             job: askFirst.checked ? "main" : "none"
         }, function(data) {
             chooser.adding = false;
@@ -187,17 +196,31 @@ ColumnLayout {
             font.weight: Font.Bold
         }
 
+        // The service's suggested models, each one choice; the first is a good start.
+        Repeater {
+            model: chooser.selected ? chooser.selected.models : []
+
+            QQC2.RadioButton {
+                required property var modelData
+                text: i18n("%1 (%2)", modelData.id, modelData.label)
+                checked: !chooser.otherModel && chooser.chosenId === modelData.id
+                onToggled: if (checked) {
+                    chooser.otherModel = false;
+                    chooser.chosenId = modelData.id;
+                }
+            }
+        }
+
         RowLayout {
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.ComboBox {
-                id: modelBox
-                Layout.minimumWidth: Kirigami.Units.gridUnit * 16
-                editable: true
-                model: chooser.modelChoices.map(id => chooser.labelFor(id))
-                // The list shows labels ("id (Strong)"); choosing one puts its plain id in the box, which is what is sent.
-                onActivated: index => editText = chooser.modelChoices[index]
-                onModelChanged: if (chooser.modelChoices.length > 0) editText = chooser.modelChoices[0]
+            QQC2.RadioButton {
+                text: i18n("Another model…")
+                checked: chooser.otherModel
+                onToggled: if (checked) {
+                    chooser.otherModel = true;
+                    chooser.chosenId = otherField.text.trim();
+                }
             }
 
             QQC2.BusyIndicator {
@@ -208,12 +231,60 @@ ColumnLayout {
             }
         }
 
-        QQC2.Label {
+        ColumnLayout {
+            visible: chooser.otherModel
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("The first one is a good start. You can also type the name of another model.")
+            Layout.leftMargin: Kirigami.Units.gridUnit
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.SearchField {
+                id: otherField
+                Layout.fillWidth: true
+                placeholderText: i18n("Search, or type the model's exact name")
+                onTextChanged: {
+                    chooser.search = text;
+                    chooser.chosenId = text.trim();
+                }
+            }
+
+            QQC2.Label {
+                visible: chooser.offered.length === 0
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font: Kirigami.Theme.smallFont
+                opacity: 0.7
+                text: i18n("Paste your key above to see the models this service offers, or type a model's name.")
+            }
+
+            // A short list that scrolls, so a service with hundreds of models stays readable.
+            QQC2.ScrollView {
+                visible: chooser.shownModels.length > 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(chooser.shownModels.length, 8) * Kirigami.Units.gridUnit * 2
+                clip: true
+
+                ListView {
+                    model: chooser.shownModels
+                    delegate: QQC2.ItemDelegate {
+                        required property string modelData
+                        width: ListView.view.width
+                        height: Kirigami.Units.gridUnit * 2
+                        text: modelData
+                        highlighted: chooser.chosenId === modelData
+                        onClicked: {
+                            otherField.text = modelData;
+                            chooser.chosenId = modelData;
+                        }
+                    }
+                }
+            }
+
+            QQC2.Label {
+                visible: chooser.offered.length > 0
+                font: Kirigami.Theme.smallFont
+                opacity: 0.7
+                text: i18np("%1 model that can chat", "%1 models that can chat", chooser.chatModels.length)
+            }
         }
 
         QQC2.CheckBox {
@@ -230,7 +301,7 @@ ColumnLayout {
                 text: chooser.adding ? i18n("Adding and testing…") : i18n("Add and test")
                 icon.name: "dialog-ok-apply"
                 highlighted: true
-                enabled: !chooser.adding && keyField.text.trim().length > 0 && modelBox.editText.trim().length > 0
+                enabled: !chooser.adding && keyField.text.trim().length > 0 && chooser.chosenId.trim().length > 0
                 onClicked: chooser.add()
             }
 
