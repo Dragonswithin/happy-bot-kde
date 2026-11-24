@@ -27,7 +27,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import __version__, settings as settings_store, user_timers
+from . import __version__, input_portal, settings as settings_store, user_timers
 from .mcp_client import McpError
 from .providers import ProviderError
 from .providers.openai_compatible import list_models
@@ -77,10 +77,11 @@ def _tool_servers(server: "AssistantServer") -> list[dict[str, Any]]:
 
 def _roles(server: "AssistantServer") -> list[dict[str, Any]]:
     results = []
-    for role, label in (("file_search", "File search"), ("web_search", "Web search")):
+    for role, label, row in (("file_search", "File search", "Files"), ("web_search", "Web search", "Web")):
         config = server.settings["roles"].get(role)
         if not config:
-            results.append(_check(label, False, "Not set up.", "Choose a tool for it under Search & Tools."))
+            results.append(_check(label, False, "Not set up.",
+                                  f"On the Search & Tools page, press Set up next to {row}."))
             continue
         try:
             names = [tool["name"] for tool in server.mcp.list_tools(config["server"])]
@@ -113,10 +114,11 @@ def _routines(server: "AssistantServer") -> dict[str, Any]:
 def run_checks(server: "AssistantServer") -> list[dict[str, Any]]:
     """Every check, in the order a user would fix them (see module docstring)."""
     results = [_model(server.settings), *_tool_servers(server), *_roles(server)]
-    token = settings_store.config_dir() / "keyboard-portal-token"
-    results.append(_check("Typing into other apps", token.exists(),
-                          "Consent is saved." if token.exists() else "The desktop has not been asked yet.",
-                          "Ask the assistant to type something once and allow it when Plasma asks."))
+    allowed = input_portal.consent_saved()
+    results.append(_check("Typing into other apps", allowed,
+                          "Allowed." if allowed else "Not allowed yet.",
+                          "On the Behaviour page, press Allow next to Typing into other apps, then choose "
+                          "Allow when Plasma asks."))
     applet = _applet_version()
     results.append(_check("Panel applet", applet == __version__,
                           f"applet {applet or 'not installed'}, assistant {__version__}",

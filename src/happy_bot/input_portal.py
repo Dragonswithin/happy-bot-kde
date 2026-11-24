@@ -10,7 +10,9 @@ The portal needs the user's consent. The first ``start`` shows the desktop's
 "allow remote control" dialog; the grant is stored by the portal against a
 restore token, which this module saves (0600) in the configuration directory
 and presents on later starts so the dialog does not reappear. Declining
-raises ``InputUnavailable`` and nothing is sent.
+raises ``InputUnavailable`` and nothing is sent. ``consent_saved`` reports
+whether such a grant is stored, for the self-check and the settings page,
+whose "Allow…" button calls ``start`` early (``POST /typing/allow``).
 
 Keys are sent as keysyms (``NotifyKeyboardKeysym``), so no keyboard-layout
 mapping is needed here: the compositor finds the key for each symbol.
@@ -226,11 +228,20 @@ _shared: KeyboardPortal | None = None
 _shared_lock = threading.Lock()
 
 
+def token_path() -> Path:
+    from .settings import config_dir
+
+    return config_dir() / "keyboard-portal-token"
+
+
+def consent_saved() -> bool:
+    """Whether the user has allowed keyboard control and the portal gave a token to reuse."""
+    return token_path().exists()
+
+
 def shared() -> KeyboardPortal:
     global _shared
     with _shared_lock:
         if _shared is None:
-            from .settings import config_dir
-
-            _shared = KeyboardPortal(config_dir() / "keyboard-portal-token")
+            _shared = KeyboardPortal(token_path())
         return _shared

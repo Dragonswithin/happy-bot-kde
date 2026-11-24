@@ -16,8 +16,11 @@ import org.kde.kirigami as Kirigami
  * offers the servers the user already set up for other AI programs, and a
  * form to connect one by hand.
  *
- * Each role row has "Change…", which opens RoleEditor.qml to pick the server,
- * tool, query argument and result count by hand. Each connected server has a
+ * Each role row has "Set up" ("Choose another…" once set up), which opens
+ * RoleChooser.qml: the choices that can do the job on this computer, best
+ * first, each used with one press and a test search. "By hand…" opens
+ * RoleEditor.qml to pick the server, tool, query argument and result count
+ * instead. Each connected server has a
  * details button that opens ToolServerDetails.qml (running, read-only, start
  * command, environment, allowed tools). "Connect by hand…" opens
  * AddToolServer.qml. Editors are created only when opened, because listing a
@@ -92,6 +95,7 @@ Kirigami.FormLayout {
         required property string role
         readonly property var config: section.roles[role]
         property bool editing: false
+        property bool choosing: false
 
         spacing: Kirigami.Units.smallSpacing
 
@@ -129,10 +133,41 @@ Kirigami.FormLayout {
             }
 
             QQC2.Button {
-                text: i18n("Change…")
+                text: roleRow.config ? i18n("Choose another…") : i18n("Set up")
+                icon.name: roleRow.config ? "" : "dialog-ok-apply"
+                highlighted: !roleRow.config
+                checkable: true
+                checked: roleRow.choosing
+                onToggled: {
+                    roleRow.choosing = checked;
+                    if (checked) {
+                        roleRow.editing = false;
+                    }
+                }
+            }
+
+            QQC2.ToolButton {
+                text: i18n("By hand…")
                 checkable: true
                 checked: roleRow.editing
-                onToggled: roleRow.editing = checked
+                onToggled: {
+                    roleRow.editing = checked;
+                    if (checked) {
+                        roleRow.choosing = false;
+                    }
+                }
+            }
+        }
+
+        Loader {
+            active: roleRow.choosing
+            visible: active
+            Layout.leftMargin: Kirigami.Units.gridUnit
+
+            sourceComponent: RoleChooser {
+                page: section.page
+                role: roleRow.role
+                onDone: roleRow.choosing = false
             }
         }
 

@@ -299,6 +299,9 @@ src/happy_bot/
     mcp_client.py       stdio MCP sessions, child-process supervision
     mcp_discovery.py    finds tool servers in other programs' configs
     tool_roles.py       file_search / web_search role mapping and proposals
+    search_choices.py   what can do file or web search here, for "Set up"
+    search_setup.py     uses one choice: adds it, assigns the job, tests it
+    file_index_server.py  built-in MCP server over KDE's index or plocate
     instant_search.py   no-model query path to the file_search tool
     desktop_actions.py  actions on the desktop, starting with opening things
     settings.py         config file, secret lookup
@@ -368,6 +371,28 @@ fresh user account with no prior configuration.
 *Exit:* on a fresh account, one install command plus first-run setup reaches
 a passing acceptance run with no file edited by hand. **This completes the
 first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
+
+**Phase 7: Effortless setup, then the half-done backlog** (placed by the
+maintainer on 2026-11-23, in this order).
+
+1. Setup an 8-year-old can do: one press sets up file search and web
+   search, picking from what the computer already has and verified
+   suggestions; one press asks Plasma's permission for typing into other
+   apps; every self-check fix names the button that fixes it.
+2. Answer cards and Markdown (§1): richer cards in answers (weather,
+   definition, conversion, file lists) and a Copy button per code block.
+3. A model per task (§15): a fast model for small actions and a strong one
+   for long tasks, chosen automatically.
+4. Install and update polish (§8): official sources first with a real
+   install verified, and system update with reboot detection.
+5. Packaging, translations and accessibility (§19): publish the AUR
+   package, ship translation catalogues, and review the UI for screen
+   readers, contrast and keyboard use.
+
+*Exit:* on a fresh account with only a model chosen, an 8-year-old's path
+works: Set up next to Files, Set up next to Web, Allow typing, each one press
+with no typing except an API key the user chooses to use; then each later
+item passes its own check recorded under Phase 7 findings.
 
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
@@ -808,6 +833,36 @@ Findings:
   the image route for now. Image and voice input, and a local model to test
   them, are deferred by the maintainer to a later phase.
 
+**Phase 7 (started 2026-11-23).**
+
+- One-press search setup: "Set up" next to Files and Web lists choices best
+  first (`search_choices.py`) and "Use this" adds the tool, gives it the job
+  and runs a test search, undoing everything if the test fails
+  (`search_setup.py`). Choices: servers already set up for other AI
+  programs that pass a test search; KDE's file index and the plocate
+  database through `happy-bot file-index-serve` (`file_index_server.py`);
+  for the web, a SearXNG found on this computer, DuckDuckGo (no key), Brave
+  and Tavily (keys). The suggested packages were checked on npm and PyPI and
+  started once to read their tool names; their versions are pinned.
+- Findings from trying it against a throwaway daemon with empty settings:
+  the wording guess offered an offline-encyclopedia server (openzim) for
+  file search because its description mentions documents, so a found server
+  must now return at least one path that exists on this computer. A port
+  that speaks SSH broke the SearXNG probe until HTTP protocol errors were
+  caught. plocate's database does not cover `/home` on this machine (a
+  separate btrfs subvolume), so the file-names choice is offered only when
+  the database reaches the user's home.
+- Verified on that daemon: DuckDuckGo and the maintainer's own file index
+  were set up with one press each and the bar's file search returned real
+  files; a missing API key was refused before anything changed; a wrong
+  SearXNG address failed its test and left the previous web search in
+  place; KDE's file index was set up through the installed command. Not
+  verified: switching KDE's file index on from the button (it was left off
+  on the maintainer's account), and the settings page driven by a person.
+- Typing permission: the Behaviour page shows whether typing into other
+  apps is allowed and an "Allow…" button that shows Plasma's question now
+  (`POST /typing/allow`). Not yet pressed by a person.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
@@ -819,6 +874,13 @@ Findings:
   sidebar.
 - File search and web search use the user's existing index and search tools
   through MCP; this project does not build its own index or search engine.
+  Amended by the maintainer on 2026-11-23: setup also offers the indexes the
+  computer already keeps (KDE's file index, the plocate file-name database)
+  through a small built-in MCP server, `happy-bot file-index-serve`, so file
+  search works on a fresh account. It reads those indexes; it builds none.
+- Setup must be easy enough for an 8-year-old (the maintainer, 2026-11-23):
+  one obvious button per job, plain words, the recommended choice marked,
+  and a test that proves it works before anything is kept.
 - It must install and configure in one go and behave as one app.
 - The local file index used in development was changed for this project (the maintainer, 2026-11-22: "the point of
   the index was to support this project"). It now embeds local document

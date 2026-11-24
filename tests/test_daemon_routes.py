@@ -191,7 +191,7 @@ class RouteTests(unittest.TestCase):
                          (False, "Choose or add one on the AI Model page."))
         self.assertTrue(checks["Tool server fake"]["ok"])
         self.assertTrue(checks["File search"]["ok"])
-        self.assertIn("Choose a tool", checks["Web search"]["fix"])
+        self.assertIn("press Set up next to Web", checks["Web search"]["fix"])
         self.assertTrue(all(item["ok"] or item["fix"] for item in reply["checks"]))
 
     def test_settings_read_offers_choices_and_agent_settings_round_trip(self) -> None:

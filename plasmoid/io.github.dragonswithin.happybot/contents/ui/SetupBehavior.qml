@@ -22,6 +22,11 @@ import org.kde.kirigami as Kirigami
  *   off is stored in `agent.disabled_tool_groups` and never offered to the
  *   model (src/happy_bot/tools/catalog.py). Reading the desktop and
  *   the user's connected tools are not switched here.
+ * - Typing into other apps: whether the desktop lets the assistant send
+ *   key presses (`GET /typing`), and "Allow…", which shows Plasma's
+ *   permission question now (`POST /typing/allow`, src/happy_bot/input_portal.py)
+ *   instead of in the middle of a request. `typingAllowed` is the only
+ *   state this section keeps, read when it opens.
  * - Extras: `agent.load_plugins` (tools from the user's plugin files,
  *   src/happy_bot/tools/plugins.py) and `agent.serve_tools` (other AI
  *   programs may use the built-in tools through `happy-bot mcp-serve`).
@@ -34,8 +39,9 @@ import org.kde.kirigami as Kirigami
  * - Terminal: `agent.terminal`, chosen from the supported terminals the
  *   daemon found installed (`page.terminals`), or automatic.
  *
- * Ranges here mirror the validation in src/happy_bot/settings.py. The
- * section holds no state of its own; every change goes through `page.save`.
+ * Ranges here mirror the validation in src/happy_bot/settings.py. Apart
+ * from `typingAllowed`, the section holds no state of its own; every
+ * settings change goes through `page.save`.
  */
 Kirigami.FormLayout {
     id: section
@@ -56,6 +62,27 @@ Kirigami.FormLayout {
         { name: "phone", label: i18n("Use your phone through KDE Connect (ring it, send to it, text messages)") },
         { name: "schedule", label: i18n("Set reminders and timers, keep notes and to-dos, and change your routines") },
     ]
+
+    property bool typingAllowed: false
+    property bool askingTyping: false
+
+    function readTyping() {
+        section.page.client.request("GET", "/typing", null, data => section.typingAllowed = data.allowed === true, () => {});
+    }
+
+    function allowTyping() {
+        section.askingTyping = true;
+        section.page.client.request("POST", "/typing/allow", {}, function(data) {
+            section.askingTyping = false;
+            section.typingAllowed = data.allowed === true;
+            section.page.report(i18n("Happy Bot may now type into other apps."), false);
+        }, function(data) {
+            section.askingTyping = false;
+            section.page.report(data.error || i18n("Typing was not allowed"), true);
+        });
+    }
+
+    Component.onCompleted: readTyping()
 
     function setPolicy(value) {
         if (value !== section.policy) {
@@ -158,6 +185,34 @@ Kirigami.FormLayout {
 
     Hint {
         text: i18n("It can always look at your windows, clipboard and files, and use the tools connected under Search & Tools. Switched-off abilities are never offered to the model.")
+    }
+
+    RowLayout {
+        Kirigami.FormData.label: i18n("Typing into other apps:")
+        spacing: Kirigami.Units.smallSpacing
+
+        Kirigami.Icon {
+            source: section.typingAllowed ? "checkmark" : "dialog-information"
+            Layout.preferredWidth: Kirigami.Units.iconSizes.small
+            Layout.preferredHeight: Kirigami.Units.iconSizes.small
+        }
+
+        QQC2.Label {
+            text: section.typingAllowed ? i18n("Allowed") : i18n("Not allowed yet")
+        }
+
+        QQC2.Button {
+            visible: !section.typingAllowed
+            text: section.askingTyping ? i18n("Waiting for your answer…") : i18n("Allow…")
+            highlighted: true
+            enabled: !section.askingTyping
+            onClicked: section.allowTyping()
+        }
+    }
+
+    Hint {
+        visible: !section.typingAllowed
+        text: i18n("Plasma will ask whether Happy Bot may control the keyboard. Choose Allow. It is asked only once.")
     }
 
     QQC2.CheckBox {

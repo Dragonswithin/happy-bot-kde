@@ -12,7 +12,8 @@ This module is the stdio side only: newline-delimited JSON-RPC 2.0 on stdin
 and stdout, answering ``initialize``, ``ping``, ``tools/list`` and
 ``tools/call``, and ignoring notifications. It talks to the daemon with the
 CLI's authenticated ``request_json``; nothing but protocol messages is ever
-written to stdout.
+written to stdout. The stdio loop itself (``serve_lines``) is shared with
+``file_index_server``, Happy Bot's other built-in MCP server.
 """
 
 from __future__ import annotations
@@ -60,6 +61,16 @@ def handle(message: dict[str, Any], request_json: Request) -> dict[str, Any] | N
 
 
 def serve(request_json: Request, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> int:
+    return serve_lines(lambda message: handle(message, request_json), stdin, stdout)
+
+
+def serve_lines(handler: Callable[[dict[str, Any]], dict[str, Any] | None],
+                stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> int:
+    """The stdio loop shared with ``file_index_server``: one JSON-RPC message per line, one reply per request.
+
+    A line that is not JSON gets a parse error; an exception in ``handler`` becomes that request's error
+    reply, so the server never dies mid-session.
+    """
     for line in stdin:
         if not line.strip():
             continue
@@ -70,8 +81,8 @@ def serve(request_json: Request, stdin: TextIO = sys.stdin, stdout: TextIO = sys
             stdout.flush()
             continue
         try:
-            answer = handle(message, request_json) if isinstance(message, dict) else None
-        except Exception as error:  # noqa: BLE001 - the daemon may be down; answer instead of dying
+            answer = handler(message) if isinstance(message, dict) else None
+        except Exception as error:  # noqa: BLE001 - the daemon or an index may be down; answer instead of dying
             answer = {"jsonrpc": "2.0", "id": message.get("id"), "error": {"code": -32000, "message": str(error)}}
         if answer is not None:
             stdout.write(json.dumps(answer) + "\n")

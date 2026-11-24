@@ -26,7 +26,16 @@ Endpoints:
 - ``POST /models/discover``: find model services running on this computer.
 - ``POST /tools/scan``: start each discovered, not yet configured tool
   server briefly to report its tools and the roles it could fill. Slow by
-  nature (seconds per server); servers are scanned in parallel.
+  nature (seconds per server); servers are scanned in parallel
+  (``search_choices.scan_discovered``).
+- ``POST /search/choices``: what could do file search or web search here,
+  best first, for the settings page's "Set up" (``search_choices``).
+- ``POST /search/use``: use one of those choices: add its server, assign the
+  job, run a test search, and undo it all if the test fails
+  (``search_setup``). Can take a minute when a server is downloaded first.
+- ``GET /typing``, ``POST /typing/allow``: whether the desktop allows the
+  assistant to type into other apps, and asking it now (the RemoteDesktop
+  portal's dialog, ``input_portal``) rather than in the middle of a request.
 - ``POST /models/probe``: list the models a service offers, to help setup.
 - ``POST /models/test``: check that a configured model answers and can call
   tools. This sends one small request to the model.
@@ -75,11 +84,12 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import desktop_actions, desktop_context, instant_search, mcp_discovery, model_discovery, personal_data, quick_results, self_check, spend
+from . import (desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+               quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
-from .mcp_client import McpError, McpServerSpec, McpSession
+from .mcp_client import McpError
 from .providers import ProviderError, create_provider
 from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, find_limit_argument, find_query_argument, propose_role, tool_arguments
@@ -235,9 +245,6 @@ def screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dic
     return 200, desktop_context.take_screenshot(server.runtime_dir)
 
 
-SCAN_STARTUP_SECONDS = 20.0
-
-
 def discover_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     def key(base_url: str, model_id: str) -> tuple[str, str]:
         # The same service may be stored with or without its /v1 suffix.
@@ -251,33 +258,42 @@ def discover_models(server: "AssistantServer", query: dict[str, list[str]], body
     return 200, {"ok": True, "services": services}
 
 
-def _scan_one(candidate: mcp_discovery.DiscoveredServer) -> dict[str, Any]:
-    described = candidate.describe()
-    described.update({"tools": [], "proposals": [], "error": ""})
-    spec = McpServerSpec(candidate.name, candidate.command, candidate.args, candidate.env)
-    try:
-        session = McpSession(spec, startup_timeout=SCAN_STARTUP_SECONDS)
-    except McpError as exc:
-        described["error"] = str(exc)
-        return described
-    try:
-        tools = session.list_tools()
-        described["tools"] = [tool["name"] for tool in tools]
-        described["proposals"] = [found for found in (propose_role(candidate.name, tool) for tool in tools) if found]
-    except McpError as exc:
-        described["error"] = str(exc)
-    finally:
-        session.close()
-    return described
-
-
 def scan_tool_servers(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     configured = {(entry["command"], tuple(entry["args"])) for entry in server.settings["tool_servers"].values()}
     candidates = [c for c in mcp_discovery.discover_servers() if (c.command, c.args) not in configured]
     if not candidates:
         return 200, {"ok": True, "servers": []}
     with ThreadPoolExecutor(max_workers=8) as pool:
-        return 200, {"ok": True, "servers": list(pool.map(_scan_one, candidates))}
+        return 200, {"ok": True, "servers": list(pool.map(search_choices.scan_discovered, candidates))}
+
+
+def search_choices_route(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    role = str(body.get("role") or "")
+    if role not in settings_store.ROLE_NAMES:
+        return _error(400, f"unknown job '{role}'", "invalid")
+    return 200, {"ok": True, "choices": search_choices.choices(role, server.settings, skip_ports=(server.state.port,))}
+
+
+def search_use(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    inputs = body.get("inputs") if isinstance(body.get("inputs"), dict) else {}
+    result = search_setup.use(server, str(body.get("role") or ""), str(body.get("choice") or ""),
+                              {str(key): str(value) for key, value in inputs.items()})
+    if not result["ok"]:
+        return _error(400, result["error"], "invalid")
+    return 200, {**result, "settings": settings_store.redacted(server.settings)}
+
+
+def typing_status(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "allowed": input_portal.consent_saved()}
+
+
+def allow_typing(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """Shows the desktop's "allow remote control" question now, instead of in the middle of a request."""
+    try:
+        input_portal.shared().start()
+    except input_portal.InputUnavailable as error:
+        return _error(409, str(error).capitalize() + ".", "declined")
+    return 200, {"ok": True, "allowed": input_portal.consent_saved()}
 
 
 def probe_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -468,6 +484,10 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/models/probe"): probe_models,
     ("POST", "/models/discover"): discover_models,
     ("POST", "/tools/scan"): scan_tool_servers,
+    ("POST", "/search/choices"): search_choices_route,
+    ("POST", "/search/use"): search_use,
+    ("GET", "/typing"): typing_status,
+    ("POST", "/typing/allow"): allow_typing,
     ("POST", "/models/test"): test_model,
     ("POST", "/cancel"): cancel,
     ("POST", "/approve"): approve,

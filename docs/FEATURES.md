@@ -354,6 +354,11 @@ text-only models and stays as an option afterwards.
 
 - ✓ Stdio MCP client, import from other agents' configs, roles, read-only
   marking per server.
+- ● One-press setup of file search and web search: choices found on this
+  computer (other AI programs' tools that pass a test search, KDE's file
+  index, the file-name database) and checked web-search suggestions, the
+  best one marked, each tested before it is kept. (search_setup.py; the
+  KDE-index switch-on and the page driven by hand are not yet verified)
 - ● HTTP and SSE MCP transports. (streamable HTTP, both reply forms)
 - ⏸ An in-app list of suggested MCP servers by need (calendar, email, browser,
   media) that the user approves. (needs a list checked against current

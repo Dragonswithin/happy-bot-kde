@@ -73,13 +73,18 @@ to return to the wand.
 - **AI Model:** which model answers; find one running on this computer or
   add a hosted one; its address, model id, API key, extra request headers,
   context window and whether it can see images; a live test.
-- **Search & Tools:** the file and web search tools (picked from the scan's
-  suggestions or by hand: server, tool, which argument gets the text, how
-  many results); connected tool servers, each with an on/off switch, a
+- **Search & Tools:** press **Set up** next to Files or Web and choose
+  **Use this** on the recommended choice; Happy Bot adds it and tries a
+  search before keeping it. Choices come from what the computer already has
+  (KDE's file search, tools set up for other AI programs, a SearXNG you
+  run) and a few checked web searches (DuckDuckGo needs no key; Brave and
+  Tavily need a free key). **By hand…** picks the server, tool, which
+  argument gets the text and how many results yourself; connected tool servers, each with an on/off switch, a
   "look-up only" mark, its start command, environment values such as API
   keys, and which of its tools the assistant may use; a scan for servers
   set up for other AI programs; connecting one by hand.
-- **Behaviour:** when to ask for approval; which kinds of action the
+- **Behaviour:** when to ask for approval; **Allow…** next to *Typing into
+  other apps*, which asks Plasma's permission once; which kinds of action the
   assistant may take at all (windows, applications, other apps' buttons
   and typing, system settings, files, commands); your own standing
   instructions; steps per request, how long commands may run, when to

@@ -20,7 +20,9 @@ notification, which is how routines started by a systemd timer report back
 ``eval`` runs ``evaluation.SCENARIOS`` as dry runs against a model and
 prints pass or fail with timings.
 ``mcp-serve`` speaks MCP on stdin and stdout so another AI program can use
-the built-in tools (``mcp_serve.py``).
+the built-in tools (``mcp_serve.py``). ``file-index-serve`` is the MCP server
+behind setup's built-in file search choices (``file_index_server.py``); the
+daemon starts it like any tool server, and it needs no daemon itself.
 ``doctor`` runs the daemon's self-check and prints each result with its fix.
 ``history`` lists saved conversations or prints one (continue it with ``ask
 --conversation ID``); ``export`` writes settings without secrets plus all
@@ -235,6 +237,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
     routine_check.add_argument("--value", required=True)
     routine_check.add_argument("name")
+    file_index = sub.add_parser("file-index-serve", help="Run as an MCP server (stdio) that searches a file index "
+                                "the computer already keeps (started by the assistant when file search uses it).")
+    file_index.add_argument("--index", required=True, choices=("kde", "locate"))
     sub.add_parser("mcp-serve", help="Run as an MCP server (stdio) lending the built-in tools to another AI "
                    "program; needs 'Let other AI programs use these tools' in the settings.")
     history = sub.add_parser("history", help="List saved conversations, or print one by id.")
@@ -420,6 +425,11 @@ def run_role(args: argparse.Namespace) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.command == "file-index-serve":
+        # Started by the daemon as a tool server: it needs no daemon, and stdout carries only MCP.
+        from .file_index_server import serve as serve_index
+
+        return serve_index(args.index)
     try:
         ensure_daemon()
         if args.command == "endpoint":
