@@ -72,7 +72,9 @@ to return to the wand.
 
 - **AI Model:** which model answers; find one running on this computer or
   add a hosted one; its address, model id, API key, extra request headers,
-  context window and whether it can see images; a live test.
+  context window and whether it can see images; a live test; optionally a
+  quicker model every request starts on, with the chosen model taking over
+  when a request needs more steps or the quicker one fails.
 - **Search & Tools:** press **Set up** next to Files or Web and choose
   **Use this** on the recommended choice; Happy Bot adds it and tries a
   search before keeping it. Choices come from what the computer already has

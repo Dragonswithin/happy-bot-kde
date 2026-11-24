@@ -48,7 +48,16 @@ cost are recorded, and the ``done`` event names the model and its cost. If
 the chosen model fails before it produced anything and a local
 ``agent.fallback_model`` is set, the turn is run again on the fallback, with
 a ``{"type": "notice", "message"}`` event saying so; a hosted fallback is
-never used automatically, so nothing is sent off the computer unasked. When
+never used automatically, so nothing is sent off the computer unasked.
+
+Quick model: when ``agent.quick_model`` is set (and the request names no
+model), every request starts on it with at most ``QUICK_MODEL_STEPS`` model
+requests. If it fails, at any point, or uses them all without finishing, the
+chosen model takes over the same conversation, which already holds the quick
+model's steps and their results, after a notice saying so; the final ``done``
+lists the actions of both. The quick model is skipped when it would break
+"local only" or the spending cap, so the hand-over never sends anything
+further than the chosen model would. When
 a local model service says all its slots are busy (``model_busy``; services
 with one slot queue requests), a notice says the request is waiting. With a hosted model
 (``redaction.is_local_address`` false) tool results are redacted before they
@@ -167,7 +176,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         emit({
             "type": "start",
             "conversation_id": conversation.id,
-            "model": settings.get("active_model", ""),
+            "model": ("" if chosen else _quick(settings, settings.get("active_model", ""))) or settings.get("active_model", ""),
             "tools": registry.names(),
             "warnings": warnings,
         })
@@ -177,6 +186,19 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             emit({"type": "notice", "message": "The model is busy with another program; your request will start "
                                                "when it is free."})
         model_name = settings.get("active_model", "")
+        quick_name = "" if chosen else _quick(settings, model_name)
+        try:
+            quick_provider = create_provider(settings["models"][quick_name]) if quick_name else None
+        except ProviderError:
+            quick_name, quick_provider = "", None
+        if quick_name:
+            handed = _attempt(quick_provider, quick_name, settings["models"][quick_name],
+                              conversation, registry, emit, gate, agent, hold_first_error=True, hand_over=True)
+            if handed is None:
+                return
+            reason = handed["message"] if handed["type"] == "error" else "it needed more steps"
+            emit({"type": "notice", "message": f"{quick_name} handed this to {model_name} ({reason})."})
+            emit = _with_earlier_actions(emit, handed.get("actions", []))
         held = _attempt(provider, model_name, model, conversation, registry, emit, gate, agent,
                         hold_first_error=bool(_fallback(settings, model_name)))
         if held is not None:
@@ -199,6 +221,15 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         app_visibility.run_after_turn()
 
 
+def _with_earlier_actions(emit: Callable[[dict[str, Any]], None], earlier: list[dict[str, str]]):
+    """``emit``, with the quick model's actions put first in the final ``done`` so none goes unreported."""
+    def forward(event: dict[str, Any]) -> None:
+        if event["type"] == "done" and earlier:
+            event = {**event, "actions": [*earlier, *event.get("actions", [])]}
+        emit(event)
+    return forward
+
+
 def model_busy(base_url: str) -> bool:
     """Whether a local llama.cpp-style service reports every slot busy (``GET /slots``); False if it cannot say."""
     root = base_url.rstrip("/").removesuffix("/v1")
@@ -211,6 +242,21 @@ def model_busy(base_url: str) -> bool:
                                                            for slot in slots)
 
 
+QUICK_MODEL_STEPS = 4
+
+
+def _quick(settings: dict[str, Any], current: str) -> str:
+    """The quick model's name when it is set, different, and allowed by local only and the spending cap; else ""."""
+    agent = settings.get("agent") or {}
+    name = agent.get("quick_model", "")
+    model = settings.get("models", {}).get(name)
+    if not name or name == current or not model:
+        return ""
+    if agent.get("local_only") and not is_local_address(model["base_url"]):
+        return ""
+    return "" if spend.over_cap(model, agent.get("monthly_spend_cap", 0)) else name
+
+
 def _fallback(settings: dict[str, Any], current: str) -> str:
     """The fallback model's name when it is set, different and on this computer; else ""."""
     name = (settings.get("agent") or {}).get("fallback_model", "")
@@ -219,14 +265,18 @@ def _fallback(settings: dict[str, Any], current: str) -> str:
 
 
 def _attempt(provider, name: str, model: dict[str, Any], conversation, registry, emit, gate, agent,
-             hold_first_error: bool) -> dict[str, Any] | None:
-    """Run the turn on one model. With ``hold_first_error``, an error before anything happened is
-    returned instead of shown, so the caller can try the fallback; the history is unchanged then."""
+             hold_first_error: bool, hand_over: bool = False) -> dict[str, Any] | None:
+    """Run the turn on one model; return a held event, or None when the turn ended here.
+
+    With ``hold_first_error``, an error before anything happened is returned instead of shown, so the
+    caller can try the fallback; the history is unchanged then. With ``hand_over`` (the quick model),
+    any error, and a ``done`` for running out of its ``QUICK_MODEL_STEPS``, are returned instead, so
+    the caller can let the chosen model continue; the history then holds the steps taken so far."""
     progressed = [False]
     held: list[dict[str, Any]] = []
 
     def guarded(event: dict[str, Any]) -> None:
-        if event["type"] == "error" and hold_first_error and not progressed[0]:
+        if event["type"] == "error" and (hand_over or (hold_first_error and not progressed[0])):
             held.append(event)
             return
         if event["type"] in ("thinking", "text_delta", "tool_call"):
@@ -235,10 +285,14 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
             usage = event.get("usage") or {}
             event = {**event, "model": name,
                      "cost": spend.record(name, model, usage.get("input_tokens", 0), usage.get("output_tokens", 0))}
+            if hand_over and event["stop"] == "step_limit":
+                held.append(event)
+                return
         emit(event)
 
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
-             max_steps=agent["max_steps"], gate=gate, redact=not is_local_address(model["base_url"]))
+             max_steps=QUICK_MODEL_STEPS if hand_over else agent["max_steps"], gate=gate,
+             redact=not is_local_address(model["base_url"]))
     return held[0] if held else None
 
 

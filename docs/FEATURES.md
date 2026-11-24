@@ -342,9 +342,11 @@ text-only models and stays as an option afterwards.
 - ⏸ Native providers where the compatible route loses features (Anthropic,
   Gemini), written from current vendor documentation. (the OpenAI-compatible
   route works for the hosted model in use)
-- ◐ A model per task: a fast one for small actions, a strong one for long
-  tasks, a vision one for screenshots. (a request can name its model;
-  automatic choice is deferred)
+- ● A model per task: a fast one for small actions, a strong one for long
+  tasks, a vision one for screenshots. (a quick model starts every request
+  and hands the same conversation to the chosen model after four steps or
+  on failure; a request can still name its model. A vision model waits for
+  image input, which is deferred)
 - ● Fallback when a model is unreachable, offered rather than silent when it
   would send data off the machine. (only a local fallback is used
   automatically)

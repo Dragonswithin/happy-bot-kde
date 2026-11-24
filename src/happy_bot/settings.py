@@ -63,6 +63,9 @@ Schema (version 1)::
                                               #   SUPPORTED_TERMINALS in tools/shell.py
         "fallback_model": "",                 # default ""; a model on this computer to answer when the chosen
                                               #   one does not respond (only a local one is used automatically)
+        "quick_model": "",                    # default "" = none; a faster model every request starts on; the
+                                              #   chosen (active) model takes over when it fails or needs more
+                                              #   than ask_stream.QUICK_MODEL_STEPS steps
         "monthly_spend_cap": 0,               # default 0 = none; stop using priced models once this month's
                                               #   spending (spend.py) reaches it
         "load_plugins": false,                # default false; true: load tools from the user's plugin files in
@@ -178,7 +181,7 @@ def default_agent() -> dict[str, Any]:
     return {
         "instructions": SUGGESTED_INSTRUCTIONS, "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
         "command_timeout_seconds": DEFAULT_TIMEOUT_SECONDS, "terminal": "", "disabled_tool_groups": [],
-        "confirm_plans": False, "local_only": False, "fallback_model": "", "monthly_spend_cap": 0,
+        "confirm_plans": False, "local_only": False, "fallback_model": "", "quick_model": "", "monthly_spend_cap": 0,
         "load_plugins": False, "serve_tools": False,
     }
 
@@ -225,7 +228,8 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
              f"'agent': 'terminal' must be empty (automatic) or one of {', '.join(SUPPORTED_TERMINALS)}")
     for flag in ("confirm_plans", "local_only", "load_plugins", "serve_tools"):
         _require(isinstance(merged[flag], bool), f"'agent': '{flag}' must be true or false")
-    _require(isinstance(merged["fallback_model"], str), "'agent': 'fallback_model' must be a model name")
+    for key in ("fallback_model", "quick_model"):
+        _require(isinstance(merged[key], str), f"'agent': '{key}' must be a model name")
     cap = merged["monthly_spend_cap"]
     _require(isinstance(cap, (int, float)) and not isinstance(cap, bool) and 0 <= cap <= 1_000_000,
              "'agent': 'monthly_spend_cap' must be a number, 0 for none")
@@ -247,6 +251,7 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
         "load_plugins": merged["load_plugins"],
         "serve_tools": merged["serve_tools"],
         "fallback_model": merged["fallback_model"].strip(),
+        "quick_model": merged["quick_model"].strip(),
         "monthly_spend_cap": cap,
     }
 
@@ -369,8 +374,9 @@ def validate_settings(raw: Any) -> dict[str, Any]:
     models = {name: _validate_model(name, value) for name, value in raw_models.items()}
     _require(isinstance(active_model, str), "'active_model' must be a model name")
     _require(not active_model or active_model in models, f"'active_model': model '{active_model}' is not set up")
-    fallback = (raw.get("agent") or {}).get("fallback_model", "") if isinstance(raw.get("agent"), dict) else ""
-    _require(not fallback or fallback in models, f"'agent': fallback model '{fallback}' is not set up")
+    for key, label in (("fallback_model", "fallback model"), ("quick_model", "quick model")):
+        named = (raw.get("agent") or {}).get(key, "") if isinstance(raw.get("agent"), dict) else ""
+        _require(not named or named in models, f"'agent': {label} '{named}' is not set up")
     folders = raw.get("folders", {})
     _require(isinstance(folders, dict), "'folders' must be an object")
     for name, path in folders.items():

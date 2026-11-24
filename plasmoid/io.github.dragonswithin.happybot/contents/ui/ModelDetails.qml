@@ -22,8 +22,10 @@ import org.kde.kirigami as Kirigami
  * daemon validates it; a refused value snaps back with the daemon's message.
  *
  * Below them: the model's prices per million tokens (`input_price`,
- * `output_price`), and two `agent` settings about models: the fallback model
- * on this computer used when the chosen one does not answer
+ * `output_price`), and three `agent` settings about models: a quicker model
+ * every request starts on, handing over to the chosen one when it needs
+ * more steps or fails (`quick_model`, src/happy_bot/ask_stream.py), the
+ * fallback model on this computer used when the chosen one does not answer
  * (`fallback_model`) and the monthly spending cap (`monthly_spend_cap`),
  * with this month's total from `GET /spend` (src/happy_bot/spend.py).
  *
@@ -156,6 +158,30 @@ Kirigami.FormLayout {
         Price { field: "input_price" }
         QQC2.Label { text: i18n("out") }
         Price { field: "output_price" }
+    }
+
+    QQC2.ComboBox {
+        id: quick
+        Kirigami.FormData.label: i18n("Start with a quicker model:")
+        Layout.minimumWidth: Kirigami.Units.gridUnit * 12
+        readonly property var choices: [""].concat(Object.keys((section.page.settings || {}).models || {}).sort().filter(
+            name => name !== section.name))
+        readonly property string current: (section.page.settings && section.page.settings.agent
+                                           && section.page.settings.agent.quick_model) || ""
+        model: choices.map(name => name === "" ? i18n("No, always use this one") : name)
+        currentIndex: Math.max(0, choices.indexOf(current))
+        onActivated: index => {
+            const wanted = quick.choices[index];
+            section.page.save(function(settings) { settings.agent.quick_model = wanted; });
+        }
+    }
+
+    QQC2.Label {
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18n("Small requests are answered by the quicker model. When a request needs more steps, or the quicker model fails, this one takes over and finishes it.")
     }
 
     QQC2.ComboBox {

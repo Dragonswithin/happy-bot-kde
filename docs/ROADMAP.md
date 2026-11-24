@@ -873,6 +873,16 @@ Findings:
   weather tool reads its own text back into one, drawn by `WeatherCard.qml`
   under the step. Both were rendered offscreen with the KDE theme and
   looked right; neither has been seen in the real popup yet.
+- A model per task, as the maintainer chose ("start quick, hand over"):
+  with `agent.quick_model` set, every request starts on that model with at
+  most `QUICK_MODEL_STEPS` (4) model requests. If it fails at any point or
+  uses them all, the chosen model continues the same history (which holds
+  the quick model's steps and results) after a notice, and the final `done`
+  reports both models' actions. The quick model is skipped when it would
+  break "local only" or the spending cap. Verified against a throwaway
+  daemon: an unreachable quick model handed a request to the local GPU
+  model, which answered, and the notice was recorded. Not verified: a real
+  quick model running out of steps (covered by a scripted test).
 
 ## Decisions
 
