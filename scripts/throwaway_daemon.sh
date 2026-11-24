@@ -61,7 +61,8 @@ start() {
   printf '%s\n' "$port" > "$PORT_FILE"
   (
     eval "$(env_lines)"
-    setsid python3 -m happy_bot.daemon_http --foreground --port "$port" > "${BASE}/daemon.log" 2>&1 &
+    # Started directly (not through setsid, which may fork) so $! is the daemon itself and "stop" reaches it.
+    nohup python3 -m happy_bot.daemon_http --foreground --port "$port" > "${BASE}/daemon.log" 2>&1 < /dev/null &
     printf '%s\n' "$!" > "$PID_FILE"
   )
   for _ in $(seq 40); do
