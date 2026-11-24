@@ -70,6 +70,10 @@ def message_to_json(message: Message) -> dict[str, Any]:
         data["tool_call_id"] = message.tool_call_id
     if message.echo:
         data["echo"] = message.echo
+    if message.context:
+        data["context"] = message.context
+    if message.private:
+        data["private"] = True
     for call, saved in zip(message.tool_calls, data.get("tool_calls") or []):
         if call.echo:
             saved["echo"] = call.echo
@@ -83,7 +87,7 @@ def message_from_json(data: dict[str, Any]) -> Message:
         for call in data.get("tool_calls") or []
     )
     return Message(str(data["role"]), str(data.get("text") or ""), calls, str(data.get("tool_call_id") or ""),
-                   str(data.get("echo") or ""))
+                   str(data.get("echo") or ""), str(data.get("context") or ""), data.get("private") is True)
 
 
 class ConversationArchive:

@@ -78,6 +78,12 @@ Schema (version 1)::
                                               #   anything needing approval is refused there
         "local_only": false,                  # default false; true: nothing read leaves the computer: a hosted
                                               #   model is refused, and web search and web pages are not offered
+        "app_context": "local",               # default "local"; who may see what Happy Bot reads from the
+                                              #   application the user is in (its name, title, version, and
+                                              #   for a "Help with …" chat its selection, controls and open
+                                              #   file; also what tools read inside windows): "off" (no AI is
+                                              #   told about it), "local" (AIs on this computer only), "any"
+                                              #   (online AIs too). See app_context.py.
         "confirm_plans": false,               # default false; true: before a request that changes more than
                                               #   one thing, the assistant first shows its plan and waits for
                                               #   the user to agree.
@@ -184,6 +190,11 @@ def config_dir() -> Path:
     return Path(base) / APP_DIR_NAME
 
 
+# Who may see what is read from the user's applications (app_context.py owns the meaning).
+APP_CONTEXT_POLICIES = ("off", "local", "any")
+APP_CONTEXT_DEFAULT = "local"
+
+
 def config_path() -> Path:
     return config_dir() / "config.json"
 
@@ -192,7 +203,7 @@ def default_agent() -> dict[str, Any]:
     return {
         "instructions": SUGGESTED_INSTRUCTIONS, "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
         "command_timeout_seconds": DEFAULT_TIMEOUT_SECONDS, "terminal": "", "disabled_tool_groups": [],
-        "confirm_plans": False, "local_only": False,
+        "confirm_plans": False, "local_only": False, "app_context": APP_CONTEXT_DEFAULT,
         "load_plugins": False, "serve_tools": False,
     }
 
@@ -240,6 +251,8 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
              f"'agent': 'terminal' must be empty (automatic) or one of {', '.join(SUPPORTED_TERMINALS)}")
     for flag in ("confirm_plans", "local_only", "load_plugins", "serve_tools"):
         _require(isinstance(merged[flag], bool), f"'agent': '{flag}' must be true or false")
+    _require(merged["app_context"] in APP_CONTEXT_POLICIES,
+             f"'agent': 'app_context' must be one of {', '.join(APP_CONTEXT_POLICIES)}")
     groups = _string_list(merged["disabled_tool_groups"], "'agent': 'disabled_tool_groups'")
     for group in groups:
         _require(group in TOOL_GROUPS, f"'agent': unknown tool group '{group}' (known: {', '.join(TOOL_GROUPS)})")
@@ -255,6 +268,7 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
         "disabled_tool_groups": sorted(set(groups)),
         "confirm_plans": merged["confirm_plans"],
         "local_only": merged["local_only"],
+        "app_context": merged["app_context"],
         "load_plugins": merged["load_plugins"],
         "serve_tools": merged["serve_tools"],
     }

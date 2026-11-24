@@ -154,11 +154,23 @@ class AskEndpointTests(unittest.TestCase):
         response = self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about})
         events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
         sent = self.model.requests[-1]["messages"][-1]["content"]
-        self.assertTrue(sent.startswith("[Background, not part of the request: the user had the application Kate"), sent)
+        self.assertTrue(sent.startswith("[Background from the user's computer, not part of the request: they had "
+                                        "the application Kate"), sent)
         self.assertIn("If they name another application or ask about something else, answer that", sent)
         self.assertTrue(sent.endswith("how do I split the view?"))
         opened = self.call("GET", f"/conversation?id={events[0]['conversation_id']}")
         self.assertEqual(opened["events"][0]["text"], "how do I split the view?")  # the chat shows what was typed
+
+    def test_with_app_awareness_off_no_ai_is_told_about_the_application(self) -> None:
+        self.configure()
+        settings = self.call("GET", "/settings")["settings"]
+        settings["agent"]["app_context"] = "off"
+        self.call("PUT", "/settings", {"settings": settings})
+        self.assertEqual(self.call("GET", "/context/app")["app"], "")
+        self.model.replies.append(chunks_for("Use Ctrl+Shift+L."))
+        about = {"app": "Kate", "class": "org.kde.kate", "title": "notes.txt — Kate"}
+        self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about}).read()
+        self.assertEqual(self.model.requests[-1]["messages"][-1]["content"], "how do I split the view?")
 
     def test_errors_are_events_not_broken_streams(self) -> None:
         self.assertEqual(self.ask("hi")[0]["code"], "not_configured")

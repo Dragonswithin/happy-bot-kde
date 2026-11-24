@@ -91,6 +91,9 @@ class Tool:
     summarize: Callable[[dict[str, Any]], str] | None = None
     precheck: Callable[[dict[str, Any]], None] | None = None
     card: Callable[[str], dict[str, Any] | None] | None = None
+    # Reads inside the user's applications (their controls, text, selection): its results are kept
+    # from online AIs unless the user's app_context setting allows them (app_context.for_model).
+    private: bool = False
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.parameters)

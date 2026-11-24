@@ -241,10 +241,10 @@ class CurrentApplicationTests(unittest.TestCase):
                     mock.patch.object(desktop_context, "active_window_context", return_value=window):
                 self.assertEqual(desktop_context.current_application(),
                                  {"app": "Notes Pro", "class": "org.example.notes", "title": "todo.md — Notes Pro",
-                                  "icon": "notes-pro"})
+                                  "icon": "notes-pro", "window": ""})
             self.assertEqual(desktop_context.application_name("org.example.unknown-app"), "Unknown app")
             with mock.patch.object(desktop_context, "active_window_context", return_value={"available": False}):
-                self.assertEqual(desktop_context.current_application(), {"app": "", "class": "", "title": "", "icon": ""})
+                self.assertEqual(desktop_context.current_application(), {"app": "", "class": "", "title": "", "icon": "", "window": ""})
 
 
 if __name__ == "__main__":

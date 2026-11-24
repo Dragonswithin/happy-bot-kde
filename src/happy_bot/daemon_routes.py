@@ -25,7 +25,8 @@ Endpoints:
   ``{"search_bar": bool}`` and/or ``{"bar_width": 8..60}`` change them all
   (``panel_widget``), for the app's Appearance page.
 - ``GET /context/app``: the application the user is working in (name, class,
-  window title, icon name), noted by the popup when it is opened from the floating
+  window title, icon name, KWin window id; all empty when the user's
+  ``agent.app_context`` is "off"), noted by the popup when it is opened from the floating
   button or the hotkey and sent with its requests as background
   (``desktop_context.current_application``).
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.
@@ -226,6 +227,9 @@ def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[
 
 
 def current_application(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """The window the user is in; empty when their app_context setting is "off", so nothing is noted."""
+    if (server.settings.get("agent") or {}).get("app_context") == "off":
+        return 200, {"ok": True, "app": "", "class": "", "title": "", "icon": "", "window": ""}
     return 200, {"ok": True, **desktop_context.current_application()}
 
 

@@ -4,7 +4,9 @@
   the history the clipboard applet shows.
 - Selected text is the Wayland primary selection (``wl-paste --primary``):
   whatever the user last highlighted in any application, so "explain the
-  selected text" works without copying first.
+  selected text" works without copying first. It is a ``private`` tool: its
+  result reaches an online AI only when the user's ``app_context`` setting
+  allows it (``app_context``).
 - Screenshots are taken with Spectacle in background mode into the user's
   Pictures/Screenshots folder (a region screenshot lets the user drag the
   area). The returned path can be passed to ``text_from_image``
@@ -108,7 +110,7 @@ def screen_tools() -> list[Tool]:
              object_schema({"limit": {"type": "integer", "description": f"Default 10, max {MAX_HISTORY}"}}),
              RISK_READ, clipboard_history, summarize=lambda a: "Read the clipboard history"),
         Tool("selected_text", "The text the user has highlighted (selected) in any application right now.",
-             object_schema(), RISK_READ, selected_text, summarize=lambda a: "Read the selected text"),
+             object_schema(), RISK_READ, selected_text, summarize=lambda a: "Read the selected text", private=True),
         Tool("take_screenshot", "Take a screenshot of the whole screen, the active window, or an area the user "
              "drags, saved in Pictures/Screenshots. Pass the file to text_from_image to read text from it.",
              object_schema({"area": area}), RISK_CHANGE, take_screenshot,

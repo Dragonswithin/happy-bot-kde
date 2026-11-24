@@ -613,6 +613,10 @@ Item {
                                 view.panelPromptChosen("");
                             }
                         }
+                        onHelpChosen: prompt => {
+                            view.session.helpChat = true;
+                            welcome.promptChosen(prompt);
+                        }
                         onPromptChosen: prompt => {
                             if (view.showField) {
                                 view.setInput(prompt);

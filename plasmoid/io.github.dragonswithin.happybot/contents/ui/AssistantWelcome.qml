@@ -23,7 +23,9 @@ import org.kde.plasma.components as PlasmaComponents3
  * they press Enter. The help shortcut names the application the user was in
  * (`helpWith`, `AssistantSession.helpWith`: "Help with Kate", with its
  * icon), so it is plain that Happy Bot knows which one; with none (opened
- * from the panel, or from the desktop itself) it is "Desktop help". The
+ * from the panel, or from the desktop itself) it is "Desktop help". Choosing
+ * "Help with …" emits `helpChosen`, which also marks the chat so its requests
+ * carry the application's full context (`AssistantSession.helpChat`). The
  * component keeps no state.
  */
 ColumnLayout {
@@ -37,6 +39,8 @@ ColumnLayout {
     readonly property string appName: helpWith && helpWith.app ? helpWith.app : ""
     signal promptChosen(string prompt)
     signal findFilesChosen()
+    // "Help with …": like promptChosen, and the chat it starts carries the application's full context.
+    signal helpChosen(string prompt)
 
     spacing: Kirigami.Units.largeSpacing
 
@@ -135,7 +139,7 @@ ColumnLayout {
                 { label: i18n("Search the web"), icon: "globe", prompt: i18n("Search the web for") },
                 welcome.appName
                     ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
-                        appIcon: true, prompt: i18n("In %1, help me", welcome.appName) }
+                        appIcon: true, help: true, prompt: i18n("In %1, help me", welcome.appName) }
                     : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
             ]
 
@@ -147,7 +151,8 @@ ColumnLayout {
                 Layout.minimumWidth: 0
                 padding: Kirigami.Units.largeSpacing * 1.5
                 text: modelData.label
-                onClicked: modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
+                onClicked: modelData.help ? welcome.helpChosen(modelData.prompt + " ")
+                    : modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
 
                 background: Rectangle {
                     radius: Kirigami.Units.cornerRadius * 2

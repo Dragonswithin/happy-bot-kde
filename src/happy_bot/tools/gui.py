@@ -22,6 +22,10 @@ delete something, so each call is classified on what can be known:
 
 This is best-effort: a harmless-looking button can still be destructive.
 
+Privacy. ``ui_snapshot`` and ``ui_get_text`` read what is inside the user's
+applications, so they are ``private`` tools: their results reach an online AI
+only when the user's ``app_context`` setting allows it (``app_context``).
+
 Refs belong to the most recent ``ui_snapshot`` of that application; after an
 action changes the interface, the model must take a new snapshot. Titles
 change while an application is used, so results always give the window's
@@ -248,7 +252,7 @@ def gui_tools() -> list[Tool]:
              "items) with a ref for each. Use this before pressing or typing, and again after the window changes.",
              object_schema({"window": window, "query": {
                  "type": "string", "description": "Only controls whose label matches, including ones not on screen"}}),
-             RISK_READ, ui_snapshot),
+             RISK_READ, ui_snapshot, private=True),
         Tool("ui_press", "Press a button, menu entry, tab, link, check box or list item in a window.",
              object_schema({"element": element, "window": window}, ["element"]), RISK_CHANGE, ui_press,
              classify=classify_press, summarize=lambda a: f"Press \"{a.get('element', '')}\""),
@@ -257,7 +261,7 @@ def gui_tools() -> list[Tool]:
              RISK_CHANGE, ui_set_text,
              summarize=lambda a: f"Set text of \"{a.get('element', '')}\" ({len(str(a.get('text', '')))} characters)"),
         Tool("ui_get_text", "Read the full text of a field, editor, label or other control.",
-             object_schema({"element": element, "window": window}, ["element"]), RISK_READ, ui_get_text),
+             object_schema({"element": element, "window": window}, ["element"]), RISK_READ, ui_get_text, private=True),
         Tool("press_keys", "Press keys in a window, as on the keyboard: a shortcut such as 'ctrl+s', or 'Return', "
              "'Tab', 'Escape', 'alt+F4'. Several are pressed in order.",
              object_schema({"keys": {"type": "array", "items": {"type": "string"}}, "window": window}, ["keys"]),

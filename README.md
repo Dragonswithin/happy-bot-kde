@@ -36,8 +36,12 @@ architecture and phase order are in `docs/ROADMAP.md`.
   searches files or the web when your request needs it.
 - The welcome screen's help shortcut names the application you were in
   ("Help with Kate") when you open Happy Bot from the floating button or
-  the hotkey. "Close chat" goes back to the welcome screen; the chat stays
-  in your saved ones.
+  the hotkey. The AI is told that application, its window title and its
+  version, and Plasma's; a chat started with "Help with …" also gets the
+  text you selected, the window's buttons and text, and the file it has
+  open. Who may see this is yours to choose on the Behaviour page: AIs on
+  this computer only (the default), any AI, or none. "Close chat" goes back
+  to the welcome screen; the chat stays in your saved ones.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones
   you already configured for other AI programs can be imported.
 - Desktop context capture: active window (KWin), clipboard (Klipper),
@@ -112,7 +116,8 @@ panel widget always look and behave the same.
   "look-up only" mark, its start command, environment values such as API
   keys, and which of its tools the assistant may use; a scan for servers
   set up for other AI programs; connecting one by hand.
-- **Behaviour:** when to ask for approval; **Allow…** next to *Typing into
+- **Behaviour:** when to ask for approval; which AI may see the app you are
+  in (only AIs on this computer, any AI, or off); **Allow…** next to *Typing into
   other apps*, which asks Plasma's permission once; which kinds of action the
   assistant may take at all (windows, applications, other apps' buttons
   and typing, system settings, files, commands); your own standing

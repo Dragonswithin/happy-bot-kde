@@ -28,14 +28,18 @@ import QtQuick
  * so the panel widget and the app always use the same values;
  * `saveUi(changes)` changes some of them (`POST /ui`). Until the first
  * answer it holds the defaults.
- * `helpWith` is the application the user was in (`{app, class, title}`, from
- * `/context/app`) when the popup was opened from the floating button or the
- * hotkey (`captureApplication`), or null. While set, it is sent with every
- * request as `about_window`, so the user never has to say which application
- * they mean; the welcome screen's help shortcut names it (AssistantWelcome.qml),
- * and it does not limit what they can ask about (src/happy_bot/ask_stream.py
- * words it as background). Opening
- * from the panel clears it (`forgetApplication`).
+ * `helpWith` is the application the user was in (`{app, class, title, window}`,
+ * from `/context/app`, empty when the user's privacy setting turned it off)
+ * when the popup was opened from the floating button or the hotkey
+ * (`captureApplication`), or null. While set, it is sent with every request
+ * as `about_window`, so the user never has to say which application they
+ * mean; the welcome screen's help shortcut names it (AssistantWelcome.qml),
+ * and it does not limit what they can ask about. `helpChat` is set when the
+ * chat was started from that shortcut: its requests also carry
+ * `full_context`, so the daemon adds the selected text, the window's controls
+ * and its open file (src/happy_bot/app_context.py, which also decides which
+ * AI may see any of it). A new or reopened chat clears `helpChat`; opening
+ * from the panel clears `helpWith` (`forgetApplication`).
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
@@ -110,6 +114,7 @@ Item {
     property string chatModel: ""
     property var helpWith: null
     property string helpWithIcon: ""  // the application's icon name, for the welcome screen only
+    property bool helpChat: false  // this chat began with "Help with …": requests carry the full context
     property var ui: ({
         robot_mascot: false, popup_width: 30, popup_height: 26, floating_opacity: 40, floating_x: -1, floating_y: -1,
         imported: []
@@ -306,6 +311,7 @@ Item {
         }
         request("GET", "/conversation?id=" + encodeURIComponent(conversationId), null, function(data) {
             session.conversationId = data.id;
+            session.helpChat = false;
             session.chatModel = session.models.some(item => item.name === data.model) ? data.model : "";
             session.replay(data.events || []);
         }, function(data) {
@@ -338,7 +344,8 @@ Item {
     /** Notes the application the user is in, for the next requests; called before the popup opens. */
     function captureApplication() {
         request("GET", "/context/app", null, function(data) {
-            session.helpWith = data.app || data.title ? { app: data.app, "class": data["class"], title: data.title } : null;
+            session.helpWith = data.app || data.title
+                ? { app: data.app, "class": data["class"], title: data.title, window: data.window || "" } : null;
             session.helpWithIcon = session.helpWith ? data.icon || "" : "";
         }, function(data) {
             session.helpWith = null;
@@ -357,6 +364,7 @@ Item {
         }
         session.conversationId = "";
         session.chatModel = "";
+        session.helpChat = false;
         session.entries.clear();
         refreshStatus();
     }
@@ -406,6 +414,7 @@ Item {
         const body = { message: text, conversation_id: session.conversationId, model: session.chatModel };
         if (session.helpWith) {
             body.about_window = session.helpWith;
+            body.full_context = session.helpChat;
         }
         xhr.send(JSON.stringify(body));
     }

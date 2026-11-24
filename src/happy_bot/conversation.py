@@ -14,6 +14,12 @@ preserves that by only ever dropping whole user turns.
 provider asked to have sent back unchanged with later requests (some
 services refuse a follow-up request without their reasoning or signatures).
 Only the provider that wrote it reads it; everything else passes it along.
+
+``context`` on a user message is background about the user's application
+that is not part of what they typed, and ``private`` on a tool message marks
+what a tool read inside one of their applications. Both are kept with the
+history but reach a model only through ``app_context.for_model``, which
+decides per model what it may see; providers never read them.
 """
 
 from __future__ import annotations
@@ -45,6 +51,8 @@ class Message:
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str = ""
     echo: str = ""
+    context: str = ""
+    private: bool = False
 
 
 @dataclass(frozen=True)

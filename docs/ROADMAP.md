@@ -1068,6 +1068,21 @@ Findings:
   (`panel_widget.py`, `/panel`), the second menu entry is gone, the
   widget's own Plasma page only points to the app's settings, and the
   address has no field (it stays a hand-edited setting).
+- Asked what the context-aware help really did: it only told the model the
+  application's name and window title. The maintainer chose a privacy
+  setting (`agent.app_context`: off, AIs on this computer only, any AI;
+  default local) and richer context: version info with every request from
+  an application, and for a chat started with "Help with …" the selection,
+  the window's controls and its open file (`app_snapshot.py`). The note and
+  private tool results (`Tool.private`: ui_snapshot, ui_get_text,
+  selected_text) are kept apart in the history (`Message.context`,
+  `Message.private`) and each model's copy is built by
+  `app_context.for_model`, which also closes a gap found on the way: tool
+  results read by a local model reached a later online one unredacted.
+  Konsole publishes no accessibility interface, so its controls cannot be
+  read; Dolphin's could (101 controls, a note of about 5,000 characters).
+  Screenshots for picture-capable models wait on image support in the
+  providers: the `vision` model setting is stored but nothing sends images.
 
 ## Decisions
 

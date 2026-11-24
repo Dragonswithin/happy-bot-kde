@@ -16,7 +16,10 @@ import org.kde.kirigami as Kirigami
  *
  * - Approvals: the daemon's `approval_policy`, which actions pause for the
  *   user, and `agent.confirm_plans`, whether multi-step changes start with a
- *   plan to agree to, and `agent.local_only` (nothing leaves the computer).
+ *   plan to agree to, `agent.local_only` (nothing leaves the computer), and
+ *   `agent.app_context`, which AI may see what is read from the application
+ *   the user is in: AIs on this computer only, any AI, or none
+ *   (src/happy_bot/app_context.py).
  *   The wording mirrors the definition in docs/ROADMAP.md.
  * - Allowed actions: one switch per built-in action group; a group that is
  *   off is stored in `agent.disabled_tool_groups` and never offered to the
@@ -145,6 +148,30 @@ Kirigami.FormLayout {
 
     Hint {
         text: i18n("A hosted model is not used, and the assistant does not search the web or read web pages.")
+    }
+
+    // agent.app_context: which AI may see what is read from the application the user is in.
+    QQC2.RadioButton {
+        Kirigami.FormData.label: i18n("The app you're in:")
+        text: i18n("Only AIs on this computer may see it")
+        checked: section.agent !== null && (section.agent.app_context || "local") === "local"
+        onToggled: if (checked) section.setAgent("app_context", "local")
+    }
+
+    QQC2.RadioButton {
+        text: i18n("Any AI may see it, including online ones")
+        checked: section.agent !== null && section.agent.app_context === "any"
+        onToggled: if (checked) section.setAgent("app_context", "any")
+    }
+
+    QQC2.RadioButton {
+        text: i18n("Off: don't tell any AI about it")
+        checked: section.agent !== null && section.agent.app_context === "off"
+        onToggled: if (checked) section.setAgent("app_context", "off")
+    }
+
+    Hint {
+        text: i18n("Opened from an app, Happy Bot tells the AI which app and window you are in and its version. A chat started with \"Help with …\" also includes the text you selected, the window's buttons and text, and the file it has open. Online AIs never see inside your apps unless you choose \"Any AI\".")
     }
 
     QQC2.CheckBox {

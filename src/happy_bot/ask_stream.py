@@ -12,11 +12,17 @@ A body with ``"ephemeral": true`` is not kept in the conversation history
 the user's order (the popup's per-chat picker, ``happy-bot eval --model``);
 the name, or "" for the order, is kept on the conversation as its ``model``
 so the popup can show the pick again when the chat is reopened. A body may
-also carry ``about_window`` (``{"app", "class", "title"}``, from ``GET
-/context/app``) when the popup was opened from the floating button or the
-hotkey: the model's copy of the request then starts with a note naming
-that application (``_with_application``); the conversation shows the
-request as typed.
+also carry ``about_window`` (``{"app", "class", "title", "window"}``, from
+``GET /context/app``) when the popup was opened from the floating button or
+the hotkey, and ``full_context: true`` in a chat started from the welcome
+screen's "Help with …" button. ``app_context.background_note`` turns it into
+a note about that application (with ``full_context``, also its selection,
+controls and open file), stored on the user's message (``Message.context``);
+the application is read only when the user's ``agent.app_context`` lets some
+AI in the chain see it. Each model then gets the history through
+``app_context.for_model``, which shows the note and what tools read inside
+applications only to the AIs that setting allows, and hides secrets again
+for a hosted one. The conversation shows the request as typed.
 
 Routines and dry runs: the system prompt lists the user's routines, and the
 registry includes the routine tools, which change settings through
@@ -85,7 +91,7 @@ import urllib.request
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import desktop_actions
+from . import app_context, desktop_actions
 from . import settings as settings_store
 from . import spend
 from .agent_loop import run_turn, system_prompt
@@ -157,7 +163,11 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             conversation.history.append(
                 Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
                                                 agent["confirm_plans"], settings.get("routines"))))
-        conversation.history.append(Message("user", _with_application(message, body.get("about_window"))))
+        policy = agent.get("app_context", app_context.DEFAULT_POLICY)
+        # Read the application only when some AI in the chain may be told about it.
+        note = app_context.background_note(body.get("about_window"), full=body.get("full_context") is True) \
+            if any(app_context.shows_context(policy, is_local_address(model["base_url"])) for _, model, _ in chain) else ""
+        conversation.history.append(Message("user", message, context=note))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")
 
@@ -219,25 +229,6 @@ def model_busy(base_url: str) -> bool:
 
 
 HAND_OVER_STEPS = 4
-MAX_WINDOW_TITLE_CHARS = 200
-
-
-def _with_application(message: str, about: Any) -> str:
-    """The request as the model reads it: with the application the user came from, when the popup sent one.
-
-    Only the model's copy carries this note; the conversation shows what the user typed.
-    """
-    if not isinstance(about, dict):
-        return message
-    app = str(about.get("app") or about.get("class") or "").strip()[:100]
-    title = str(about.get("title") or "").strip()[:MAX_WINDOW_TITLE_CHARS]
-    if not app and not title:
-        return message
-    where = f"the application {app}" + (f' (window title: "{title}")' if title else "") if app else f'the window "{title}"'
-    return (f"[Background, not part of the request: the user had {where} open when they asked. If the request "
-            f"is about the application they are in (\"this\", \"here\", \"how do I…\" without a name), it is "
-            f"this one, so do not ask which. If they name another application or ask about something else, answer "
-            f"that and ignore this note.]\n\n{message}")
 
 
 def _usable(settings: dict[str, Any], names: list[str]) -> tuple[list[tuple[str, dict[str, Any], Any]], list[str]]:
@@ -304,9 +295,11 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
                 return
         emit(event)
 
+    local = is_local_address(model["base_url"])
+    policy = agent.get("app_context", app_context.DEFAULT_POLICY)
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
-             max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate,
-             redact=not is_local_address(model["base_url"]))
+             max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate, redact=not local,
+             prepare=lambda history: app_context.for_model(history, policy, local))
     return held[0] if held else None
 
 

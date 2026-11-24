@@ -139,18 +139,19 @@ def application_name(resource_class: str) -> str:
 
 
 def current_application() -> dict[str, str]:
-    """``{"app", "class", "title", "icon"}`` of the window the user is working in, or empty strings.
+    """``{"app", "class", "title", "icon", "window"}`` of the window the user is working in, or empty strings.
 
     The popup asks for this when it is opened from the floating button or the hotkey, so the
-    assistant knows which application the question is about (``ask_stream`` adds app, class and
-    title to the request) and the welcome screen can name it, with ``icon`` (its desktop entry's
-    icon name), on its help shortcut.
+    assistant knows which application the question is about (``app_context`` turns it into a note
+    for the model) and the welcome screen can name it, with ``icon`` (its desktop entry's icon
+    name), on its help shortcut. ``window`` is its KWin id, so ``app_context`` can read that window
+    again when a request is sent, after the user has moved to the popup.
     """
     context = active_window_context()
     window = context.get("window") or {}
     cls = str(window.get("app") or "")
     return {"app": application_name(cls), "class": cls, "title": str(window.get("title") or "")[:200],
-            "icon": _desktop_entry(cls).get("Icon", "")}
+            "icon": _desktop_entry(cls).get("Icon", ""), "window": str(window.get("id") or "")}
 
 
 def session_context() -> dict[str, Any]:

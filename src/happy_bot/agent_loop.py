@@ -36,6 +36,11 @@ When ``redact`` is true (a hosted model), tool results pass through
 ``redaction.redact`` before they are added to the history, so passwords,
 API keys and private keys a tool happened to read are not sent off the
 computer; the popup's own copy of the result is redacted the same way.
+A result of a tool marked ``private`` (it read inside the user's
+applications) is stored with ``Message.private``. ``prepare``, when given,
+turns the history into what this model may see right before each request
+(``app_context.for_model``: the user's app_context setting, and secrets
+read by an earlier, local model hidden again for a hosted one).
 
 History contract: ``history`` is mutated in place and is always left valid
 for the next request. An assistant message is appended only when its stream
@@ -215,6 +220,7 @@ def run_turn(
     max_steps: int = MAX_STEPS,
     gate: PermissionGate | None = None,
     redact: bool = False,
+    prepare: Callable[[list[Message]], list[Message]] | None = None,
 ) -> None:
     """Run the turn whose user message is the last entry of ``history`` (see module docstring)."""
     specs = registry.specs()
@@ -234,7 +240,8 @@ def run_turn(
         echo = ""
         thinking_reported = False
         try:
-            for event in provider.stream(trim_history(history, context_window), specs, cancel):
+            outgoing = prepare(history) if prepare else history
+            for event in provider.stream(trim_history(outgoing, context_window), specs, cancel):
                 if isinstance(event, TextDelta):
                     text_parts.append(event.text)
                     emit({"type": "text_delta", "text": event.text})
@@ -295,7 +302,8 @@ def run_turn(
                 actions.append({"summary": summary, "outcome": outcome})
             if redact:
                 text = redact_secrets(text)
-            history.append(Message("tool", text, tool_call_id=call.id))
+            tool = registry.get(call.name)
+            history.append(Message("tool", text, tool_call_id=call.id, private=bool(tool and tool.private)))
             event = {"type": "tool_result", "id": call.id, "name": call.name, "ok": ok, "text": text[:EVENT_RESULT_CHARS]}
             card = registry.card(call.name, text) if ok else None
             if card:
