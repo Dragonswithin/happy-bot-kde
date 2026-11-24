@@ -350,6 +350,8 @@ text-only models and stays as an option afterwards.
 
 - ✓ OpenAI-compatible provider with tools and streaming, loopback discovery,
   extra headers, models added by id when a service cannot list them.
+- ● OpenAI's Responses API, which OpenAI's newest models need for tools; the
+  OpenAI preset uses it. (not yet tried with a real key)
 - ● Online services by name: Claude, OpenAI, Google Gemini, Grok, Qwen,
   Muse, Mistral, DeepSeek, Kimi, Groq and OpenRouter, each with its key page,
   short directions and suggested models; every model added is tested and

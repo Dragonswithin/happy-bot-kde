@@ -76,7 +76,7 @@ def _entry(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                        if item["id"] == model_id), 0)
     except ProviderError:
         pass  # some services do not list models; the preset's or the default window is used
-    entry = {"provider": "openai_compatible", "base_url": base_url, "model": model_id, "api_key": api_key,
+    entry = {"provider": (preset or {}).get("provider", "openai_compatible"), "base_url": base_url, "model": model_id, "api_key": api_key,
              "context_window": window or (preset or {}).get("context_window") or settings_store.DEFAULT_CONTEXT_WINDOW}
     if preset:
         prices = model_presets.suggested(preset["id"], model_id)

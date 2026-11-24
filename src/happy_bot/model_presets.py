@@ -2,7 +2,8 @@
 
 Each preset is what a person needs to go from "I use Claude" to a working model without knowing an
 API address: the service's OpenAI-compatible address (``base_url``, used through
-``providers.openai_compatible``), the page where keys are made (``key_url``), two or three plain
+``providers.openai_compatible``, or OpenAI's own Responses API when ``provider`` says
+``openai_responses``), the page where keys are made (``key_url``), two or three plain
 steps (``key_steps``), where the user's words go (``privacy``), and suggested models (``models``,
 each ``{"id", "label"}``, best start first, with prices per million tokens when the service
 publishes them, copied into the model entry for the spending cap). ``context_window`` is used when
@@ -48,6 +49,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
         "description": "The company behind ChatGPT, with its newest GPT models, paid per use.",
         "privacy": "Whatever Happy Bot reads for a request is sent to OpenAI.",
         "base_url": "https://api.openai.com/v1",
+        # Its newest models refuse tools on /chat/completions and need the Responses API.
+        "provider": "openai_responses",
         "key_url": "https://platform.openai.com/api-keys",
         "key_steps": "Sign in to the OpenAI platform, choose Create new secret key, and copy it. A ChatGPT "
                      "subscription is separate: API use is billed on its own.",

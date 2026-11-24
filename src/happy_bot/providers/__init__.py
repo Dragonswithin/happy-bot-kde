@@ -11,8 +11,11 @@ from typing import Any
 
 from .base import ModelProvider, ProviderError
 from .openai_compatible import OpenAICompatibleProvider
+from .openai_responses import OpenAIResponsesProvider
 
-PROVIDER_KINDS = ("openai_compatible",)
+# openai_compatible: /chat/completions, which most services speak. openai_responses: OpenAI's
+# /responses, which its newest models need for tools (the OpenAI preset uses it).
+PROVIDER_KINDS = ("openai_compatible", "openai_responses")
 
 __all__ = ["ModelProvider", "ProviderError", "PROVIDER_KINDS", "create_provider"]
 
@@ -20,8 +23,9 @@ __all__ = ["ModelProvider", "ProviderError", "PROVIDER_KINDS", "create_provider"
 def create_provider(model: dict[str, Any]) -> ModelProvider:
     """Build the provider for one entry of the ``models`` settings."""
     kind = model.get("provider")
-    if kind == "openai_compatible":
-        return OpenAICompatibleProvider(
+    if kind in PROVIDER_KINDS:
+        provider = OpenAICompatibleProvider if kind == "openai_compatible" else OpenAIResponsesProvider
+        return provider(
             base_url=model["base_url"],
             model=model["model"],
             api_key=model.get("api_key", ""),

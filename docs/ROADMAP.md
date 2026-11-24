@@ -954,6 +954,16 @@ Findings:
   own combo box made binding loops on its implicit size in the popup, which
   resizes to its content, so the picker uses the standard one at a fixed
   width. Loads without errors in `plasmawindowed`; not yet used by a person.
+- OpenAI's newest models refused tools on `/chat/completions` when the
+  maintainer added one ("Function tools with reasoning_effort are not
+  supported for gpt-6-luna in /v1/chat/completions"). A second provider
+  kind, `openai_responses` (`providers/openai_responses.py`), speaks OpenAI's
+  Responses API from its documentation: flat tool definitions, the history
+  as input items, `store: false`, and each response's output items
+  (reasoning with its `encrypted_content`, messages, function calls) replayed
+  unchanged through `echo`, which OpenAI requires with the tool results that
+  follow. The OpenAI preset uses it; everything else stays on chat
+  completions. Tested against recorded-style events; not yet with a real key.
 
 ## Decisions
 

@@ -25,7 +25,8 @@ Schema (version 1)::
       },
       "models": {
         "<name>": {
-          "provider": "openai_compatible",    # required; the only kind so far
+          "provider": "openai_compatible",    # required; or "openai_responses" (OpenAI's newer API, which its
+                                              #   newest models need for tools; the OpenAI preset sets it)
           "base_url": "http://host:port/v1",  # required; the API root above /chat/completions
           "model": "<model id>",              # required; as the service names it
           "api_key": "",                      # default ""; sent as a bearer token when set
@@ -146,7 +147,7 @@ from .runtime_paths import APP_DIR_NAME, write_private_file
 from .tools.shell import DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, SUPPORTED_TERMINALS
 
 SETTINGS_VERSION = 1
-PROVIDER_KINDS = ("openai_compatible",)
+PROVIDER_KINDS = ("openai_compatible", "openai_responses")  # see providers/__init__.py
 DEFAULT_CONTEXT_WINDOW = 32768
 APPROVAL_POLICIES = ("danger", "changes", "everything")
 FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
