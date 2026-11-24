@@ -1,4 +1,5 @@
-"""Routines: named requests the user saved, run when asked, on a schedule, or when a folder changes.
+"""Routines: named requests the user saved, run when asked, on a schedule, when a folder changes,
+when a drive is plugged in, on joining a network, or when the battery runs low.
 
 A routine is an entry of the ``routines`` setting (``settings.py`` stores it;
 this module validates it and owns what it means)::
@@ -9,6 +10,8 @@ this module validates it and owns what it means)::
         "schedule": "Mon..Fri 08:30",   # default ""; a systemd OnCalendar expression, "" = never on its own
         "watch_folder": "",             # default ""; run when something in this folder changes
         "drive_label": "",              # default ""; run when a drive with this label is plugged in
+        "on_network": "",               # default ""; run on joining this network (connection or Wi-Fi name)
+        "battery_below": 0,             # default 0 = never; run when the battery drops below this percent
         "enabled": true                 # default true; false keeps it but never runs it on its own
       }
     }
@@ -24,7 +27,9 @@ How routines run:
 - On their own: ``sync`` keeps one pair of systemd user units per trigger in
   step with the setting (a ``.timer`` for ``schedule``, a ``.path`` for
   ``watch_folder``, and for ``drive_label`` a service the drive's device unit
-  wants, so it runs when that drive is plugged in), whose service runs ``happy-bot ask --notify``
+  wants, so it runs when that drive is plugged in; for ``on_network`` and
+  ``battery_below`` a timer that checks every two minutes and runs the
+  routine when the condition has just become true, ``routine_conditions``), whose service runs ``happy-bot ask --notify``
   with the request. That command has no terminal, so any step needing
   approval is declined, never taken; the answer arrives as a notification.
 
@@ -43,6 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from . import user_timers
+from .routine_conditions import CHECK_EVERY
 
 KIND = "routine"
 MAX_REQUEST_CHARS = 2000
@@ -64,7 +70,8 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
             raise RoutineError(f"{where}: names use letters, digits, spaces, '_', '.' or '-' (max 60)")
         if not isinstance(entry, dict):
             raise RoutineError(f"{where} must be an object")
-        unknown = set(entry) - {"request", "schedule", "watch_folder", "drive_label", "enabled"}
+        unknown = set(entry) - {"request", "schedule", "watch_folder", "drive_label", "on_network", "battery_below",
+                                "enabled"}
         if unknown:
             raise RoutineError(f"{where}: unknown setting {sorted(unknown)[0]!r}")
         request = entry.get("request")
@@ -83,6 +90,12 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
         label = entry.get("drive_label", "")
         if not isinstance(label, str) or len(label) > 64 or "/" in label or "\n" in label:
             raise RoutineError(f"{where}: 'drive_label' must be a drive's label (no '/')")
+        network = entry.get("on_network", "")
+        if not isinstance(network, str) or len(network) > 100 or "\n" in network:
+            raise RoutineError(f"{where}: 'on_network' must be a network's name")
+        battery = entry.get("battery_below", 0)
+        if isinstance(battery, bool) or not isinstance(battery, int) or not 0 <= battery <= 99:
+            raise RoutineError(f"{where}: 'battery_below' must be a whole percentage from 1 to 99, or 0 for none")
         enabled = entry.get("enabled", True)
         if not isinstance(enabled, bool):
             raise RoutineError(f"{where}: 'enabled' must be true or false")
@@ -91,6 +104,8 @@ def validate_routines(raw: Any) -> dict[str, dict[str, Any]]:
             "schedule": schedule.strip(),
             "watch_folder": os.path.expanduser(folder.strip()) if folder.strip() else "",
             "drive_label": label.strip(),
+            "on_network": network.strip(),
+            "battery_below": battery,
             "enabled": enabled,
         }
     return routines
@@ -129,6 +144,10 @@ def desired_units(routines: dict[str, dict[str, Any]]) -> dict[str, tuple[str, l
         if entry.get("drive_label"):
             device = user_timers.device_unit(f"/dev/disk/by-label/{entry['drive_label']}")
             wanted[user_timers.unit_name(KIND, _ident(name, "drive"))] = (description, command, "device", device)
+        for kind, value in (("network", entry.get("on_network", "")), ("battery", entry.get("battery_below", 0))):
+            if value:
+                check = [_launcher(), "routine-check", "--kind", kind, "--value", str(value), "--", name]
+                wanted[user_timers.unit_name(KIND, _ident(name, kind))] = (description, check, "timer", CHECK_EVERY)
     return wanted
 
 

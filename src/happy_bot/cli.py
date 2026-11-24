@@ -15,6 +15,8 @@ at once, so a script can never approve a dangerous action by accident.
 notification, which is how routines started by a systemd timer report back
 (``routines.py``). Every other command prints one JSON reply.
 
+``routine-check`` is what a network or battery routine's timer runs
+(``routine_conditions.py``).
 ``eval`` runs ``evaluation.SCENARIOS`` as dry runs against a model and
 prints pass or fail with timings.
 ``mcp-serve`` speaks MCP on stdin and stdout so another AI program can use
@@ -228,6 +230,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluate = sub.add_parser("eval", help="Try a model on everyday requests as dry runs (nothing changes) and "
                               "report which pass and how long they take.")
     evaluate.add_argument("--model", default="", help="A configured model; default is the active one.")
+    routine_check = sub.add_parser("routine-check", help="Run a routine if its network or battery condition has just "
+                                   "become true (started by the routine's timer).")
+    routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
+    routine_check.add_argument("--value", required=True)
+    routine_check.add_argument("name")
     sub.add_parser("mcp-serve", help="Run as an MCP server (stdio) lending the built-in tools to another AI "
                    "program; needs 'Let other AI programs use these tools' in the settings.")
     history = sub.add_parser("history", help="List saved conversations, or print one by id.")
@@ -441,6 +448,15 @@ def main(argv: list[str] | None = None) -> int:
                       + (f"  {item['problem']}" if item["problem"] else ""))
             print(f"{sum(item['passed'] for item in results)} of {len(results)} passed")
             return 0 if all(item["passed"] for item in results) else 1
+        elif args.command == "routine-check":
+            from .routine_conditions import check
+
+            routine = current_settings().get("routines", {}).get(args.name)
+            if not routine or not routine.get("enabled", True):
+                reply = {"ok": True, "result": "no such routine, or it is paused"}
+            else:
+                reply = {"ok": True, "result": check(args.name, args.kind, args.value,
+                                                      lambda: stream_ask(routine["request"], notify=True))}
         elif args.command == "mcp-serve":
             from .mcp_serve import serve
 

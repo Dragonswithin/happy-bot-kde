@@ -17,7 +17,9 @@ import org.kde.plasma.plasma5support as P5Support
  * Routines: every entry of the daemon's `routines` setting (its meaning is in
  * src/happy_bot/routines.py), each with its request, an optional
  * schedule (systemd calendar syntax), an optional folder to watch, an
- * optional drive label (it runs when that drive is plugged in), a pause
+ * optional drive label (it runs when that drive is plugged in), an optional
+ * network to run on joining (the battery condition is set by asking the
+ * assistant), a pause
  * switch and Delete; a form adds one. Edits are saved when a field is left;
  * the daemon validates the schedule and keeps the routine's timers in step.
  * "Try it" runs the request as a dry run (`happy-bot ask --dry-run
@@ -168,6 +170,13 @@ Kirigami.FormLayout {
                         text: routine.entry.watch_folder || ""
                         placeholderText: i18n("Or watch a folder, e.g. ~/Inbox")
                         onEditingFinished: section.update(routine.modelData, "watch_folder", text.trim())
+                    }
+
+                    QQC2.TextField {
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 8
+                        text: routine.entry.on_network || ""
+                        placeholderText: i18n("Or on joining this network")
+                        onEditingFinished: section.update(routine.modelData, "on_network", text.trim())
                     }
 
                     QQC2.TextField {

@@ -787,7 +787,10 @@ Findings:
   wants), finding a window by what it shows (`workspace.py`), opening
   folders and terminals (`apps.py`), a digest of turns dropped from long
   conversations (`conversation.trim_history`), media downloads with the
-  user's yt-dlp, and an Open button on the "finished" notification.
+  user's yt-dlp, and an Open button on the "finished" notification. A
+  third round added routines that run on joining a network or when the
+  battery runs low (`routine_conditions.py`, checked every two minutes by a
+  timer, firing once when the condition becomes true).
   `desktop_actions.open_assistant_popup` opens the popup by invoking the
   applet's "activate widget" shortcut action through KGlobalAccel; the maintainer saw
   the popup open when it was tried. The maintainer also confirmed the popup's settings

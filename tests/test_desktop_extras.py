@@ -1,7 +1,8 @@
 """Tests for weather, mice and touchpads, key repeat, reopening the popup, pinning,
-drive-triggered routines, finding windows by their content, and opening folders and terminals.
+drive-, network- and battery-triggered routines, finding windows by their content, and
+opening folders and terminals.
 
-Network, DBus, KWin, accessibility and program starts are replaced by fakes,
+Network, DBus, KWin, accessibility, ``nmcli``/``upower`` output and program starts are replaced by fakes,
 so nothing on the desktop changes; pinned conversations and routine units
 are written into temporary folders.
 """
@@ -21,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from happy_bot import desktop_actions, routines, user_timers  # noqa: E402
+from happy_bot import desktop_actions, routine_conditions, routines, user_timers  # noqa: E402
 from happy_bot.accessibility import Element, Snapshot  # noqa: E402
 from happy_bot.conversation_archive import ConversationArchive  # noqa: E402
 from happy_bot.conversations import Conversation, ConversationStore  # noqa: E402
@@ -180,6 +181,43 @@ class DownloadTests(unittest.TestCase):
                     media.download_media({"url": "https://example.com/gone"})
             with self.assertRaisesRegex(ToolFailure, "'url'"):
                 media.download_media({"url": "file:///etc/passwd"})
+
+
+class ConditionRoutineTests(unittest.TestCase):
+    def test_a_condition_runs_the_routine_only_when_it_becomes_true(self) -> None:
+        ran = []
+        results = []
+        with tempfile.TemporaryDirectory() as tmp:
+            for value in (False, True, True, False, True):
+                with mock.patch.object(routine_conditions, "holds", return_value=value):
+                    results.append(routine_conditions.check("Home", "network", "Home", lambda: ran.append(1), Path(tmp)))
+        self.assertEqual(results, ["not true", "ran", "still true", "not true", "ran"])
+        self.assertEqual(len(ran), 2)
+
+    def test_battery_and_network_are_read_from_upower_and_nmcli(self) -> None:
+        outputs = {"nmcli": "Wired connection 1\nHome\\:Net\n", "upower -e": "/org/x/battery_BAT0\n",
+                   "upower -i": "  state: discharging\n  percentage: 14%\n"}
+        with mock.patch.object(routine_conditions, "_output",
+                               side_effect=lambda command: next(v for k, v in outputs.items() if " ".join(command).startswith(k))):
+            self.assertTrue(routine_conditions.on_network("home:net"))
+            self.assertFalse(routine_conditions.on_network("Cafe"))
+            self.assertTrue(routine_conditions.battery_below(20))
+            self.assertFalse(routine_conditions.battery_below(10))
+
+    def test_condition_routines_get_a_checking_timer(self) -> None:
+        settings = validate_settings({"routines": {"Low": {"request": "Save my work", "battery_below": 15},
+                                                   "Home": {"request": "Mount the NAS", "on_network": "Home"}}})
+        with tempfile.TemporaryDirectory() as tmp:
+            routines.sync(settings["routines"], Path(tmp), manage=False)
+            timers = sorted(path.read_text() for path in Path(tmp).glob("*.timer"))
+            services = " ".join(path.read_text() for path in Path(tmp).glob("*.service"))
+        self.assertEqual(len(timers), 2)
+        self.assertTrue(all("OnCalendar=*:0/2" in timer for timer in timers))
+        self.assertIn('"routine-check" "--kind" "battery" "--value" "15" "--" "Low"', services)
+        self.assertIn('"routine-check" "--kind" "network" "--value" "Home" "--" "Home"', services)
+        from happy_bot.settings import SettingsError
+        with self.assertRaisesRegex(SettingsError, "'battery_below'"):
+            validate_settings({"routines": {"x": {"request": "y", "battery_below": 150}}})
 
 
 if __name__ == "__main__":

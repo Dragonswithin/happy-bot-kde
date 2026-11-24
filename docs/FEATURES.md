@@ -287,9 +287,10 @@ text-only models and stays as an option afterwards.
   the user's yt-dlp, into Downloads)
 - ● Scheduled requests ("every weekday at 8, summarise my calendar and the
   weather") as user systemd timers.
-- ◐ Triggers: a file appears, a device connects, the battery is low, a network
-  joins, a time arrives. (times, folders and a drive being plugged in; battery
-  and network changes need system-level hooks and are deferred)
+- ● Triggers: a file appears, a device connects, the battery is low, a network
+  joins, a time arrives. (a schedule, a watched folder, a drive plugged in, joining
+  a network, the battery dropping below a level; network and battery are checked
+  every two minutes and fire once when they become true)
 - ● Named routines ("start work" opens apps, applies a layout, sets Do Not
   Disturb). (a folder-watching routine ran end to end)
 - ● Save a successful multi-step request as a routine.

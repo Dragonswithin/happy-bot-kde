@@ -35,6 +35,10 @@ def describe(name: str, entry: dict[str, Any]) -> str:
         when.append(f"when {entry['watch_folder']} changes")
     if entry.get("drive_label"):
         when.append(f"when the drive {entry['drive_label']} is plugged in")
+    if entry.get("on_network"):
+        when.append(f"on joining the network {entry['on_network']}")
+    if entry.get("battery_below"):
+        when.append(f"when the battery drops below {entry['battery_below']}%")
     timing = (" and ".join(when) if when else "only when asked") + ("" if entry.get("enabled", True) else ", paused")
     return f"{name} ({timing}): {entry['request']}"
 
@@ -54,6 +58,8 @@ def routine_tools(read_settings: ReadSettings, update_settings: UpdateSettings) 
             "schedule": arguments.get("schedule", existing.get("schedule", "")),
             "watch_folder": arguments.get("watch_folder", existing.get("watch_folder", "")),
             "drive_label": arguments.get("drive_label", existing.get("drive_label", "")),
+            "on_network": arguments.get("on_network", existing.get("on_network", "")),
+            "battery_below": arguments.get("battery_below", existing.get("battery_below", 0)),
             "enabled": arguments.get("enabled", existing.get("enabled", True)),
         }
 
@@ -86,6 +92,9 @@ def routine_tools(read_settings: ReadSettings, update_settings: UpdateSettings) 
                             "watch_folder": {"type": "string", "description": "'' for none"},
                             "drive_label": {"type": "string", "description": "run when the drive with this label "
                                             "is plugged in; '' for none"},
+                            "on_network": {"type": "string", "description": "run on joining this network; '' for none"},
+                            "battery_below": {"type": "integer", "description": "run when the battery drops below "
+                                              "this percent; 0 for none"},
                             "enabled": {"type": "boolean", "description": "false pauses it"}}, ["name"]),
              RISK_CHANGE, save_routine, summarize=lambda a: f"Save the routine '{a.get('name', '?')}'"),
         Tool("delete_routine", "Delete a saved routine.", object_schema({"name": {"type": "string"}}, ["name"]),
