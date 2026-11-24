@@ -22,6 +22,12 @@ import QtQuick
  * daemon keeps it with the conversation, and opening a saved chat restores
  * it; a new chat starts on "", and a pick whose AI was removed falls back
  * to "".
+ * `ui` is Happy Bot's look and feel (the daemon's `ui` settings,
+ * src/happy_bot/ui_settings.py): the mascot, the popup's size, search while
+ * typing, the floating Happy Bot's look and place. It comes with `/health`,
+ * so the panel widget and the app always use the same values;
+ * `saveUi(changes)` changes some of them (`POST /ui`). Until the first
+ * answer it holds the defaults.
  * `helpWith` is the application the user was in (`{app, class, title}`, from
  * `/context/app`) when the popup was opened from the floating button or the
  * hotkey (`captureApplication`), or null. While set, it is sent with every
@@ -100,6 +106,11 @@ Item {
     property var models: []
     property string chatModel: ""
     property var helpWith: null
+    property var ui: ({
+        robot_mascot: false, popup_width: 30, popup_height: 26, instant_search: true, instant_min_chars: 2,
+        instant_delay_ms: 200, instant_results: 8, floating_opacity: 40, floating_x: -1, floating_y: -1, imported: []
+    })
+    property bool uiLoaded: false
 
     readonly property ListModel entries: ListModel {}
     property var history: []
@@ -190,6 +201,10 @@ Item {
         request("GET", "/health", null, function(data) {
             session.needsSetup = !(data.setup && data.setup.model);
             session.models = data.models || [];
+            if (data.ui && JSON.stringify(data.ui) !== JSON.stringify(session.ui)) {
+                session.ui = data.ui;
+            }
+            session.uiLoaded = true;
             if (session.chatModel && !session.models.some(item => item.name === session.chatModel)) {
                 session.chatModel = "";
             }
@@ -322,6 +337,16 @@ Item {
         }, function(data) {
             session.refreshHistory();
         });
+    }
+
+    /** Changes some of the shared look-and-feel settings; `then(ui)` gets them all back. */
+    function saveUi(changes, then) {
+        request("POST", "/ui", { changes: changes }, function(data) {
+            session.ui = data.ui;
+            if (then) {
+                then(data.ui);
+            }
+        }, function(data) {});
     }
 
     /** Notes the application the user is in, for the next requests; called before the popup opens. */

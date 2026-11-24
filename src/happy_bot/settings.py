@@ -87,6 +87,8 @@ Schema (version 1)::
                                               #   Reading the desktop
                                               #   and the user's tool servers are not affected.
       },
+      "ui": {...},                            # the panel widget's and the app's look and feel, kept once
+                                              #   for both; keys, defaults and ranges: ui_settings.py
       "personal": {                           # where the assistant keeps the user's notes and to-dos
         "notes_file": "",                     #   default "" = Notes.md in the Documents folder
         "todo_file": ""                       #   default "" = To-do.md in the Documents folder
@@ -140,6 +142,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent_loop import MAX_STEPS
+from .ui_settings import UiSettingsError, validate_ui
 from .mcp_client import McpServerSpec
 from .routines import RoutineError, validate_routines
 from .tools.workspace import LayoutError, validate_layouts
@@ -199,6 +202,7 @@ def default_settings() -> dict[str, Any]:
         "version": SETTINGS_VERSION, "tool_servers": {}, "roles": {}, "models": {}, "active_model": "",
         "approval_policy": "danger", "folders": {}, "history_days": DEFAULT_HISTORY_DAYS, "agent": default_agent(),
         "routines": {}, "layouts": {}, "personal": {"notes_file": "", "todo_file": ""},
+        "ui": validate_ui({}),
     }
 
 
@@ -392,7 +396,7 @@ def validate_settings(raw: Any) -> dict[str, Any]:
     _require(isinstance(raw, dict), "settings must be an object")
     _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "model_order", "active_model",
                                 "approval_policy", "folders",
-                                "history_days", "agent", "routines", "layouts", "personal"}, "")
+                                "history_days", "agent", "routines", "layouts", "personal", "ui"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
     raw_roles = raw.get("roles", {})
@@ -436,7 +440,15 @@ def validate_settings(raw: Any) -> dict[str, Any]:
         "routines": _validate_routines(raw.get("routines", {})),
         "layouts": _validate_layouts(raw.get("layouts", {})),
         "personal": _validate_personal(raw.get("personal", {})),
+        "ui": _validate_ui_group(raw.get("ui", {})),
     }
+
+
+def _validate_ui_group(raw: Any) -> dict[str, Any]:
+    try:
+        return validate_ui(raw)
+    except UiSettingsError as error:
+        raise SettingsError(str(error)) from error
 
 
 def _validate_personal(raw: Any) -> dict[str, str]:

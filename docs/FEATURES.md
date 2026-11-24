@@ -63,10 +63,12 @@ text-only models and stays as an option afterwards.
 - ● Happy Bot as an app of its own: "Happy Bot" in the application menu runs
   the widget outside the panel (`happy-bot-app`, Plasma's plasmawindowed),
   where it is only the floating Happy Bot; launching it again opens or
-  closes it; it can start at login. The panel widget is optional.
+  closes it; it can start at login. The panel widget is optional, and its
+  own settings are only the panel's (icon or bar, width); everything else
+  is set in the app and shared, so both always match.
 - ● A floating button over other windows (a layer-shell surface: anywhere on
   the screen, dragged to move, faded while not in use) and a hotkey set on
-  the Search Bar page; both open Happy Bot with the application in use
+  the app's Appearance page; both open Happy Bot with the application in use
   noted ("Helping with: …", removable) and sent with the questions. The
   button opens into Happy Bot itself, right where it is, so the panel is not
   needed. (the button and its open view were seen in place; clicking,

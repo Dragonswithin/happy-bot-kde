@@ -4,7 +4,14 @@
       xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
   <kcfgfile name=""/>
   <group name="General">
-    <!-- Which picture stands for the assistant on the panel and beside its
+    <!-- This copy of the widget's own Plasma settings. Only three are still
+         used: daemonUrl, and, in the panel widget, inputInPanel and
+         barWidth. Happy Bot's other settings belong to the app and are kept
+         by the daemon (src/happy_bot/ui_settings.py), so the panel widget
+         and the app match. The entries marked "earlier" were where each copy
+         kept them before; main.qml reads them once to hand any changed value
+         over to the daemon, and they are not used otherwise. -->
+    <!-- Earlier: which picture stands for the assistant on the panel and beside its
          replies. false (default): the system's wand icon (tools-wizard).
          true: Happy Bot's robot mascot (contents/images/happy-bot.svg). -->
     <entry name="useRobotMascot" type="Bool">
@@ -33,7 +40,7 @@
       <min>8</min>
       <max>60</max>
     </entry>
-    <!-- The floating Happy Bot, shown when Happy Bot runs as its own app
+    <!-- Earlier: the floating Happy Bot, shown when Happy Bot runs as its own app
          (happy-bot-app; these values belong to that app's copy of the
          widget). floatingX, floatingY: its position in logical pixels from
          the top left of the screen; -1 (default) puts it near the bottom
@@ -51,7 +58,7 @@
       <min>15</min>
       <max>100</max>
     </entry>
-    <!-- Size of the results popup in Plasma grid units. Defaults 30 wide by
+    <!-- Earlier: size of the results popup in Plasma grid units. Defaults 30 wide by
          26 tall. Ranges: width 20 to 70, height 12 to 50. -->
     <entry name="popupWidth" type="Int">
       <default>30</default>
@@ -63,8 +70,8 @@
       <min>12</min>
       <max>50</max>
     </entry>
-    <!-- Live file results while typing (the instant search), shown on the
-         Search Bar page. instantSearch: whether to search while typing at all
+    <!-- Earlier: live file results while typing (the instant search), shown on the
+         earlier Search Bar page. instantSearch: whether to search while typing at all
          (default true; Enter still sends the text to the assistant).
          instantMinChars: characters typed before searching (default 2,
          range 1 to 10). instantDelayMs: pause in typing, in milliseconds,

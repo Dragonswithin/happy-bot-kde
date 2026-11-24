@@ -8,8 +8,11 @@ socket.
 
 Endpoints:
 
-- ``GET /health``: daemon status, which parts of setup are complete, and the
-  user's AIs in order (name and whether online) for the popup's per-chat picker.
+- ``GET /health``: daemon status, which parts of setup are complete, the
+  user's AIs in order (name and whether online) for the popup's per-chat
+  picker, and the shared look-and-feel settings (``ui``).
+- ``POST /ui``: change some of those shared settings (``ui_settings``); the
+  panel widget and the app both read them, so they stay the same.
 - ``GET /context``: desktop context capture (``desktop_context``).
 - ``GET /app``, ``POST /app``: whether the Happy Bot app (the floating Happy
   Bot, run by ``happy-bot-app``) is running and starts at login; start it,
@@ -139,6 +142,7 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     # The popup's per-chat picker: names and whether each is online, in the user's order. No secrets.
     payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"])}
                          for name in server.settings.get("model_order", [])]
+    payload["ui"] = server.settings.get("ui") or {}
     payload["settings_error"] = server.settings_error
     return 200, payload
 
@@ -148,6 +152,19 @@ def context(server: "AssistantServer", query: dict[str, list[str]], body: dict[s
     captured = desktop_context.combined_context(kind)
     server.state.update(last_context_kind=kind)
     return 200, {"ok": True, "context": captured}
+
+
+def change_ui(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """Merge ``body["changes"]`` into the shared look-and-feel settings (``ui_settings``); returns them all."""
+    changes = body.get("changes")
+    if not isinstance(changes, dict):
+        return _error(400, "changes must be an object", "invalid")
+    updated = {**server.settings, "ui": {**(server.settings.get("ui") or {}), **changes}}
+    try:
+        stored = server.replace_settings(updated)
+    except settings_store.SettingsError as error:
+        return _error(400, str(error), "invalid")
+    return 200, {"ok": True, "ui": stored["ui"]}
 
 
 def app_status(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -167,7 +184,8 @@ def app_change(server: "AssistantServer", query: dict[str, list[str]], body: dic
 
 
 def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
-    return 200, {"ok": True, "count": app_control.waker.notify(), "running": app_control.running()}
+    action = str(body.get("action") or "open")
+    return 200, {"ok": True, "count": app_control.waker.notify(action), "running": app_control.running()}
 
 
 def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -175,7 +193,7 @@ def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[
         seen = int(_first(query, "seen", "-1"))
     except ValueError:
         return _error(400, "seen must be a number", "invalid")
-    return 200, {"ok": True, "count": app_control.waker.wait(seen)}
+    return 200, {"ok": True, **app_control.waker.wait(seen)}
 
 
 def current_application(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -522,6 +540,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,
+    ("POST", "/ui"): change_ui,
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,
     ("POST", "/app/show"): app_show,

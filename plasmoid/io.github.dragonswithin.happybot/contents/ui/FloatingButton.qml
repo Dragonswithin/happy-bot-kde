@@ -13,7 +13,7 @@ import org.kde.layershell as LayerShell
 /**
  * The floating Happy Bot: a small round button above other windows,
  * anywhere on the screen, that opens into Happy Bot itself right where it
- * is. main.qml creates it when the `floatingButton` setting is on; it needs
+ * is. main.qml creates it when Happy Bot runs as its own app; it needs
  * neither the panel icon nor the panel bar.
  *
  * It is a layer-shell surface (LayerShellQt, the protocol Plasma's own

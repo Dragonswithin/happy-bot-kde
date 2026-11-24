@@ -17,13 +17,14 @@ architecture and phase order are in `docs/ROADMAP.md`.
   floating Happy Bot, a button over other windows that you drag anywhere and
   that fades while not in use. Clicking it opens Happy Bot right there,
   field and all; no panel widget is needed. Launching it again (or a launch
-  shortcut set in System Settings > Shortcuts) opens or closes it. The
-  Search Bar settings start it, or start it when you log in; right-click
-  the floating button for its own settings or to quit. Happy Bot knows
+  shortcut set in System Settings > Shortcuts) opens or closes it.
+  Right-click the floating button for Happy Bot's settings or to quit. Happy Bot knows
   which application you are in when opened this way or with the hotkey,
   shown as "Helping with: …", which you can remove.
 - The panel widget (search bar or icon) is optional and works alongside the
-  app.
+  app. Its own settings are only what concerns the panel (icon or search
+  bar, the bar's width); everything else is set in Happy Bot itself, so the
+  panel widget and the floating Happy Bot always match.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.
@@ -77,12 +78,12 @@ architecture and phase order are in `docs/ROADMAP.md`.
 
 ## Settings
 
-Right-click the assistant's icon and choose Configure. Every setting has a
-control there; no file needs editing.
-
-On the **Search Bar** page, check **Use robot mascot** and click **Apply**
-to show the robot on the panel and beside Happy Bot’s replies. Uncheck it
-to return to the wand.
+Right-click the floating Happy Bot (or the panel widget) and choose
+**Configure Happy Bot…**. Every setting has a control there; no file needs
+editing. Settings belong to Happy Bot itself, so the floating Happy Bot and
+the panel widget always look and behave the same; the panel widget's own
+settings ("Panel widget settings…") are only the icon or search bar and the
+bar's width.
 
 - **AI Model:** your AIs in one list, in the order they are asked: the
   first answers, and if it fails the next one does. Arrows change the order;
@@ -113,10 +114,11 @@ to return to the wand.
 - **History & Folders:** how long conversations are kept, deleting them
   all, and where Desktop, Documents, Downloads, Pictures, Music and Videos
   are.
-- **Search Bar:** live results while typing (on or off, after how many
+- **Appearance:** the robot mascot or the wand, the hotkey, starting
+  Happy Bot at login, how faded the floating Happy Bot is and putting it
+  back in its corner, live results while typing (on or off, after how many
   characters, after what pause, how many), the popup's size, and the
   address of the background service for unusual setups.
-- **Keyboard Shortcuts:** the shortcut that opens the assistant.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.
@@ -257,10 +259,10 @@ scripts/install.sh --uninstall           # keeps your settings
 scripts/install.sh --uninstall --purge   # removes them too
 ```
 
-The widget's Search Bar settings page chooses between the icon (default) and
-a search bar in the panel, and sets the bar width and the results size; its
-Keyboard Shortcuts page sets the shortcut that opens the popup or focuses the
-bar.
+The panel widget's own settings page (Panel) chooses between the icon
+(default) and a search bar in the panel and sets the bar width; its
+Keyboard Shortcuts page sets a shortcut that opens the panel popup or
+focuses the bar. Happy Bot's own hotkey is on the app's Appearance page.
 
 Translations of the widget live in `po/<language>.po`. `scripts/translations.sh
 template` writes the template to start one from, `merge` brings every

@@ -49,10 +49,10 @@ import "barInput.js" as BarInput
  *   if there are any, else shows only the field. Submitting a request clears the matches and shows
  *   the conversation; Enter in an empty field shows the previous one; an
  *   approval request clears the matches so its card is in front of the user.
- * - Typing. When live results are on (`instantSearch`), text of at least
- *   `instantMinChars` characters is sent to the instant file search after
- *   `instantDelayMs` of no typing; these and `instantResults` are the
- *   applet's own settings (contents/config/main.xml, Search Bar page). The
+ * - Typing. When live results are on (`instant_search`), text of at least
+ *   `instant_min_chars` characters is sent to the instant file search after
+ *   `instant_delay_ms` of no typing; these and `instant_results` are the
+ *   shared look-and-feel settings (`session.ui`, the app's Appearance page). The
  *   same pause also fetches quick results (answers, windows, applications,
  *   settings pages, conversations), shown above the files; choosing one
  *   carries out its action (`openHit`). Optional prefixes (barInput.js) narrow
@@ -84,6 +84,14 @@ import "barInput.js" as BarInput
  * The floating button's right-click opens its own menu (settings, new
  * conversation, hide the floating button), without "Remove from panel",
  * which there would remove the floating button along with the widget.
+ * Settings: nearly all of Happy Bot's settings belong to the app. The
+ * daemon keeps them (models, tools, behaviour, history, routines, and the
+ * look and feel in `session.ui`), so the panel widget follows the app.
+ * In the panel, "Configure Happy Bot…" (and every "open settings" in the
+ * popup) opens the app's settings, starting the app if needed
+ * (`openAppSettings`); "Panel widget settings…" opens this widget's own:
+ * search bar or icon, and the bar's width (contents/config/config.qml).
+ *
  * A right-click on the icon or the bar opens the applet's own small menu
  * (settings, new conversation, remove).
  *
@@ -106,7 +114,7 @@ PlasmoidItem {
     property var sentRequests: []
     property int recallIndex: 0
 
-    Plasmoid.icon: Look.assistantIcon(Plasmoid.configuration.useRobotMascot)
+    Plasmoid.icon: Look.assistantIcon(session.ui.robot_mascot)
     Plasmoid.title: i18n("Happy Bot")
     Plasmoid.status: {
         if (wantsInput) {
@@ -145,7 +153,7 @@ PlasmoidItem {
     AssistantSession {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
-        searchLimit: Plasmoid.configuration.instantResults
+        searchLimit: session.ui.instant_results
         onHitsChanged: {
             popup.selectedIndex = -1;
             if (root.floating) {
@@ -158,19 +166,19 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        interval: Plasmoid.configuration.instantDelayMs
+        interval: session.ui.instant_delay_ms
         onTriggered: session.searchFiles(root.pendingQuery, root.pendingMode)
     }
 
     ResultsPopup {
         id: popup
-        useRobotMascot: Plasmoid.configuration.useRobotMascot
+        useRobotMascot: session.ui.robot_mascot
         session: session
         showConversation: root.conversationOpen
         takesFocus: !root.barMode
         barText: root.barMode && root.fullRepresentationItem ? root.fullRepresentationItem.text : ""
-        widthInGridUnits: Plasmoid.configuration.popupWidth
-        heightInGridUnits: Plasmoid.configuration.popupHeight
+        widthInGridUnits: session.ui.popup_width
+        heightInGridUnits: session.ui.popup_height
         visualParent: root
         location: Plasmoid.location
         onQueryEdited: text => root.handleEdited(text)
@@ -214,21 +222,18 @@ PlasmoidItem {
         active: root.standalone
         sourceComponent: FloatingButton {
             session: session
-            posX: Plasmoid.configuration.floatingX
-            posY: Plasmoid.configuration.floatingY
-            idleOpacity: Plasmoid.configuration.floatingOpacity / 100
+            posX: session.ui.floating_x
+            posY: session.ui.floating_y
+            idleOpacity: session.ui.floating_opacity / 100
             iconSource: Plasmoid.icon
             busy: session.busy
-            useRobotMascot: Plasmoid.configuration.useRobotMascot
+            useRobotMascot: session.ui.robot_mascot
             showConversation: root.conversationOpen
-            widthInGridUnits: Plasmoid.configuration.popupWidth
-            heightInGridUnits: Plasmoid.configuration.popupHeight
+            widthInGridUnits: session.ui.popup_width
+            heightInGridUnits: session.ui.popup_height
             onClicked: root.openForApplication()
             onMenuRequested: floatingMenu.openRelative()
-            onMoved: (x, y) => {
-                Plasmoid.configuration.floatingX = x;
-                Plasmoid.configuration.floatingY = y;
-            }
+            onMoved: (x, y) => session.saveUi({ floating_x: x, floating_y: y })
             onQueryEdited: text => root.handleEdited(text)
             onAccepted: text => root.handleAccepted(text)
             onSelectionMove: delta => root.moveSelection(delta)
@@ -304,6 +309,13 @@ PlasmoidItem {
         }
 
         PlasmaExtras.MenuItem {
+            text: i18n("Panel widget settings…")
+            icon: "configure"
+            visible: !root.standalone
+            onClicked: Plasmoid.internalAction("configure").trigger()
+        }
+
+        PlasmaExtras.MenuItem {
             text: i18n("New conversation")
             icon: "document-new"
             onClicked: session.newChat()
@@ -370,8 +382,13 @@ PlasmoidItem {
     /** The app waits for "show yourself" (a second launch, or the hotkey) through the daemon. */
     function waitForShowRequest() {
         session.request("GET", "/app/wait?seen=" + root.showRequests, null, function(data) {
-            // A second launch or the launch shortcut: open the floating Happy Bot, or close it when open.
-            if (root.showRequests >= 0 && data.count > root.showRequests) {
+            // A second launch or the launch shortcut opens the floating Happy Bot, or closes it when open;
+            // the panel widget asks for the settings. A request that started the app counts too.
+            const fresh = root.showRequests >= 0 ? data.count > root.showRequests
+                                                 : data.age >= 0 && data.age < 30;
+            if (fresh && data.action === "settings") {
+                root.openSettings();
+            } else if (fresh && root.showRequests >= 0) {
                 if (root.floatingOpen) {
                     root.closePopup();
                 } else {
@@ -397,7 +414,47 @@ PlasmoidItem {
         }
     }
 
+    /** The panel widget: Happy Bot's settings belong to the app, so start it if needed and open them there. */
+    function openAppSettings() {
+        root.closePopup();
+        session.request("POST", "/app", { start: true }, function(data) {
+            session.request("POST", "/app/show", { action: "settings" }, function(data) {}, function(data) {});
+        }, function(data) {});
+    }
+
+    // Before the look-and-feel settings moved to the daemon, each copy kept its own in Plasma. Each
+    // copy hands over the values it had changed, once ("imported"), so nothing set earlier is lost.
+    Connections {
+        target: session
+        function onUiLoadedChanged() {
+            const copy = root.standalone ? "app" : "panel";
+            const ui = session.ui;
+            if (!session.uiLoaded || (ui.imported || []).indexOf(copy) >= 0) {
+                return;
+            }
+            const config = Plasmoid.configuration;
+            const old = {
+                robot_mascot: [config.useRobotMascot, false], popup_width: [config.popupWidth, 30],
+                popup_height: [config.popupHeight, 26], instant_search: [config.instantSearch, true],
+                instant_min_chars: [config.instantMinChars, 2], instant_delay_ms: [config.instantDelayMs, 200],
+                instant_results: [config.instantResults, 8], floating_opacity: [config.floatingOpacity, 40],
+                floating_x: [config.floatingX, -1], floating_y: [config.floatingY, -1]
+            };
+            const changes = { imported: (ui.imported || []).concat([copy]) };
+            for (const key in old) {
+                if (old[key][0] !== undefined && old[key][0] !== old[key][1]) {
+                    changes[key] = old[key][0];
+                }
+            }
+            session.saveUi(changes);
+        }
+    }
+
     function openSettings() {
+        if (!root.standalone) {
+            root.openAppSettings();
+            return;
+        }
         root.closePopup();
         Plasmoid.internalAction("configure").trigger();
     }
@@ -507,8 +564,7 @@ PlasmoidItem {
         const parsed = BarInput.parse(text);
         root.pendingQuery = parsed.text;
         root.pendingMode = parsed.mode;
-        if (Plasmoid.configuration.instantSearch
-                && root.pendingQuery.length >= Plasmoid.configuration.instantMinChars) {
+        if (session.ui.instant_search && root.pendingQuery.length >= session.ui.instant_min_chars) {
             searchDelay.restart();
         } else {
             searchDelay.stop();

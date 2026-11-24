@@ -1012,6 +1012,24 @@ Findings:
   button in place; "show" opened it (720×324, focused) and a second one
   closed it; the window in use stayed Konsole while it was open; an
   install restarts a running app on the new version.
+- Settings belong to the app (the maintainer, 2026-11-24): the panel
+  widget's own settings are only what concerns it (icon or search bar, the
+  bar's width, the daemon's address). Happy Bot's look and feel moved from
+  each copy's Plasma settings into the daemon's `ui` settings
+  (`ui_settings.py`, `POST /ui`, read with `/health`), so the panel widget
+  and the app match, including the mascot. The dialog's page list depends
+  on the copy (`config.qml`): the app shows Appearance and the five daemon
+  pages, the panel only Panel. The dialog opens on the first page even when
+  it is hidden, so that page is one entry that is Appearance or Panel. In
+  the panel, "Configure Happy Bot…" opens the app's settings, starting the
+  app if needed (`POST /app/show` with "settings"; the wait's answer
+  carries the action and its age so a just-started app still acts on it).
+  Each copy handed over its old values once ("imported"): the maintainer's
+  robot mascot came from the panel and the floating position from the app.
+  The hotkey stays the app copy's own desktop shortcut. Verified: both
+  copies show the robot; each settings dialog showed the right pages.
+  A change made in one copy reaches the other within the 12-second status
+  check.
 
 ## Decisions
 

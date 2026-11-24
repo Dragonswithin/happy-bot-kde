@@ -48,19 +48,28 @@ class AutostartTests(unittest.TestCase):
 class WakerTests(unittest.TestCase):
     def test_a_waiting_app_wakes_on_a_show_request(self) -> None:
         waker = app_control.Waker()
-        seen = waker.wait(-1)  # the first call answers at once with the current count
-        woke: list[int] = []
+        seen = waker.wait(-1)["count"]  # the first call answers at once with the current count
+        woke: list[dict] = []
         waiter = threading.Thread(target=lambda: woke.append(waker.wait(seen, timeout=5)))
         waiter.start()
         time.sleep(0.1)
-        waker.notify()
+        waker.notify("settings")
         waiter.join(2)
-        self.assertEqual(woke, [seen + 1])
+        self.assertEqual((woke[0]["count"], woke[0]["action"]), (seen + 1, "settings"))
+        self.assertLess(woke[0]["age"], 1)
+
+    def test_a_request_made_before_the_app_started_is_still_seen(self) -> None:
+        waker = app_control.Waker()
+        waker.notify("settings")
+        first = waker.wait(-1)
+        self.assertEqual((first["count"], first["action"]), (1, "settings"))
+        self.assertEqual(waker.wait(-1, timeout=0)["action"], "settings")
+        self.assertEqual(app_control.Waker().wait(-1)["age"], -1)  # nothing asked yet
 
     def test_without_a_request_the_wait_ends_after_its_timeout(self) -> None:
         waker = app_control.Waker()
         started = time.monotonic()
-        self.assertEqual(waker.wait(0, timeout=0.2), 0)
+        self.assertEqual(waker.wait(0, timeout=0.2)["count"], 0)
         self.assertGreaterEqual(time.monotonic() - started, 0.15)
 
 
