@@ -11,22 +11,32 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * "AI model" section of the AI Model page (ConfigModels.qml): choose which
- * configured model answers, test or remove it, find model services running
- * on this computer, and add a hosted or other service by address. The chosen
- * model's stored properties are edited below it, in ModelDetails.qml.
+ * The top of the AI Model page (ConfigModels.qml), written as two plain
+ * questions and three ways to add an AI:
  *
- * It is a Kirigami.FormLayout so its labels line up with ModelDetails.qml
- * (ConfigModels.qml links them with `twinFormLayouts`). The add-a-service
- * fields stay folded away until asked for.
+ * - "Ask first": the model that answers (`active_model`), with Test and
+ *   Remove, and a line saying whether what it reads stays on this computer.
+ * - "If it fails, ask": the model that answers when the first one does not
+ *   (`agent.fallback_model`). Only models on this computer are offered, so
+ *   nothing goes online unless an online model is chosen to ask first
+ *   (src/happy_bot/ask_stream.py enforces the same rule).
+ * - "Find on this computer" (`POST /models/discover`) lists the models local
+ *   services have loaded; each can be made the one asked first or the backup
+ *   with one press.
+ * - "Online service…" opens OnlineModelChooser.qml: pick the service, get
+ *   and paste a key with directions, pick a model.
+ * - "By hand…": an address, model id and optional key, for any other
+ *   OpenAI-compatible service, self-hosted or not.
  *
- * It keeps only transient state (what a scan found, the add-form fields, the
- * last test result). Everything durable goes through `page.save`
- * (DaemonSettings.qml). A model's
- * API key is typed here once and sent to the daemon; it is never read back.
+ * Every addition goes through `POST /models/use`
+ * (src/happy_bot/model_setup.py), which adds the model, gives it its job and
+ * tests it, and removes it again if it does not answer; the result is shown
+ * here. Choosing between models already added uses `page.save`
+ * (DaemonSettings.qml). Model details (address, context window, prices) and
+ * the quicker-model and spending options are below, in ModelDetails.qml.
  *
- * A model whose address is not on this computer is labelled as hosted with
- * the plain consequence: what the assistant reads is sent to that service.
+ * Only transient state lives here: what a scan found, the by-hand fields,
+ * the last test result. A key typed here is sent once and never read back.
  */
 Kirigami.FormLayout {
     id: section
@@ -39,13 +49,17 @@ Kirigami.FormLayout {
     // `models` and `activeName` update separately when settings reload, so the
     // name can briefly point at a model that is not in the map yet.
     readonly property var active: (activeName && models[activeName]) || null
+    readonly property string backupName: (page.settings && page.settings.agent && page.settings.agent.fallback_model) || ""
+    readonly property var backupChoices: [""].concat(modelNames.filter(name => name !== activeName
+                                                                           && isLocal(models[name].base_url)))
     property var found: []
     property bool scanning: false
     property bool scanned: false
     property bool testing: false
     property string testResult: ""
     property bool testPassed: false
-    property bool adding: false
+    property string adding: ""   // "", "online" or "manual": which add form is open
+    property string usingKey: ""  // the found model being added, while its test runs
 
     function isLocal(address) {
         return /^https?:\/\/(127\.[0-9.]+|localhost|\[::1\])(:|\/|$)/.test(address || "");
@@ -56,21 +70,35 @@ Kirigami.FormLayout {
         return match ? match[1] : address;
     }
 
-    function uniqueName(base) {
-        let name = (base || "model").replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 48) || "model";
-        let candidate = name;
-        for (let suffix = 2; section.models[candidate] !== undefined; suffix++) {
-            candidate = name + "-" + suffix;
+    function describe(name) {
+        const model = section.models[name];
+        if (!model) {
+            return name;
         }
-        return candidate;
+        const port = (model.base_url || "").match(/:(\d+)(\/|$)/);
+        if (section.isLocal(model.base_url)) {
+            // Two local services can serve similar models; the port tells them apart.
+            return port ? i18n("%1 (on this computer, port %2)", name, port[1]) : i18n("%1 (on this computer)", name);
+        }
+        return i18n("%1 (online, %2)", name, section.hostOf(model.base_url));
     }
 
-    function addModel(name, entry) {
-        section.page.save(function(settings) {
-            settings.models[name] = entry;
-            settings.active_model = name;
-        }, function() {
-            section.test(name);
+    function showResult(passed, text) {
+        section.testPassed = passed;
+        section.testResult = text;
+    }
+
+    /** Adds a model through the daemon, which tests it; `job` is "main", "backup" or "none". */
+    function use(body, job, key) {
+        section.usingKey = key || "";
+        section.page.client.request("POST", "/models/use", Object.assign({ job: job }, body), function(data) {
+            section.usingKey = "";
+            section.page.settings = data.settings;
+            section.showResult(data.tools, data.message);
+            section.page.reload();
+        }, function(data) {
+            section.usingKey = "";
+            section.showResult(false, data.error || i18n("That did not work"));
         });
     }
 
@@ -79,14 +107,12 @@ Kirigami.FormLayout {
         section.testResult = "";
         section.page.client.request("POST", "/models/test", { name: name }, function(data) {
             section.testing = false;
-            section.testPassed = data.tools === true;
-            section.testResult = data.tools
+            section.showResult(data.tools === true, data.tools
                 ? i18n("%1 answers and can use tools. It is ready.", name)
-                : i18n("%1 answers but did not use a tool, so the assistant cannot search or act with it.", name);
+                : i18n("%1 answers but did not use a tool, so Happy Bot cannot search or act with it.", name));
         }, function(data) {
             section.testing = false;
-            section.testPassed = false;
-            section.testResult = data.error || i18n("The test failed");
+            section.showResult(false, data.error || i18n("The test failed"));
         });
     }
 
@@ -102,30 +128,39 @@ Kirigami.FormLayout {
         });
     }
 
+    // --- which AI answers ------------------------------------------------------
     Item {
         Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("AI model")
+        Kirigami.FormData.label: i18n("Which AI answers")
     }
 
     QQC2.Label {
-        Kirigami.FormData.label: i18n("Answers with:")
+        Kirigami.FormData.label: i18n("Ask first:")
         visible: section.modelNames.length === 0
-        text: i18n("No model yet. Find one on this computer or add a service below.")
+        text: i18n("No AI yet. Add one below: one on this computer, or an online service.")
         wrapMode: Text.Wrap
         Layout.maximumWidth: Kirigami.Units.gridUnit * 20
     }
 
     RowLayout {
-        Kirigami.FormData.label: i18n("Answers with:")
+        Kirigami.FormData.label: i18n("Ask first:")
         visible: section.modelNames.length > 0
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.ComboBox {
-            id: chooser
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 13
-            model: section.modelNames
+            id: mainBox
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 16
+            model: section.modelNames.map(name => section.describe(name))
             currentIndex: section.modelNames.indexOf(section.activeName)
-            onActivated: section.page.save(function(settings) { settings.active_model = chooser.currentText; })
+            onActivated: index => {
+                const name = section.modelNames[index];
+                section.page.save(function(settings) {
+                    settings.active_model = name;
+                    if (settings.agent.fallback_model === name) {
+                        settings.agent.fallback_model = "";
+                    }
+                });
+            }
         }
 
         QQC2.Button {
@@ -136,8 +171,8 @@ Kirigami.FormLayout {
         }
 
         QQC2.ToolButton {
-            icon.name: "window-close"
-            text: i18n("Remove this model")
+            icon.name: "edit-delete"
+            text: i18n("Remove this AI")
             display: QQC2.AbstractButton.IconOnly
             enabled: section.activeName.length > 0
             QQC2.ToolTip.text: text
@@ -147,6 +182,11 @@ Kirigami.FormLayout {
                 section.testResult = "";
                 section.page.save(function(settings) {
                     delete settings.models[name];
+                    for (const key of ["fallback_model", "quick_model"]) {
+                        if (settings.agent[key] === name) {
+                            settings.agent[key] = "";
+                        }
+                    }
                     settings.active_model = Object.keys(settings.models).sort()[0] || "";
                 });
             }
@@ -179,10 +219,32 @@ Kirigami.FormLayout {
             opacity: 0.8
             text: section.active === null ? ""
                 : section.isLocal(section.active.base_url)
-                    ? i18n("%1 runs on this computer. Nothing leaves it.", section.active.model)
-                    : i18n("%1 is hosted by %2. Whatever the assistant reads for a request, such as your clipboard or a file, is sent there.",
-                           section.active.model, section.hostOf(section.active.base_url))
+                    ? i18n("It runs on this computer. Nothing leaves it.")
+                    : i18n("It is online at %1. Whatever Happy Bot reads for a request, such as your clipboard or a file, is sent there.",
+                           section.hostOf(section.active.base_url))
         }
+    }
+
+    QQC2.ComboBox {
+        id: backupBox
+        Kirigami.FormData.label: i18n("If it fails, ask:")
+        visible: section.modelNames.length > 0
+        Layout.minimumWidth: Kirigami.Units.gridUnit * 16
+        model: section.backupChoices.map(name => name === "" ? i18n("Nobody (show what went wrong)") : section.describe(name))
+        currentIndex: Math.max(0, section.backupChoices.indexOf(section.backupName))
+        onActivated: index => {
+            const wanted = section.backupChoices[index];
+            section.page.save(function(settings) { settings.agent.fallback_model = wanted; });
+        }
+    }
+
+    QQC2.Label {
+        visible: section.modelNames.length > 0
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18n("If the first AI does not answer, this one answers instead. Only an AI on this computer can step in, so nothing goes online unless you choose an online AI to ask first.")
     }
 
     Kirigami.InlineMessage {
@@ -193,23 +255,39 @@ Kirigami.FormLayout {
         text: section.testResult
     }
 
+    // --- adding an AI ------------------------------------------------------------
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Add an AI")
+    }
+
     RowLayout {
-        Kirigami.FormData.label: i18n("Add a model:")
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.Button {
             text: i18n("Find on this computer")
             icon.name: "edit-find"
             enabled: !section.scanning
-            onClicked: section.scan()
+            onClicked: {
+                section.adding = "";
+                section.scan();
+            }
         }
 
         QQC2.Button {
-            text: i18n("Hosted service…")
+            text: i18n("Online service…")
             icon.name: "network-workgroup"
             checkable: true
-            checked: section.adding
-            onToggled: section.adding = checked
+            checked: section.adding === "online"
+            onToggled: section.adding = checked ? "online" : ""
+        }
+
+        QQC2.Button {
+            text: i18n("By hand…")
+            icon.name: "document-edit"
+            checkable: true
+            checked: section.adding === "manual"
+            onToggled: section.adding = checked ? "manual" : ""
         }
 
         QQC2.BusyIndicator {
@@ -222,7 +300,7 @@ Kirigami.FormLayout {
 
     QQC2.Label {
         visible: section.scanned && section.found.length === 0
-        text: i18n("No model service is running on this computer.")
+        text: i18n("No AI service is running on this computer.")
         opacity: 0.8
     }
 
@@ -251,6 +329,9 @@ Kirigami.FormLayout {
                         id: offer
 
                         required property var modelData
+                        readonly property string key: service.modelData.base_url + "|" + modelData.id
+                        readonly property string job: offer.modelData.configured_as === section.activeName ? "main"
+                            : offer.modelData.configured_as && offer.modelData.configured_as === section.backupName ? "backup" : ""
 
                         spacing: Kirigami.Units.smallSpacing
 
@@ -260,35 +341,44 @@ Kirigami.FormLayout {
                             Layout.preferredHeight: Kirigami.Units.iconSizes.small
                         }
 
-                        QQC2.Label {
-                            Layout.minimumWidth: Kirigami.Units.gridUnit * 12
-                            Layout.maximumWidth: Kirigami.Units.gridUnit * 16
-                            elide: Text.ElideMiddle
-                            text: offer.modelData.id
-                            opacity: offer.modelData.loaded ? 1 : 0.6
-                        }
+                        ColumnLayout {
+                            spacing: 0
+                            Layout.minimumWidth: Kirigami.Units.gridUnit * 11
+                            Layout.maximumWidth: Kirigami.Units.gridUnit * 14
 
-                        QQC2.Label {
-                            text: offer.modelData.loaded ? i18n("port %1", service.modelData.port) : i18n("not loaded")
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.6
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                elide: Text.ElideMiddle
+                                text: offer.modelData.id
+                                opacity: offer.modelData.loaded ? 1 : 0.6
+                            }
+
+                            QQC2.Label {
+                                text: offer.modelData.loaded ? i18n("port %1", service.modelData.port) : i18n("not loaded")
+                                font: Kirigami.Theme.smallFont
+                                opacity: 0.6
+                            }
                         }
 
                         QQC2.Button {
-                            text: offer.modelData.configured_as ? i18n("Added") : i18n("Use")
-                            enabled: !offer.modelData.configured_as
-                            onClicked: {
-                                const entry = {
-                                    provider: "openai_compatible", base_url: service.modelData.base_url,
-                                    model: offer.modelData.id
-                                };
-                                if (offer.modelData.context_window > 0) {
-                                    entry.context_window = offer.modelData.context_window;
-                                }
-                                section.addModel(section.uniqueName(offer.modelData.id), entry);
-                                section.found = [];
-                                section.scanned = false;
-                            }
+                            text: offer.job === "main" ? i18n("Asked first") : i18n("Ask first")
+                            enabled: offer.job !== "main" && section.usingKey === ""
+                            onClicked: section.use({ base_url: service.modelData.base_url, model: offer.modelData.id },
+                                                   "main", offer.key)
+                        }
+
+                        QQC2.Button {
+                            text: offer.job === "backup" ? i18n("Is the backup") : i18n("Use if it fails")
+                            enabled: offer.job === "" && section.usingKey === "" && section.modelNames.length > 0
+                            onClicked: section.use({ base_url: service.modelData.base_url, model: offer.modelData.id },
+                                                   "backup", offer.key)
+                        }
+
+                        QQC2.BusyIndicator {
+                            running: section.usingKey === offer.key
+                            visible: running
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                         }
                     }
                 }
@@ -304,10 +394,31 @@ Kirigami.FormLayout {
         }
     }
 
+    Loader {
+        Layout.fillWidth: true
+        active: section.adding === "online"
+        visible: active
+        sourceComponent: OnlineModelChooser {
+            page: section.page
+            onAdded: (name, message) => {
+                section.showResult(true, message);
+                section.adding = "";
+                section.page.reload();
+            }
+        }
+    }
+
+    QQC2.Label {
+        visible: section.adding === "manual"
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        text: i18n("For any other service that speaks the OpenAI chat API, on this computer, your network or online.")
+    }
+
     QQC2.TextField {
         id: address
         Kirigami.FormData.label: i18n("Address:")
-        visible: section.adding
+        visible: section.adding === "manual"
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         placeholderText: "https://api.example.com/v1"
     }
@@ -315,7 +426,7 @@ Kirigami.FormLayout {
     QQC2.TextField {
         id: modelId
         Kirigami.FormData.label: i18n("Model:")
-        visible: section.adding
+        visible: section.adding === "manual"
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         placeholderText: i18n("The model's id, as the service names it")
     }
@@ -323,25 +434,27 @@ Kirigami.FormLayout {
     Kirigami.PasswordField {
         id: apiKey
         Kirigami.FormData.label: i18n("API key:")
-        visible: section.adding
+        visible: section.adding === "manual"
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         placeholderText: i18n("Leave empty if the service needs none")
     }
 
+    QQC2.CheckBox {
+        id: manualFirst
+        visible: section.adding === "manual"
+        text: i18n("Ask this one first")
+        checked: true
+    }
+
     QQC2.Button {
-        visible: section.adding
-        text: i18n("Add and test")
+        visible: section.adding === "manual"
+        text: section.usingKey === "manual" ? i18n("Adding and testing…") : i18n("Add and test")
         icon.name: "list-add"
-        enabled: /^https?:\/\/.+/.test(address.text.trim()) && modelId.text.trim().length > 0
+        enabled: section.usingKey === "" && /^https?:\/\/.+/.test(address.text.trim()) && modelId.text.trim().length > 0
         onClicked: {
-            section.addModel(section.uniqueName(modelId.text.trim()), {
-                provider: "openai_compatible", base_url: address.text.trim(),
-                model: modelId.text.trim(), api_key: apiKey.text
-            });
-            address.text = "";
-            modelId.text = "";
+            section.use({ base_url: address.text.trim(), model: modelId.text.trim(), api_key: apiKey.text },
+                        manualFirst.checked ? "main" : "none", "manual");
             apiKey.text = "";
-            section.adding = false;
         }
     }
 }

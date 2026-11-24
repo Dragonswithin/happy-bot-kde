@@ -226,6 +226,7 @@ def run_turn(
             return
         text_parts: list[str] = []
         calls = []
+        echo = ""
         thinking_reported = False
         try:
             for event in provider.stream(trim_history(history, context_window), specs, cancel):
@@ -242,6 +243,7 @@ def run_turn(
                     usage["requests"] += 1
                     usage["input_tokens"] += event.input_tokens
                     usage["output_tokens"] += event.output_tokens
+                    echo = event.echo
                     if event.stop_reason == "cancelled":
                         cancel.set()
         except ProviderError as error:
@@ -251,7 +253,7 @@ def run_turn(
             finish("cancelled")
             return
 
-        history.append(Message("assistant", "".join(text_parts), tuple(calls)))
+        history.append(Message("assistant", "".join(text_parts), tuple(calls), echo=echo))
         if not calls:
             finish("answered")
             return

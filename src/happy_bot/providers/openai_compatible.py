@@ -16,7 +16,16 @@ stream ends. Arguments that are not a JSON object are passed on with
 failing the turn.
 
 ``stream_options.include_usage`` is requested for token counts; a server that
-rejects the option with HTTP 400 is retried once without it.
+rejects the option with HTTP 400 is retried once without it. Only ``model``,
+``messages``, ``tools``, ``stream`` and that option are sent: several services
+refuse requests that set sampling options such as ``temperature``.
+
+Some services refuse a follow-up request unless the assistant's earlier
+message comes back exactly: its ``reasoning_content`` (DeepSeek, Kimi) or each
+tool call's ``extra_content`` (Gemini's thought signatures). Those are kept as
+``echo`` on the message and the call, tagged with this ``base_url``, and sent
+back only to the same address, so a conversation that moves to another model
+never carries one service's fields to another.
 
 Blocking: ``stream`` blocks on network reads, up to ``timeout`` seconds
 between chunks. It checks ``cancel`` after every received line and closes the
@@ -77,7 +86,22 @@ def _explain_http_error(error: HTTPError, base_url: str) -> str:
     return f"{reason}: {detail[:300]}" if detail else f"{reason}."
 
 
-def _message_to_wire(message: Message) -> dict[str, Any]:
+def _echo_for(echo: str, base_url: str) -> dict[str, Any]:
+    """The fields to send back, when ``echo`` was written by this same service; else nothing."""
+    try:
+        data = json.loads(echo) if echo else {}
+    except ValueError:
+        return {}
+    if not isinstance(data, dict) or data.get("for") != base_url or not isinstance(data.get("fields"), dict):
+        return {}
+    return data["fields"]
+
+
+def _make_echo(fields: dict[str, Any], base_url: str) -> str:
+    return json.dumps({"for": base_url, "fields": fields}, ensure_ascii=False) if fields else ""
+
+
+def _message_to_wire(message: Message, base_url: str = "") -> dict[str, Any]:
     if message.role == "tool":
         return {"role": "tool", "tool_call_id": message.tool_call_id, "content": message.text}
     wire: dict[str, Any] = {"role": message.role, "content": message.text}
@@ -88,24 +112,28 @@ def _message_to_wire(message: Message) -> dict[str, Any]:
                 "id": call.id,
                 "type": "function",
                 "function": {"name": call.name, "arguments": json.dumps(call.arguments, ensure_ascii=False)},
+                **_echo_for(call.echo, base_url),
             }
             for call in message.tool_calls
         ]
+    if message.role == "assistant":
+        wire.update(_echo_for(message.echo, base_url))
     return wire
 
 
-def _finish_tool_call(index: int, parts: dict[str, Any]) -> ToolCall:
+def _finish_tool_call(index: int, parts: dict[str, Any], base_url: str = "") -> ToolCall:
     raw = "".join(parts["arguments"]).strip()
     call_id = parts["id"] or f"call_{index}"
+    echo = _make_echo(parts.get("extra") or {}, base_url)
     if not raw:
-        return ToolCall(call_id, parts["name"], {})
+        return ToolCall(call_id, parts["name"], {}, echo=echo)
     try:
         arguments = json.loads(raw)
     except ValueError as exc:
-        return ToolCall(call_id, parts["name"], {}, f"arguments were not valid JSON ({exc})")
+        return ToolCall(call_id, parts["name"], {}, f"arguments were not valid JSON ({exc})", echo)
     if not isinstance(arguments, dict):
-        return ToolCall(call_id, parts["name"], {}, "arguments must be a JSON object")
-    return ToolCall(call_id, parts["name"], arguments)
+        return ToolCall(call_id, parts["name"], {}, "arguments must be a JSON object", echo)
+    return ToolCall(call_id, parts["name"], arguments, echo=echo)
 
 
 class OpenAICompatibleProvider:
@@ -150,7 +178,7 @@ class OpenAICompatibleProvider:
     ) -> Iterator[ProviderEvent]:
         body: dict[str, Any] = {
             "model": self.model,
-            "messages": [_message_to_wire(message) for message in messages],
+            "messages": [_message_to_wire(message, self.base_url) for message in messages],
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -162,6 +190,7 @@ class OpenAICompatibleProvider:
             ]
         response = self._open(body)
         pending: dict[int, dict[str, Any]] = {}
+        reasoning: list[str] = []
         stop_reason = ""
         usage: dict[str, Any] = {}
         try:
@@ -190,12 +219,16 @@ class OpenAICompatibleProvider:
                 for choice in event.get("choices") or []:
                     delta = choice.get("delta") or {}
                     if delta.get("reasoning_content") or delta.get("reasoning"):
+                        if delta.get("reasoning_content"):
+                            reasoning.append(str(delta["reasoning_content"]))
                         yield ThinkingDelta()
                     if delta.get("content"):
                         yield TextDelta(str(delta["content"]))
                     for fragment in delta.get("tool_calls") or []:
                         slot = pending.setdefault(
-                            int(fragment.get("index", 0)), {"id": "", "name": "", "arguments": []})
+                            int(fragment.get("index", 0)), {"id": "", "name": "", "arguments": [], "extra": {}})
+                        if isinstance(fragment.get("extra_content"), dict):
+                            slot["extra"]["extra_content"] = fragment["extra_content"]
                         function = fragment.get("function") or {}
                         slot["id"] = fragment.get("id") or slot["id"]
                         slot["name"] = function.get("name") or slot["name"]
@@ -210,11 +243,12 @@ class OpenAICompatibleProvider:
         if stop_reason != "cancelled":
             for index in sorted(pending):
                 if pending[index]["name"]:
-                    yield ToolCallReady(_finish_tool_call(index, pending[index]))
+                    yield ToolCallReady(_finish_tool_call(index, pending[index], self.base_url))
         yield TurnEnd(
             stop_reason=stop_reason,
             input_tokens=int(usage.get("prompt_tokens") or 0),
             output_tokens=int(usage.get("completion_tokens") or 0),
+            echo=_make_echo({"reasoning_content": "".join(reasoning)} if reasoning else {}, self.base_url),
         )
 
 

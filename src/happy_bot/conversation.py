@@ -9,6 +9,11 @@ calls) and ``tool`` (the result of one tool call, linked by ``tool_call_id``).
 An assistant message that requested tools must be followed by exactly one
 ``tool`` message per call before the next model request; ``trim_history``
 preserves that by only ever dropping whole user turns.
+
+``echo`` on an assistant message and on a tool call is opaque JSON text a
+provider asked to have sent back unchanged with later requests (some
+services refuse a follow-up request without their reasoning or signatures).
+Only the provider that wrote it reads it; everything else passes it along.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ class ToolCall:
     name: str
     arguments: dict[str, Any]
     arguments_error: str = ""
+    echo: str = ""
 
 
 @dataclass(frozen=True)
@@ -38,6 +44,7 @@ class Message:
     text: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str = ""
+    echo: str = ""
 
 
 @dataclass(frozen=True)
@@ -71,6 +78,7 @@ class TurnEnd:
     stop_reason: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
+    echo: str = ""  # the reply's ``Message.echo``
 
 
 ProviderEvent = TextDelta | ThinkingDelta | ToolCallReady | TurnEnd

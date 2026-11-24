@@ -912,6 +912,25 @@ Findings:
   did). Not yet tried with Orca.
 - Publishing the AUR package and the KDE Store entry is a public action on
   the maintainer's accounts and waits for him.
+- AI Model page, after the maintainer found it confusing (2026-11-24): it now
+  asks two questions, "Ask first" (`active_model`) and "If it fails, ask"
+  (`agent.fallback_model`, local models only), and adds an AI three ways:
+  found on this computer (each with "Ask first" or "Use if it fails"),
+  "Online service…" (`model_presets.py`: twelve services, each with its key
+  page, directions and suggested models, checked against the services' own
+  documentation) or "By hand…". Every addition goes through
+  `POST /models/use` (`model_setup.py`), which tests the model and removes
+  it again if it does not answer. Checking the services showed that
+  DeepSeek, Kimi and Gemini refuse a follow-up request unless the
+  assistant's reasoning or tool-call signatures come back unchanged; the
+  provider now keeps them as `echo` and sends them back only to the same
+  address. Claude keys not scoped to a workspace need an extra header, so
+  the Claude directions say to pick a workspace. Verified on a throwaway
+  daemon: the NPU model set to answer first and the GPU model as backup
+  (both answered and used tools), a refused OpenRouter key left nothing
+  behind, and a missing key was asked for. The maintainer's own settings
+  were set the same way (NPU first, GPU if it fails, no quicker model).
+  Not verified: any online service with a real key.
 
 ## Decisions
 

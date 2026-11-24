@@ -38,7 +38,12 @@ Endpoints:
   portal's dialog, ``input_portal``) rather than in the middle of a request.
 - ``POST /models/probe``: list the models a service offers, to help setup.
 - ``POST /models/test``: check that a configured model answers and can call
-  tools. This sends one small request to the model.
+  tools (``model_setup.check_model``). This sends one small request to the model.
+- ``GET /models/presets``: the online AI services setup offers, with where to
+  get a key (``model_presets``).
+- ``POST /models/use``: add a model (found, from a preset with a key, or by
+  address), test it and make it the main model or the backup, undoing it if
+  it does not answer (``model_setup``).
 - ``POST /cancel``: stop a conversation's running turn.
 - ``GET /conversations``: saved conversations, newest first
   (``{id, title, created, updated, requests}``).
@@ -78,19 +83,17 @@ to offer (``not_configured``, ``tool_failed``, ``invalid``).
 from __future__ import annotations
 
 import json
-import threading
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
 from . import (desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
-               quick_results, search_choices, search_setup, self_check, spend)
+               model_presets, model_setup, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
-from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .mcp_client import McpError
-from .providers import ProviderError, create_provider
+from .providers import ProviderError
 from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, find_limit_argument, find_query_argument, propose_role, tool_arguments
 from .tools import reminders
@@ -319,29 +322,27 @@ def probe_models(server: "AssistantServer", query: dict[str, list[str]], body: d
 
 
 def test_model(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
-    """Ask the named (or active) model to call a trivial tool; report whether it did."""
+    """Ask the named (or active) model to call a trivial tool; report whether it did (``model_setup.check_model``)."""
     name = str(body.get("name") or server.settings.get("active_model") or "")
     model = server.settings.get("models", {}).get(name)
     if model is None:
         return _error(404, f"no model named '{name}' is set up", "invalid")
-    probe_tool = ToolSpec("confirm_ready", "Call this to confirm you can use tools.",
-                          {"type": "object", "properties": {}, "required": []})
-    messages = [
-        Message("system", "You are being tested. Call the confirm_ready tool. Do not reply with text."),
-        Message("user", "Call confirm_ready now."),
-    ]
-    called, text = False, ""
     try:
-        for event in create_provider(model).stream(messages, [probe_tool], threading.Event()):
-            if isinstance(event, ToolCallReady) and event.call.name == "confirm_ready":
-                called = True
-            elif isinstance(event, TextDelta):
-                text += event.text
+        result = model_setup.check_model(model)
     except ProviderError as exc:
         return _error(502, str(exc), "unreachable")
-    if not called:
-        return 200, {"ok": True, "name": name, "answers": True, "tools": False, "reply": text[:200]}
-    return 200, {"ok": True, "name": name, "answers": True, "tools": True}
+    return 200, {"ok": True, "name": name, **result}
+
+
+def model_presets_route(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "presets": model_presets.listing()}
+
+
+def use_model(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    result = model_setup.use(server, body)
+    if not result["ok"]:
+        return _error(400, result["error"], "invalid")
+    return 200, {**result, "settings": settings_store.redacted(server.settings)}
 
 
 def cancel(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -489,6 +490,8 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/typing"): typing_status,
     ("POST", "/typing/allow"): allow_typing,
     ("POST", "/models/test"): test_model,
+    ("GET", "/models/presets"): model_presets_route,
+    ("POST", "/models/use"): use_model,
     ("POST", "/cancel"): cancel,
     ("POST", "/approve"): approve,
     ("GET", "/conversations"): list_conversations,

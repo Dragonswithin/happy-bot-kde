@@ -70,11 +70,14 @@ On the **Search Bar** page, check **Use robot mascot** and click **Apply**
 to show the robot on the panel and beside Happy Bot’s replies. Uncheck it
 to return to the wand.
 
-- **AI Model:** which model answers; find one running on this computer or
-  add a hosted one; its address, model id, API key, extra request headers,
-  context window and whether it can see images; a live test; optionally a
-  quicker model every request starts on, with the chosen model taking over
-  when a request needs more steps or the quicker one fails.
+- **AI Model:** *Ask first* is the AI that answers; *If it fails, ask* is
+  one on this computer that answers when the first does not. Add an AI with
+  **Find on this computer**, **Online service…** (pick the service, open its
+  key page, paste the key, pick a model; Claude, OpenAI, Google Gemini, Grok, Qwen, Muse, Mistral, DeepSeek, Kimi, Groq and OpenRouter) or **By hand…**
+  for any other OpenAI-compatible service. Each one is tested when added.
+  Below: the chosen model's address, key, headers, context window and
+  whether it sees images, and under *More options* a quicker model to start
+  every request on and a monthly spending cap.
 - **Search & Tools:** press **Set up** next to Files or Web and choose
   **Use this** on the recommended choice; Happy Bot adds it and tries a
   search before keeping it. Choices come from what the computer already has

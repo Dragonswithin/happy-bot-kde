@@ -68,15 +68,22 @@ def message_to_json(message: Message) -> dict[str, Any]:
         ]
     if message.tool_call_id:
         data["tool_call_id"] = message.tool_call_id
+    if message.echo:
+        data["echo"] = message.echo
+    for call, saved in zip(message.tool_calls, data.get("tool_calls") or []):
+        if call.echo:
+            saved["echo"] = call.echo
     return data
 
 
 def message_from_json(data: dict[str, Any]) -> Message:
     calls = tuple(
-        ToolCall(str(call["id"]), str(call["name"]), dict(call.get("arguments") or {}), str(call.get("arguments_error") or ""))
+        ToolCall(str(call["id"]), str(call["name"]), dict(call.get("arguments") or {}), str(call.get("arguments_error") or ""),
+                 str(call.get("echo") or ""))
         for call in data.get("tool_calls") or []
     )
-    return Message(str(data["role"]), str(data.get("text") or ""), calls, str(data.get("tool_call_id") or ""))
+    return Message(str(data["role"]), str(data.get("text") or ""), calls, str(data.get("tool_call_id") or ""),
+                   str(data.get("echo") or ""))
 
 
 class ConversationArchive:

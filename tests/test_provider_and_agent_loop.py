@@ -51,7 +51,25 @@ class ProviderTests(unittest.TestCase):
         events = self.run_stream()
         self.assertIsInstance(events[0], ThinkingDelta)
         self.assertEqual("".join(e.text for e in events if isinstance(e, TextDelta)), "Hello there, friend")
-        self.assertEqual(events[-1], TurnEnd("stop", 11, 7))
+        end = events[-1]
+        self.assertEqual((end.stop_reason, end.input_tokens, end.output_tokens), ("stop", 11, 7))
+        self.assertIn('"reasoning_content": "thinking..."', end.echo)
+
+    def test_echo_goes_back_only_to_the_service_that_wrote_it(self) -> None:
+        self.service.replies.append(chunks_for("first", reasoning=True))
+        echo = self.run_stream()[-1].echo
+        call = ToolCall("c1", "echo", {}, echo=echo.replace("reasoning_content", "extra_content"))
+        assistant = Message("assistant", "", (call,), echo=echo)
+        self.service.replies.append(chunks_for("again"))
+        self.run_stream([Message("user", "hi"), assistant, Message("tool", "done", tool_call_id="c1")])
+        sent = self.service.requests[-1]["messages"][1]
+        self.assertEqual(sent["reasoning_content"], "thinking...")
+        self.assertEqual(sent["tool_calls"][0]["extra_content"], "thinking...")
+        other = OpenAICompatibleProvider("http://127.0.0.1:1/v1", "m")
+        from happy_bot.providers.openai_compatible import _message_to_wire
+        self.assertNotIn("reasoning_content", _message_to_wire(assistant, other.base_url))
+        from happy_bot.conversation_archive import message_from_json, message_to_json
+        self.assertEqual(message_from_json(message_to_json(assistant)), assistant)
 
     def test_request_carries_model_key_tools_and_full_conversation(self) -> None:
         self.service.replies.append(chunks_for("ok"))

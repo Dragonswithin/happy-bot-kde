@@ -346,6 +346,13 @@ text-only models and stays as an option afterwards.
 
 - ✓ OpenAI-compatible provider with tools and streaming, loopback discovery,
   extra headers, models added by id when a service cannot list them.
+- ● Online services by name: Claude, OpenAI, Google Gemini, Grok, Qwen,
+  Muse, Mistral, DeepSeek, Kimi, Groq and OpenRouter, each with its key page,
+  short directions and suggested models; every model added is tested and
+  removed again if it does not answer. "Ask first" and "If it fails, ask"
+  on the AI Model page set the main and backup models. (checked against each
+  service's documentation 2026-11-24; no online service tried with a real
+  key yet)
 - ⏸ Native providers where the compatible route loses features (Anthropic,
   Gemini), written from current vendor documentation. (the OpenAI-compatible
   route works for the hosted model in use)

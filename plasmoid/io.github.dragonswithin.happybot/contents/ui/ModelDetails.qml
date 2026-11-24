@@ -22,11 +22,10 @@ import org.kde.kirigami as Kirigami
  * daemon validates it; a refused value snaps back with the daemon's message.
  *
  * Below them: the model's prices per million tokens (`input_price`,
- * `output_price`), and three `agent` settings about models: a quicker model
+ * `output_price`), and two `agent` settings about models: a quicker model
  * every request starts on, handing over to the chosen one when it needs
- * more steps or fails (`quick_model`, src/happy_bot/ask_stream.py), the
- * fallback model on this computer used when the chosen one does not answer
- * (`fallback_model`) and the monthly spending cap (`monthly_spend_cap`),
+ * more steps or fails (`quick_model`, src/happy_bot/ask_stream.py), and the
+ * monthly spending cap (`monthly_spend_cap`),
  * with this month's total from `GET /spend` (src/happy_bot/spend.py).
  *
  * The API key and header values are secrets. The daemon never sends them:
@@ -160,6 +159,11 @@ Kirigami.FormLayout {
         Price { field: "output_price" }
     }
 
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("More options")
+    }
+
     QQC2.ComboBox {
         id: quick
         Kirigami.FormData.label: i18n("Start with a quicker model:")
@@ -182,22 +186,6 @@ Kirigami.FormLayout {
         font: Kirigami.Theme.smallFont
         opacity: 0.7
         text: i18n("Small requests are answered by the quicker model. When a request needs more steps, or the quicker model fails, this one takes over and finishes it.")
-    }
-
-    QQC2.ComboBox {
-        id: fallback
-        Kirigami.FormData.label: i18n("If it does not answer:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 12
-        readonly property var choices: [""].concat(Object.keys((section.page.settings || {}).models || {}).sort().filter(
-            name => name !== section.name && /^https?:\/\/(127\.|localhost|\[::1\])/.test(section.page.settings.models[name].base_url)))
-        readonly property string current: (section.page.settings && section.page.settings.agent
-                                           && section.page.settings.agent.fallback_model) || ""
-        model: choices.map(name => name === "" ? i18n("Show an error") : i18n("Use %1 (on this computer)", name))
-        currentIndex: Math.max(0, choices.indexOf(current))
-        onActivated: index => {
-            const wanted = fallback.choices[index];
-            section.page.save(function(settings) { settings.agent.fallback_model = wanted; });
-        }
     }
 
     RowLayout {
