@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Launcher installed as ``~/.local/bin/happy-bot``. Runs the command-line client.
+
+The package is not pip-installed; ``scripts/install.sh`` copies it to
+``~/.local/lib/happy-bot`` (override with ``HAPPY_BOT_LIB``), and
+a system package (``packaging/arch/PKGBUILD``) puts it in
+``/usr/lib/happy-bot``; this file puts the first of those that exists
+on the import path, in that order, and calls the entry point. Run from a
+checkout, it falls back to the repository's ``src``.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+_candidates = [Path(os.environ["HAPPY_BOT_LIB"])] if os.environ.get("HAPPY_BOT_LIB") else []
+_candidates += [Path.home() / ".local/lib/happy-bot", Path("/usr/lib/happy-bot"),
+                Path(__file__).resolve().parent.parent / "src"]
+sys.path.insert(0, str(next((path for path in _candidates if (path / "happy_bot").is_dir()), _candidates[-1])))
+
+from happy_bot.cli import main  # noqa: E402 - path set up above
+
+raise SystemExit(main())

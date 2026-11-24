@@ -21,13 +21,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import desktop_actions, routines, user_timers  # noqa: E402
-from kde_ai_assistant.accessibility import Element, Snapshot  # noqa: E402
-from kde_ai_assistant.conversation_archive import ConversationArchive  # noqa: E402
-from kde_ai_assistant.conversations import Conversation, ConversationStore  # noqa: E402
-from kde_ai_assistant.settings import validate_settings  # noqa: E402
-from kde_ai_assistant.tools import appearance, apps, media, weather, workspace  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot import desktop_actions, routines, user_timers  # noqa: E402
+from happy_bot.accessibility import Element, Snapshot  # noqa: E402
+from happy_bot.conversation_archive import ConversationArchive  # noqa: E402
+from happy_bot.conversations import Conversation, ConversationStore  # noqa: E402
+from happy_bot.settings import validate_settings  # noqa: E402
+from happy_bot.tools import appearance, apps, media, weather, workspace  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 
 class WeatherTests(unittest.TestCase):
@@ -138,7 +138,7 @@ class WindowContentTests(unittest.TestCase):
                    {"id": "{b}", "app": "kate", "title": "Invoice notes", "pid": 11}]
         snapshot = Snapshot(10, "scan.pdf", "okular", [Element("e1", "label", "Invoice #42 total", 1, True, (), (), False, "")], False)
         with mock.patch.object(workspace, "_kwin", return_value=windows), \
-                mock.patch("kde_ai_assistant.accessibility.take_snapshot", return_value=snapshot):
+                mock.patch("happy_bot.accessibility.take_snapshot", return_value=snapshot):
             text = workspace.find_window_with_text({"text": "invoice"})
         self.assertIn('id {a}  okular  "scan.pdf"  (shows: Invoice #42 total)', text)
         self.assertIn('id {b}  kate  "Invoice notes"  (in its title)', text)
@@ -148,12 +148,12 @@ class FolderAndTerminalTests(unittest.TestCase):
     def test_folders_and_files_go_to_the_file_manager_and_terminals_open_in_a_folder(self) -> None:
         calls = []
         with tempfile.TemporaryDirectory() as tmp, \
-                mock.patch("kde_ai_assistant.session_dbus.call", side_effect=lambda *a: calls.append(a)):
+                mock.patch("happy_bot.session_dbus.call", side_effect=lambda *a: calls.append(a)):
             Path(tmp, "a.txt").write_text("x")
             apps.open_folder({"path": tmp})
             apps.open_folder({"path": str(Path(tmp, "a.txt"))})
             self.assertEqual([call[3] for call in calls], ["ShowFolders", "ShowItems"])
-            with mock.patch("kde_ai_assistant.tools.shell.terminal_program", return_value="/usr/bin/konsole"), \
+            with mock.patch("happy_bot.tools.shell.terminal_program", return_value="/usr/bin/konsole"), \
                     mock.patch.object(apps.subprocess, "Popen") as popen:
                 apps.open_terminal({"folder": tmp})
             self.assertEqual(popen.call_args[0][0], ["/usr/bin/konsole", "--workdir", tmp])
@@ -162,7 +162,7 @@ class FolderAndTerminalTests(unittest.TestCase):
 
 class DownloadTests(unittest.TestCase):
     def test_saved_files_are_reported_and_recorded_and_failures_explained(self) -> None:
-        from kde_ai_assistant import undo_journal
+        from happy_bot import undo_journal
 
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / "yt-dlp"
@@ -172,7 +172,7 @@ class DownloadTests(unittest.TestCase):
                             f"echo '[download] 50%'\ntouch '{downloads}/Song.mp3'\necho '{downloads}/Song.mp3'\n")
             fake.chmod(0o755)
             with mock.patch.object(media.shutil, "which", return_value=str(fake)), \
-                    mock.patch("kde_ai_assistant.agent_loop.user_folders", return_value={"Downloads": str(downloads)}):
+                    mock.patch("happy_bot.agent_loop.user_folders", return_value={"Downloads": str(downloads)}):
                 self.assertEqual(media.download_media({"url": "https://example.com/v", "audio_only": True}),
                                  f"Saved {downloads}/Song.mp3.")
                 self.assertEqual(undo_journal.pending()[0]["data"], {"path": f"{downloads}/Song.mp3"})

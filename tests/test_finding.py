@@ -22,10 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.mcp_client import McpManager  # noqa: E402
-from kde_ai_assistant.settings import validate_settings  # noqa: E402
-from kde_ai_assistant.tools import catalog, finding  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot.mcp_client import McpManager  # noqa: E402
+from happy_bot.settings import validate_settings  # noqa: E402
+from happy_bot.tools import catalog, finding  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 
 class FindingTests(unittest.TestCase):

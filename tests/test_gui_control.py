@@ -20,11 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import accessibility, input_portal  # noqa: E402
-from kde_ai_assistant.accessibility import Element, Snapshot  # noqa: E402
-from kde_ai_assistant.input_portal import InputUnavailable, keysym_for_character, parse_combination  # noqa: E402
-from kde_ai_assistant.tools import gui  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot import accessibility, input_portal  # noqa: E402
+from happy_bot.accessibility import Element, Snapshot  # noqa: E402
+from happy_bot.input_portal import InputUnavailable, keysym_for_character, parse_combination  # noqa: E402
+from happy_bot.tools import gui  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 
 def element(ref: str, role: str, name: str, showing: bool = True, actions: tuple = ("Press",), editable: bool = False,

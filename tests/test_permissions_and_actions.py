@@ -29,14 +29,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402
 
-from kde_ai_assistant.agent_loop import run_turn  # noqa: E402
-from kde_ai_assistant.conversation import Message, TextDelta, ToolCall, ToolCallReady, TurnEnd  # noqa: E402
-from kde_ai_assistant.daemon_http import AssistantServer  # noqa: E402
-from kde_ai_assistant.permissions import ApprovalBroker, PermissionGate, needs_approval  # noqa: E402
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools import apps, files, shell, system  # noqa: E402
-from kde_ai_assistant.tools.catalog import builtin_tools  # noqa: E402
-from kde_ai_assistant.tools.registry import (  # noqa: E402
+from happy_bot.agent_loop import run_turn  # noqa: E402
+from happy_bot.conversation import Message, TextDelta, ToolCall, ToolCallReady, TurnEnd  # noqa: E402
+from happy_bot.daemon_http import AssistantServer  # noqa: E402
+from happy_bot.permissions import ApprovalBroker, PermissionGate, needs_approval  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools import apps, files, shell, system  # noqa: E402
+from happy_bot.tools.catalog import builtin_tools  # noqa: E402
+from happy_bot.tools.registry import (  # noqa: E402
     RISK_CHANGE, RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema)
 
 
@@ -64,7 +64,7 @@ class FolderTests(unittest.TestCase):
         import os
         from unittest import mock
 
-        from kde_ai_assistant.agent_loop import system_prompt, user_folders
+        from happy_bot.agent_loop import system_prompt, user_folders
 
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "user-dirs.dirs").write_text(
@@ -208,7 +208,7 @@ class GateTests(unittest.TestCase):
         self.assertIn("declined", provider.seen[1][-2].text)
 
     def test_a_call_that_cannot_succeed_fails_before_the_user_is_asked(self) -> None:
-        from kde_ai_assistant.tools.files import file_tools
+        from happy_bot.tools.files import file_tools
         registry = ToolRegistry(file_tools())
 
         class Provider:
@@ -354,7 +354,7 @@ class ShellToolTests(unittest.TestCase):
 
 class ShellProgressAndTerminalTests(unittest.TestCase):
     def run_with_context(self, arguments: dict, cancel_after: float | None = None) -> tuple[str, list[str], float]:
-        from kde_ai_assistant.tools.registry import CallContext, call_context
+        from happy_bot.tools.registry import CallContext, call_context
 
         lines: list[str] = []
         cancel = threading.Event()
@@ -407,7 +407,7 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
         """Run ``command`` through ``run_in_terminal``; the result text either way, and ``self.last_ok``."""
         from unittest import mock
 
-        from kde_ai_assistant.tools.registry import CallContext, call_context
+        from happy_bot.tools.registry import CallContext, call_context
 
         lines: list[str] = []
         cancel = threading.Event()
@@ -547,7 +547,7 @@ class SystemToolClassifierTests(unittest.TestCase):
     def test_read_and_search_summaries_read_naturally(self) -> None:
         import os
 
-        from kde_ai_assistant.tools.summaries import describe_read_call, describe_search
+        from happy_bot.tools.summaries import describe_read_call, describe_search
 
         home = os.path.expanduser("~")
         self.assertEqual(describe_read_call("list_directory", {"path": f"{home}/Desktop"}), "Listed ~/Desktop")
@@ -634,7 +634,7 @@ class AppVisibilityTests(unittest.TestCase):
     def setUp(self) -> None:
         from unittest import mock
 
-        from kde_ai_assistant.tools import app_visibility
+        from happy_bot.tools import app_visibility
 
         self.v = app_visibility
         self._tmp = tempfile.TemporaryDirectory()
@@ -714,7 +714,7 @@ class AppVisibilityTests(unittest.TestCase):
 
 class TerminalTextTests(unittest.TestCase):
     def test_clean_keeps_what_the_screen_finally_showed(self) -> None:
-        from kde_ai_assistant.tools.terminal_text import clean
+        from happy_bot.tools.terminal_text import clean
 
         self.assertEqual(clean("a\r\nb\r\n"), "a\nb\n")
         self.assertEqual(clean("10%\r50%\r100%\rdone   \n"), "done\n")
@@ -722,7 +722,7 @@ class TerminalTextTests(unittest.TestCase):
         self.assertEqual(clean("bell\x07 back\x08"), "bell back")
 
     def test_head_and_tail(self) -> None:
-        from kde_ai_assistant.tools.terminal_text import keep_head_and_tail
+        from happy_bot.tools.terminal_text import keep_head_and_tail
 
         self.assertEqual(keep_head_and_tail("short", 3, 3), "short")
         self.assertEqual(keep_head_and_tail("abcdefghij", 3, 2), "abc\n[... 5 characters cut ...]\nij")

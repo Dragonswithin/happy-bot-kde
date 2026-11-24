@@ -1,0 +1,20 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Dragonswithin"
+      }
+    ],
+    "Category": "Utilities",
+    "Description": "Panel search bar that finds, answers and acts using any AI model you configure.",
+    "EnabledByDefault": false,
+    "Icon": "tools-wizard",
+    "Id": "io.github.dragonswithin.happybot",
+    "License": "MIT",
+    "Name": "Happy Bot",
+    "Version": "0.1.0",
+    "Website": "https://github.com/Dragonswithin/happy-bot-kde"
+  },
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

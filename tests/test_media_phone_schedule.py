@@ -24,12 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import routines, user_timers  # noqa: E402
-from kde_ai_assistant.agent_loop import system_prompt  # noqa: E402
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools import media, phone, reminders  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
-from kde_ai_assistant.tools.routine_tools import routine_tools  # noqa: E402
+from happy_bot import routines, user_timers  # noqa: E402
+from happy_bot.agent_loop import system_prompt  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools import media, phone, reminders  # noqa: E402
+from happy_bot.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
+from happy_bot.tools.routine_tools import routine_tools  # noqa: E402
 
 PLAYER = "org.mpris.MediaPlayer2.elisa"
 
@@ -93,7 +93,7 @@ class AudioTests(unittest.TestCase):
     def test_default_output_is_matched_by_name_and_can_be_undone(self) -> None:
         self.assertIn("USB Headset", media.set_default_device({"kind": "output", "device": "headset"}))
         self.assertIn(["pactl", "set-default-sink", "usb-headset"], self.commands)
-        from kde_ai_assistant import undo_journal
+        from happy_bot import undo_journal
         self.assertEqual(undo_journal.pending()[0]["data"], {"kind": "sink", "name": "hdmi"})
         with self.assertRaisesRegex(ToolFailure, "no device matches"):
             media.set_default_device({"kind": "output", "device": "bluetooth"})
@@ -174,9 +174,9 @@ class ReminderTests(TimerDirTest):
     def test_reminder_units_are_written_listed_and_cancelled(self) -> None:
         text = reminders.set_reminder({"text": 'Call the vet, 100% "today"', "in_minutes": 30})
         ident = text.split()[1]
-        service = (self.unit_dir / f"kde-ai-assistant-reminder-{ident}.service").read_text()
+        service = (self.unit_dir / f"happy-bot-reminder-{ident}.service").read_text()
         self.assertIn('"Call the vet, 100%% \\"today\\""', service)
-        timer = (self.unit_dir / f"kde-ai-assistant-reminder-{ident}.timer").read_text()
+        timer = (self.unit_dir / f"happy-bot-reminder-{ident}.timer").read_text()
         self.assertIn("Persistent=true", timer)
         self.assertIn(f"{ident}  ", reminders.list_reminders({}))
         self.assertIn('Call the vet, 100% "today"', reminders.list_reminders({}))
@@ -185,7 +185,7 @@ class ReminderTests(TimerDirTest):
         self.assertEqual(reminders.list_reminders({}), "No reminders are set.")
 
     def test_passed_reminders_are_cleaned_up_and_other_units_left_alone(self) -> None:
-        user_timers.write_units(self.unit_dir, "kde-ai-assistant-reminder-old", "old", ["true"], "timer", "2020-01-01 10:00:00")
+        user_timers.write_units(self.unit_dir, "happy-bot-reminder-old", "old", ["true"], "timer", "2020-01-01 10:00:00")
         (self.unit_dir / "someone-else.timer").write_text("[Timer]\nOnCalendar=daily\n")
         self.assertEqual(reminders.list_reminders({}), "No reminders are set.")
         self.assertEqual(sorted(path.name for path in self.unit_dir.iterdir()), ["someone-else.timer"])

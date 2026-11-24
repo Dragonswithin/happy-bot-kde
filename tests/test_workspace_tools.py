@@ -17,9 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools import workspace  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_DANGER, ToolFailure  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools import workspace  # noqa: E402
+from happy_bot.tools.registry import RISK_DANGER, ToolFailure  # noqa: E402
 
 
 class DesktopTests(unittest.TestCase):
@@ -88,7 +88,7 @@ class LayoutTests(unittest.TestCase):
 
     def test_save_restore_and_delete(self) -> None:
         self.assertIn("2 windows", self.tools["save_layout"].handler({"name": "coding"}))
-        with mock.patch("kde_ai_assistant.tools.windows._run", side_effect=lambda args, js: self.placed.append(args)):
+        with mock.patch("happy_bot.tools.windows._run", side_effect=lambda args, js: self.placed.append(args)):
             with mock.patch.object(workspace, "_kwin", return_value=self.WINDOWS[:1]):
                 text = self.tools["restore_layout"].handler({"name": "coding"})
         self.assertIn("Not running, so not placed: konsole", text)

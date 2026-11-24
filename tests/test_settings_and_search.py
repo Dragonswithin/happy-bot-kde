@@ -20,12 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import settings as settings_store  # noqa: E402
-from kde_ai_assistant.instant_search import extract_hits, search_files  # noqa: E402
-from kde_ai_assistant.mcp_client import McpError, McpManager, ToolResult  # noqa: E402
-from kde_ai_assistant.mcp_discovery import discover_servers  # noqa: E402
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tool_roles import RoleNotConfigured, propose_role  # noqa: E402
+from happy_bot import settings as settings_store  # noqa: E402
+from happy_bot.instant_search import extract_hits, search_files  # noqa: E402
+from happy_bot.mcp_client import McpError, McpManager, ToolResult  # noqa: E402
+from happy_bot.mcp_discovery import discover_servers  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tool_roles import RoleNotConfigured, propose_role  # noqa: E402
 
 FAKE_SERVER = str(Path(__file__).resolve().parent / "fake_mcp_server.py")
 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
 
 class ModelDiscoveryTests(unittest.TestCase):
     def test_listening_ports_are_read_from_proc_and_filtered(self) -> None:
-        from kde_ai_assistant.model_discovery import listening_ports
+        from happy_bot.model_discovery import listening_ports
 
         header = "  sl  local_address rem_address   st tx_queue rx_queue\n"
         tcp = header + "\n".join([
@@ -236,7 +236,7 @@ class ModelDiscoveryTests(unittest.TestCase):
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from fake_model_service import FakeModelService
 
-        from kde_ai_assistant.model_discovery import discover_local
+        from happy_bot.model_discovery import discover_local
 
         service = FakeModelService()
         try:
@@ -253,7 +253,7 @@ class ModelDiscoveryTests(unittest.TestCase):
         import threading
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-        from kde_ai_assistant.model_discovery import discover_local
+        from happy_bot.model_discovery import discover_local
 
         class Catalogue(BaseHTTPRequestHandler):
             def log_message(self, format, *args):  # noqa: A002

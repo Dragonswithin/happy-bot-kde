@@ -1,4 +1,4 @@
-# KDE AI Assistant: Product Goal And Roadmap
+# Happy Bot: Product Goal And Roadmap
 
 This document is the authoritative statement of what this project is for and
 the order in which it gets built. It replaces any earlier "chat sidebar with a
@@ -131,7 +131,7 @@ panel button plus shortcut that opens a focused popup with the field inside.
 
 - The daemon starts and supervises the MCP servers it uses as child
   processes. The user never runs them.
-- One config file under `~/.config/kde-ai-assistant`, edited only through the
+- One config file under `~/.config/happy-bot`, edited only through the
   settings dialog or CLI. Every value in it, and every option the applet has,
   has a control in the settings dialog: the user never edits a file.
 - **First-run setup** in the applet, each step skippable and re-runnable:
@@ -251,11 +251,11 @@ The daemon will execute actions, so the current open surface must close
 - Remove `Access-Control-Allow-Origin: *`. Reject any request carrying an
   `Origin` header and any `Host` that is not the loopback address and port.
 - Require a per-session bearer token stored `0600` under
-  `$XDG_RUNTIME_DIR/kde-ai-assistant`. Other local users can reach loopback.
+  `$XDG_RUNTIME_DIR/happy-bot`. Other local users can reach loopback.
 - Keep the bind loopback-only.
 - API keys and other secrets (tool-server environment values, model request
   headers) live in the one settings file, `0600`, under
-  `~/.config/kde-ai-assistant`. They are never in Plasma applet config, never
+  `~/.config/happy-bot`. They are never in Plasma applet config, never
   returned by an endpoint (clients see `null` and send `null` back to keep
   the stored value), and never logged. KWallet was the original first choice
   and was dropped: a wallet may be locked or absent when the daemon starts,
@@ -279,7 +279,7 @@ The daemon is 399 lines and about to grow several owners. Split by
 responsibility, each file under about 500 lines with a real header:
 
 ```
-src/kde_ai_assistant/
+src/happy_bot/
     daemon_http.py      request routing, auth, event stream
     agent_loop.py       turn execution, step limit, cancel
     conversation.py     neutral message / tool-call types
@@ -307,7 +307,7 @@ tests/
 ```
 
 `scripts/install.sh` currently copies two single files; it must install the
-package (for example under `~/.local/lib/kde-ai-assistant`) with thin
+package (for example under `~/.local/lib/happy-bot`) with thin
 launchers in `~/.local/bin`.
 
 ## Phases
@@ -320,7 +320,7 @@ CLI context commands and `plasmawindowed` applet work as they are. Remove the
 dead `ai.example.com` default and the `/open-full-ui` path (daemon, CLI
 and applet). Spike a text field as the applet's panel form: typing, focus by
 shortcut, popup under the bar.
-*Exit:* `kde-ai-assistant status` and `context` succeed; a text field in the
+*Exit:* `happy-bot status` and `context` succeed; a text field in the
 real panel accepts typing and opens a popup, or the fallback is chosen and
 recorded here.
 
@@ -331,7 +331,7 @@ create empty placeholder modules for later phases. The applet needs a way to
 obtain the token: QML `XMLHttpRequest` refuses local files unless
 `QML_XHR_ALLOW_FILE_READ` is set, so settle the mechanism with a short spike
 first (candidate: the `org.kde.plasma.plasma5support` executable data source
-running a `kde-ai-assistant token` subcommand).
+running a `happy-bot token` subcommand).
 *Exit:* an unauthenticated or browser-origin request is refused; the applet
 still reaches `/health` with the token; tests pass.
 
@@ -435,7 +435,7 @@ his decision.
   better than showing an error for a server that restarts fine.
 - The MCP client is standard library only: newline-delimited JSON-RPC over
   the child's pipes. It works unchanged against both of the maintainer's servers.
-- Both servers were set up through `kde-ai-assistant tools import` and
+- Both servers were set up through `happy-bot tools import` and
   `role set`, with no file edited by hand. Role proposals picked the right
   tool on each (`machine_context_search`, `web_search`).
 - The maintainer's index is lexical for whole-machine search (full text over paths,
@@ -627,7 +627,7 @@ his decision.
 - A cost of the chosen approval policy, seen once: asked only to find a
   document, the local model created an empty folder first (`make_directory`
   is a change, so it ran unprompted) and then said so. Nothing was lost, and
-  the action log recorded it. `kde-ai-assistant policy changes` prevents
+  the action log recorded it. `happy-bot policy changes` prevents
   this class of surprise at the price of more prompts.
 
 **After Phase 6: look and behaviour changes (2026-11-23, from the maintainer's use).**
@@ -637,7 +637,7 @@ his decision.
   its own blue panel focus indicator, which a widget cannot switch off.
 - File matches and the conversation take turns in the popup instead of
   sharing it; saved conversations are listed in a sidebar and kept for
-  `history_days` (default 30) in `$XDG_DATA_HOME/kde-ai-assistant`.
+  `history_days` (default 30) in `$XDG_DATA_HOME/happy-bot`.
 - The popup sizes to its content from exact column heights. Sizing it from a
   ListView's estimated `contentHeight` made the window resize itself in a
   loop (it "jumped up and down").
@@ -746,8 +746,8 @@ reason). Where things live:
   the Routines & Reminders settings page, `ask --dry-run --notify`.
 - Bar: `quick_answers.py`, `quick_results.py` (`/quick`), prefixes and
   recall (`barInput.js`), right-click file actions, drag and drop,
-  `krunner_bridge.py` with `krunner/kde-ai-assistant.desktop`, and the
-  global-shortcut entry `desktop/kde-ai-assistant-shortcuts.desktop`.
+  `krunner_bridge.py` with `krunner/happy-bot.desktop`, and the
+  global-shortcut entry `desktop/happy-bot-shortcuts.desktop`.
 - More tools: `power.py`, `appearance.py`, `devices.py`, `defaults.py`,
   `documents.py`, `screen.py`, `workspace.py`, `software.py`,
   `developer.py`, `finding.py`, `notes.py`, `memory.py`, `plugins.py`.

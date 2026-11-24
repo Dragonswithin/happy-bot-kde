@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.daemon_http import AssistantServer  # noqa: E402
+from happy_bot.daemon_http import AssistantServer  # noqa: E402
 
 FAKE_SERVER = str(Path(__file__).resolve().parent / "fake_mcp_server.py")
 FAKE_ENTRY = {"command": sys.executable, "args": [FAKE_SERVER], "env": {"TOKEN": "abc"}}
@@ -143,7 +143,7 @@ class RouteTests(unittest.TestCase):
     def test_quick_results_reminders_and_routine_units_go_through_the_daemon(self) -> None:
         from unittest import mock
 
-        from kde_ai_assistant.tools import reminders
+        from happy_bot.tools import reminders
 
         reply = self.call("GET", "/quick?q=6*7")[1]
         self.assertEqual(reply["results"][0]["action"], {"type": "copy", "target": "42"})
@@ -179,9 +179,9 @@ class RouteTests(unittest.TestCase):
     def test_self_check_names_problems_with_fixes(self) -> None:
         import json as json_module
 
-        from kde_ai_assistant import __version__
+        from happy_bot import __version__
 
-        metadata = Path(__file__).resolve().parent.parent / "plasmoid/io.github.dragonswithin.kdeaiassistant/metadata.json"
+        metadata = Path(__file__).resolve().parent.parent / "plasmoid/io.github.dragonswithin.happybot/metadata.json"
         self.assertEqual(json_module.loads(metadata.read_text())["KPlugin"]["Version"], __version__)
         self.configure()
         reply = self.call("GET", "/check")[1]

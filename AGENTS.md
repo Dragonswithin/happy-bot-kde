@@ -1,4 +1,4 @@
-# KDE AI Assistant Project Instructions
+# Happy Bot Project Instructions
 
 - Product goal: a search bar on the Plasma panel beside the launcher where
   the user types anything and the computer does it: find files through the
@@ -22,9 +22,9 @@
   it a durable boot-level service unless the feature being added is no longer
   desktop-interactive.
 - Do not store screenshots, logs, transcripts, or command output in the repo.
-  Runtime state belongs under `$XDG_RUNTIME_DIR/kde-ai-assistant`. The one
+  Runtime state belongs under `$XDG_RUNTIME_DIR/happy-bot`. The one
   exception, chosen by the maintainer, is the user's conversation history: saved 0600
-  under `$XDG_DATA_HOME/kde-ai-assistant/conversations` and deleted after
+  under `$XDG_DATA_HOME/happy-bot/conversations` and deleted after
   `history_days` (default 30) without use.
 - Keep root/system actions behind an explicit external broker. This project can
   report broker availability, but it should not grow an unbounded root helper.

@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.tools import developer, screen, software  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_DANGER, ToolFailure, ToolRegistry  # noqa: E402
+from happy_bot.tools import developer, screen, software  # noqa: E402
+from happy_bot.tools.registry import RISK_DANGER, ToolFailure, ToolRegistry  # noqa: E402
 
 
 def result(stdout: str = "", ok: bool = True) -> dict:

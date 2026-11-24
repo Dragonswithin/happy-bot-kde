@@ -23,12 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402
 
-from kde_ai_assistant.agent_loop import run_turn  # noqa: E402
-from kde_ai_assistant.conversation import (  # noqa: E402
+from happy_bot.agent_loop import run_turn  # noqa: E402
+from happy_bot.conversation import (  # noqa: E402
     Message, TextDelta, ThinkingDelta, ToolCall, ToolCallReady, ToolSpec, TurnEnd, trim_history)
-from kde_ai_assistant.providers import ProviderError, create_provider  # noqa: E402
-from kde_ai_assistant.providers.openai_compatible import OpenAICompatibleProvider, list_models  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
+from happy_bot.providers import ProviderError, create_provider  # noqa: E402
+from happy_bot.providers.openai_compatible import OpenAICompatibleProvider, list_models  # noqa: E402
+from happy_bot.tools.registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema  # noqa: E402
 
 ECHO = ToolSpec("echo", "Echo text.", object_schema({"text": {"type": "string"}}, ["text"]))
 
@@ -324,7 +324,7 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(len(self.history), 2)
 
     def test_tools_can_report_progress_and_it_is_throttled(self) -> None:
-        from kde_ai_assistant.tools.registry import report_progress
+        from happy_bot.tools.registry import report_progress
 
         def chatty(arguments: dict) -> str:
             for index in range(50):

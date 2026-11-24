@@ -1,4 +1,4 @@
-# KDE AI Assistant: Feature Backlog
+# Happy Bot: Feature Backlog
 
 This is the full list of what the assistant should eventually do to be useful,
 grouped by area. It is a backlog, not a plan: `docs/ROADMAP.md` stays the
@@ -81,7 +81,7 @@ text-only models and stays as an option afterwards.
 - ● Pin a conversation; search across saved conversations. (pinned ones are
   listed first and never expire; earlier conversations also appear in quick
   results by title)
-- ● Continue a conversation from the CLI and back. (kde-ai-assistant history,
+- ● Continue a conversation from the CLI and back. (happy-bot history,
   ask --conversation)
 - ● A notification when a long task finishes (done for long requests);
   clicking it reopens the thread. (its Open button opens the popup through the
@@ -359,7 +359,7 @@ text-only models and stays as an option afterwards.
 - ● Tool usage statistics: which tools the model uses and which fail.
   (tool_usage totals the action log)
 - ● Offer the assistant's desktop tools as an MCP server to other agents,
-  under the same approval rules. (kde-ai-assistant mcp-serve)
+  under the same approval rules. (happy-bot mcp-serve)
 - ● Small Python tools dropped into a folder as plugins.
 
 ## 17. Safety, Trust And Privacy

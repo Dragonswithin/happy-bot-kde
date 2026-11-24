@@ -24,12 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import undo_journal  # noqa: E402
-from kde_ai_assistant.agent_loop import run_turn  # noqa: E402
-from kde_ai_assistant.conversation import Message, TextDelta, ToolCall, ToolCallReady, TurnEnd  # noqa: E402
-from kde_ai_assistant.redaction import HIDDEN, is_local_address, redact  # noqa: E402
-from kde_ai_assistant.tools import files, undo  # noqa: E402
-from kde_ai_assistant.tools.registry import (  # noqa: E402
+from happy_bot import undo_journal  # noqa: E402
+from happy_bot.agent_loop import run_turn  # noqa: E402
+from happy_bot.conversation import Message, TextDelta, ToolCall, ToolCallReady, TurnEnd  # noqa: E402
+from happy_bot.redaction import HIDDEN, is_local_address, redact  # noqa: E402
+from happy_bot.tools import files, undo  # noqa: E402
+from happy_bot.tools.registry import (  # noqa: E402
     RISK_CHANGE, RISK_DANGER, RISK_READ, Tool, ToolFailure, ToolRegistry, object_schema)
 
 
@@ -142,7 +142,7 @@ class DesktopUndoTests(RuntimeDirTest):
 
 class ActivityTests(RuntimeDirTest):
     def test_activity_lists_the_action_log_and_what_can_be_undone(self) -> None:
-        log = self.root / "run" / "kde-ai-assistant"
+        log = self.root / "run" / "happy-bot"
         log.mkdir()
         (log / "actions.jsonl").write_text("\n".join(json.dumps(record) for record in (
             {"time": "2026-11-22T10:00:00", "tool": "old_tool", "outcome": "ran without asking", "arguments": "{}"},

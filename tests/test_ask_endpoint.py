@@ -29,12 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_model_service import FakeModelService, chunks_for  # noqa: E402
 
-from kde_ai_assistant import settings as settings_store  # noqa: E402
-from kde_ai_assistant.conversations import MAX_CONVERSATIONS, ConversationStore  # noqa: E402
-from kde_ai_assistant.daemon_http import AssistantServer  # noqa: E402
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools import observe  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot import settings as settings_store  # noqa: E402
+from happy_bot.conversations import MAX_CONVERSATIONS, ConversationStore  # noqa: E402
+from happy_bot.daemon_http import AssistantServer  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools import observe  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 FAKE_MCP = str(Path(__file__).resolve().parent / "fake_mcp_server.py")
 
@@ -128,7 +128,7 @@ class AskEndpointTests(unittest.TestCase):
         preferred = [t for t in self.model.requests[0]["tools"] if t["function"]["name"] == "fake__find_files"][0]
         self.assertTrue(preferred["function"]["description"].startswith("Preferred tool for finding"))
 
-        from kde_ai_assistant.tools.catalog import build_registry
+        from happy_bot.tools.catalog import build_registry
         registry, _ = build_registry(self.server.mcp, self.server.settings)
         self.assertEqual(registry.assess("fake__find_files", {})[0], "read")     # role-assigned
         self.assertEqual(registry.assess("fake__crash", {})[0], "change")        # unvouched server tool
@@ -390,7 +390,7 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertEqual(os.listdir(self.root / "history"), [])
 
     def test_ids_cannot_escape_the_history_folder(self) -> None:
-        from kde_ai_assistant.conversation_archive import ConversationArchive
+        from happy_bot.conversation_archive import ConversationArchive
 
         archive = ConversationArchive(self.root / "history", days=30)
         for bad in ("../config", "a/b", "", "x" * 100, "../../etc/passwd"):
@@ -401,7 +401,7 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertFalse((self.root / "escape.json").exists())
 
     def test_text_pieces_are_joined_and_liveness_events_dropped(self) -> None:
-        from kde_ai_assistant.conversations import Conversation
+        from happy_bot.conversations import Conversation
 
         conversation = Conversation(id="abcd")
         for event in ({"type": "start"}, {"type": "thinking"}, {"type": "text_delta", "text": "Hel"},

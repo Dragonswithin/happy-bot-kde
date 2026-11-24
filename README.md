@@ -1,4 +1,4 @@
-# KDE AI Assistant
+# Happy Bot
 
 A search bar for the KDE Plasma 6 panel: type anything and the computer does
 it. It finds files through your existing local index, answers from the web
@@ -42,16 +42,16 @@ architecture and phase order are in `docs/ROADMAP.md`.
   in the launcher, refreshing the launcher (and, if needed, restarting the
   panel right after the request) when it does not.
   Everything else runs at once. The Behaviour settings page (or
-  `kde-ai-assistant policy changes` / `policy everything`) makes it ask more
+  `happy-bot policy changes` / `policy everything`) makes it ask more
   often.
 - Conversations are kept: reopening the box returns to the current one, and
   a sidebar lists earlier ones to reopen and continue. They are saved,
-  readable only by you, in `~/.local/share/kde-ai-assistant/conversations`
+  readable only by you, in `~/.local/share/happy-bot/conversations`
   and deleted 30 days after their last use (changed on the History & Folders
   settings page; 0 saves nothing). They can contain whatever the assistant
   read for you.
 - Every action that changed something is recorded in
-  `$XDG_RUNTIME_DIR/kde-ai-assistant/actions.jsonl` until you log out.
+  `$XDG_RUNTIME_DIR/happy-bot/actions.jsonl` until you log out.
 
 - It can operate other applications: read a window's buttons, menus and
   fields through the accessibility interface, press them, fill in text, and
@@ -125,16 +125,16 @@ Besides the bar and the settings above:
 Commands:
 
 ```bash
-kde-ai-assistant doctor                     # check everything, with fixes
-kde-ai-assistant eval [--model NAME]        # try a model on everyday requests (changes nothing)
-kde-ai-assistant ask --dry-run "…"          # say what it would do, change nothing
-kde-ai-assistant history [ID]               # earlier conversations
-kde-ai-assistant export FILE / import FILE  # move settings (without secrets) and conversations
-kde-ai-assistant mcp-serve                  # let another AI program use the tools (enable in settings)
+happy-bot doctor                     # check everything, with fixes
+happy-bot eval [--model NAME]        # try a model on everyday requests (changes nothing)
+happy-bot ask --dry-run "…"          # say what it would do, change nothing
+happy-bot history [ID]               # earlier conversations
+happy-bot export FILE / import FILE  # move settings (without secrets) and conversations
+happy-bot mcp-serve                  # let another AI program use the tools (enable in settings)
 ```
 
 Global shortcuts for "Explain selected text" and "Ask about this window" are
-under System Settings > Shortcuts > AI Assistant Shortcuts (no keys are set
+under System Settings > Shortcuts > Happy Bot Shortcuts (no keys are set
 by default). An Arch package recipe is in `packaging/arch/`.
 
 ## Setting Up From The Command Line
@@ -143,44 +143,44 @@ The main settings can also be scripted. For a model, any
 service with an OpenAI-compatible chat API works, local or hosted:
 
 ```bash
-kde-ai-assistant model probe http://127.0.0.1:8080          # what does it offer?
-kde-ai-assistant model add NAME --url URL [--model ID]       # local, no key
-kde-ai-assistant model add NAME --url URL --model ID --key-stdin   # paste the key, Enter
-kde-ai-assistant model test                                  # answers? can call tools?
-kde-ai-assistant model use NAME
-kde-ai-assistant ask "what is on my clipboard?"
+happy-bot model probe http://127.0.0.1:8080          # what does it offer?
+happy-bot model add NAME --url URL [--model ID]       # local, no key
+happy-bot model add NAME --url URL --model ID --key-stdin   # paste the key, Enter
+happy-bot model test                                  # answers? can call tools?
+happy-bot model use NAME
+happy-bot ask "what is on my clipboard?"
 ```
 
 `--header NAME=VALUE` adds a request header for services that need one.
-`kde-ai-assistant folders` shows where the assistant thinks Desktop,
+`happy-bot folders` shows where the assistant thinks Desktop,
 Documents and Downloads are (it follows the system's settings), and
-`kde-ai-assistant folders Documents /some/path` overrides one. With
+`happy-bot folders Documents /some/path` overrides one. With
 a hosted model, whatever the tools read (clipboard, file contents) is sent to
 that service.
 
 For search and tools:
 
 ```bash
-kde-ai-assistant tools discover          # servers found in other programs' settings
-kde-ai-assistant tools import NAME       # add one (--read-only if it changes nothing)
-kde-ai-assistant tools list              # its tools, and suggested roles
-kde-ai-assistant role set file_search SERVER TOOL
-kde-ai-assistant role set web_search SERVER TOOL
-kde-ai-assistant search some words
+happy-bot tools discover          # servers found in other programs' settings
+happy-bot tools import NAME       # add one (--read-only if it changes nothing)
+happy-bot tools list              # its tools, and suggested roles
+happy-bot role set file_search SERVER TOOL
+happy-bot role set web_search SERVER TOOL
+happy-bot search some words
 ```
 
-Settings are stored in `~/.config/kde-ai-assistant/config.json` (mode 0600).
-The schema is documented at the top of `src/kde_ai_assistant/settings.py`.
+Settings are stored in `~/.config/happy-bot/config.json` (mode 0600).
+The schema is documented at the top of `src/happy_bot/settings.py`.
 Change them through the settings dialog or the commands above rather than by
 editing the file; the daemon validates and applies changes immediately.
 
 Useful environment overrides:
 
-- `KDE_AI_ASSISTANT_DAEMON_HOST`
-- `KDE_AI_ASSISTANT_DAEMON_PORT`
-- `KDE_AI_ASSISTANT_DAEMON_URL`
-- `KDE_AI_ASSISTANT_ROOT_BROKER`
-- `KDE_AI_ASSISTANT_ADMIN_GROUP`
+- `HAPPY_BOT_DAEMON_HOST`
+- `HAPPY_BOT_DAEMON_PORT`
+- `HAPPY_BOT_DAEMON_URL`
+- `HAPPY_BOT_ROOT_BROKER`
+- `HAPPY_BOT_ADMIN_GROUP`
 
 ## Install
 
@@ -194,7 +194,7 @@ That installs the daemon and command-line client, starts the daemon as a
 systemd user service tied to your Plasma session, installs the panel widget
 and, the first time, adds the search bar to the panel that holds your
 application launcher. Then press Enter in the empty bar (or right-click it
-and choose Configure AI Assistant) to set it up:
+and choose Configure Happy Bot) to set it up:
 
 1. **AI model.** "Find models on this computer" lists model services that
    are running locally; or add a hosted service by address, model id and API
@@ -210,13 +210,13 @@ loads the new widget code.
 
 What goes where:
 
-- `src/kde_ai_assistant/` to `~/.local/lib/kde-ai-assistant/kde_ai_assistant/`
-- `launchers/kde-ai-assistant-daemon` and `launchers/kde-ai-assistant` to
+- `src/happy_bot/` to `~/.local/lib/happy-bot/happy_bot/`
+- `launchers/happy-bot-daemon` and `launchers/happy-bot` to
   `~/.local/bin/`
-- `systemd/user/kde-ai-assistant-daemon.service` to
+- `systemd/user/happy-bot-daemon.service` to
   `~/.config/systemd/user/`
 - the Plasma widget to your Plasma package store (`kpackagetool6`)
-- your settings, created on first use, in `~/.config/kde-ai-assistant/`
+- your settings, created on first use, in `~/.config/happy-bot/`
 
 To remove it:
 
@@ -232,7 +232,7 @@ a shortcut that focuses the bar.
 To test the widget in a window instead of a panel:
 
 ```bash
-plasmawindowed io.github.dragonswithin.kdeaiassistant
+plasmawindowed io.github.dragonswithin.happybot
 ```
 
 Widget load errors are not printed to the terminal; read them with
@@ -243,7 +243,7 @@ Widget load errors are not printed to the terminal; read them with
 
 The daemon listens on loopback only and can act for the user, so every
 request must carry the bearer token it writes at each start to
-`$XDG_RUNTIME_DIR/kde-ai-assistant/token` (mode 0600). Requests with an
+`$XDG_RUNTIME_DIR/happy-bot/token` (mode 0600). Requests with an
 `Origin` header (any browser page) or a foreign `Host` header are refused.
 The CLI and the widget read the token themselves.
 
@@ -251,14 +251,14 @@ The CLI and the widget read the token themselves.
 
 ```bash
 python3 -m unittest discover -s tests
-python3 -m py_compile src/kde_ai_assistant/*.py
-python3 -m py_compile src/kde_ai_assistant/*/*.py
+python3 -m py_compile src/happy_bot/*.py
+python3 -m py_compile src/happy_bot/*/*.py
 bash -n scripts/install.sh
 QT_FORCE_STDERR_LOGGING=1 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml plasmoid/*/contents/ui/*.qml
-systemd-analyze --user verify systemd/user/kde-ai-assistant-daemon.service
-systemctl --user status kde-ai-assistant-daemon.service
-kde-ai-assistant status --pretty
-kde-ai-assistant context --kind window --pretty
+systemd-analyze --user verify systemd/user/happy-bot-daemon.service
+systemctl --user status happy-bot-daemon.service
+happy-bot status --pretty
+happy-bot context --kind window --pretty
 ```
 
 ## Requirements

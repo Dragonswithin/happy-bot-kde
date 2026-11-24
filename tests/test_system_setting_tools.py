@@ -22,9 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import undo_journal  # noqa: E402
-from kde_ai_assistant.tools import appearance, defaults, devices, power, undo  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot import undo_journal  # noqa: E402
+from happy_bot.tools import appearance, defaults, devices, power, undo  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 
 class Recorder:
@@ -43,7 +43,7 @@ class Recorder:
 
 
 def clear_journal() -> None:
-    path = Path(os.environ["XDG_RUNTIME_DIR"]) / "kde-ai-assistant" / "undo.jsonl"
+    path = Path(os.environ["XDG_RUNTIME_DIR"]) / "happy-bot" / "undo.jsonl"
     if path.exists():
         path.unlink()
 

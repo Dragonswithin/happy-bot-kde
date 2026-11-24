@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Installs, upgrades or removes KDE AI Assistant for the current user. No root needed.
+# Installs, upgrades or removes Happy Bot for the current user. No root needed.
 #
 # Install (default) puts things here:
-#   src/kde_ai_assistant/            -> ~/.local/lib/kde-ai-assistant/kde_ai_assistant/
+#   src/happy_bot/            -> ~/.local/lib/happy-bot/happy_bot/
 #   launchers/*                      -> ~/.local/bin/
 #   systemd/user/*.service           -> ~/.config/systemd/user/
 #   plasmoid/<id>/                   -> the user's Plasma applet store (kpackagetool6)
-#   krunner/kde-ai-assistant.desktop -> ~/.local/share/krunner/dbusplugins/ (KRunner plugin)
-#   desktop/kde-ai-assistant-shortcuts.desktop -> ~/.local/share/applications/, linked from
+#   krunner/happy-bot.desktop -> ~/.local/share/krunner/dbusplugins/ (KRunner plugin)
+#   desktop/happy-bot-shortcuts.desktop -> ~/.local/share/applications/, linked from
 #                                      ~/.local/share/kglobalaccel/ (global shortcuts)
 # and, the first time, adds the search bar to the panel that holds the
 # application launcher, so nothing is left to do by hand. Setup then continues
@@ -27,25 +27,25 @@
 #   --no-panel    do not add the search bar to a panel
 #   --uninstall   remove everything this script installed, the bar from every
 #                 panel, and the reminder and routine timers the assistant
-#                 created; your settings in ~/.config/kde-ai-assistant stay
+#                 created; your settings in ~/.config/happy-bot stay
 #   --purge       with --uninstall: remove the settings too
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 BIN_DIR="${HOME}/.local/bin"
-LIB_DIR="${HOME}/.local/lib/kde-ai-assistant"
-CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/kde-ai-assistant"
-PACKAGE_SRC="${REPO_ROOT}/src/kde_ai_assistant"
-SERVICE_NAME="kde-ai-assistant-daemon.service"
+LIB_DIR="${HOME}/.local/lib/happy-bot"
+CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/happy-bot"
+PACKAGE_SRC="${REPO_ROOT}/src/happy_bot"
+SERVICE_NAME="happy-bot-daemon.service"
 SERVICE_SRC="${REPO_ROOT}/systemd/user/${SERVICE_NAME}"
 SERVICE_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
-PLASMOID_ID="io.github.dragonswithin.kdeaiassistant"
+PLASMOID_ID="io.github.dragonswithin.happybot"
 PLASMOID_DIR="${REPO_ROOT}/plasmoid/${PLASMOID_ID}"
-LAUNCHERS=(kde-ai-assistant-daemon kde-ai-assistant)
-KRUNNER_SRC="${REPO_ROOT}/krunner/kde-ai-assistant.desktop"
+LAUNCHERS=(happy-bot-daemon happy-bot)
+KRUNNER_SRC="${REPO_ROOT}/krunner/happy-bot.desktop"
 KRUNNER_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/krunner/dbusplugins"
-SHORTCUTS_SRC="${REPO_ROOT}/desktop/kde-ai-assistant-shortcuts.desktop"
+SHORTCUTS_SRC="${REPO_ROOT}/desktop/happy-bot-shortcuts.desktop"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
 KGLOBALACCEL_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/kglobalaccel"
 
@@ -135,15 +135,15 @@ if (( uninstall )); then
   fi
   systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
   rm -f -- "${SERVICE_DIR}/${SERVICE_NAME}"
-  # Reminder and routine units carry this marker (src/kde_ai_assistant/user_timers.py);
+  # Reminder and routine units carry this marker (src/happy_bot/user_timers.py);
   # nothing else in the directory is touched.
-  for unit in "${SERVICE_DIR}"/kde-ai-assistant-reminder-* "${SERVICE_DIR}"/kde-ai-assistant-routine-*; do
-    [[ -f "$unit" ]] && grep -q '^X-KdeAiAssistant=yes' "$unit" || continue
+  for unit in "${SERVICE_DIR}"/happy-bot-reminder-* "${SERVICE_DIR}"/happy-bot-routine-*; do
+    [[ -f "$unit" ]] && grep -q '^X-HappyBot=yes' "$unit" || continue
     case "$unit" in *.timer|*.path) systemctl --user disable --now "$(basename -- "$unit")" >/dev/null 2>&1 || true ;; esac
     rm -f -- "$unit"
   done
-  rm -f -- "${KRUNNER_DIR}/kde-ai-assistant.desktop" "${KGLOBALACCEL_DIR}/kde-ai-assistant-shortcuts.desktop" \
-    "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
+  rm -f -- "${KRUNNER_DIR}/happy-bot.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop" \
+    "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
   systemctl --user daemon-reload || true
   remove_from_panels >/dev/null
   if applet_installed; then
@@ -155,9 +155,9 @@ if (( uninstall )); then
   rm -rf -- "$LIB_DIR"
   if (( purge )); then
     rm -rf -- "$CONFIG_DIR"
-    printf 'KDE AI Assistant removed, including its settings.\n'
+    printf 'Happy Bot removed, including its settings.\n'
   else
-    printf 'KDE AI Assistant removed. Your settings remain in %s (use --purge to remove them too).\n' "$CONFIG_DIR"
+    printf 'Happy Bot removed. Your settings remain in %s (use --purge to remove them too).\n' "$CONFIG_DIR"
   fi
   exit 0
 fi
@@ -175,13 +175,13 @@ if applet_installed; then
 fi
 
 if (( dry_run )); then
-  printf 'Would replace %s with %s\n' "${LIB_DIR}/kde_ai_assistant" "$PACKAGE_SRC"
+  printf 'Would replace %s with %s\n' "${LIB_DIR}/happy_bot" "$PACKAGE_SRC"
   for launcher in "${LAUNCHERS[@]}"; do
     printf 'Would install %s -> %s\n' "${REPO_ROOT}/launchers/${launcher}" "${BIN_DIR}/${launcher}"
   done
   printf 'Would install %s -> %s\n' "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
-  printf 'Would install %s -> %s\n' "$KRUNNER_SRC" "${KRUNNER_DIR}/kde-ai-assistant.desktop"
-  printf 'Would install %s -> %s (and link it for global shortcuts)\n' "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
+  printf 'Would install %s -> %s\n' "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
+  printf 'Would install %s -> %s (and link it for global shortcuts)\n' "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
   if (( start_service )); then
     printf 'Would enable and restart user service: %s\n' "$SERVICE_NAME"
   else
@@ -195,19 +195,19 @@ if (( dry_run )); then
 fi
 
 install -d -m 0755 "$BIN_DIR" "$SERVICE_DIR" "$LIB_DIR"
-rm -rf -- "${LIB_DIR}/kde_ai_assistant"
-install -d -m 0755 "${LIB_DIR}/kde_ai_assistant"
+rm -rf -- "${LIB_DIR}/happy_bot"
+install -d -m 0755 "${LIB_DIR}/happy_bot"
 (cd "$PACKAGE_SRC" && find . -name '*.py' -print0) | while IFS= read -r -d '' file; do
-  install -D -m 0644 "${PACKAGE_SRC}/${file}" "${LIB_DIR}/kde_ai_assistant/${file}"
+  install -D -m 0644 "${PACKAGE_SRC}/${file}" "${LIB_DIR}/happy_bot/${file}"
 done
 for launcher in "${LAUNCHERS[@]}"; do
   install -m 0755 "${REPO_ROOT}/launchers/${launcher}" "${BIN_DIR}/${launcher}"
 done
 install -m 0644 "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
-install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/kde-ai-assistant.desktop"
-install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop"
+install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
+install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
 install -d -m 0755 "$KGLOBALACCEL_DIR"
-ln -sf -- "${APPLICATIONS_DIR}/kde-ai-assistant-shortcuts.desktop" "${KGLOBALACCEL_DIR}/kde-ai-assistant-shortcuts.desktop"
+ln -sf -- "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop"
 
 systemctl --user daemon-reload
 if (( start_service )); then
@@ -227,13 +227,13 @@ else
   case "$placed" in
     added) printf 'The search bar is now in your panel. Press Enter in it to set up a model.\n' ;;
     present) printf 'The search bar is already in a panel.\n' ;;
-    *) printf 'Add the "AI Assistant" widget to your panel next to the application launcher.\n' ;;
+    *) printf 'Add the "Happy Bot" widget to your panel next to the application launcher.\n' ;;
   esac
 fi
 
 case ":${PATH}:" in
   *":${BIN_DIR}:"*) ;;
-  *) printf 'Note: %s is not on your PATH; the kde-ai-assistant command is there.\n' "$BIN_DIR" ;;
+  *) printf 'Note: %s is not on your PATH; the happy-bot command is there.\n' "$BIN_DIR" ;;
 esac
 
-printf 'KDE AI Assistant installed.\n'
+printf 'Happy Bot installed.\n'

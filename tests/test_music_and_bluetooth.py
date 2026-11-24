@@ -18,8 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.tools import developer, devices, media  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolFailure  # noqa: E402
+from happy_bot.tools import developer, devices, media  # noqa: E402
+from happy_bot.tools.registry import ToolFailure  # noqa: E402
 
 
 class MusicTests(unittest.TestCase):
@@ -37,7 +37,7 @@ class MusicTests(unittest.TestCase):
 
     def test_play_matches_words_in_paths_and_opens_a_playlist(self) -> None:
         opened = []
-        with mock.patch("kde_ai_assistant.desktop_actions.open_location", side_effect=opened.append):
+        with mock.patch("happy_bot.desktop_actions.open_location", side_effect=opened.append):
             self.assertIn("Playing 2 track(s)", media.play_music({"query": "ok computer"}))
         self.assertTrue(opened[0].endswith(".m3u"))
         self.assertIn("Paranoid Android.flac", Path(opened[0]).read_text())

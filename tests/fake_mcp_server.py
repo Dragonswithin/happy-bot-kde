@@ -1,6 +1,6 @@
 """A minimal stdio MCP server used as a child process by the test suite.
 
-It implements just enough of the protocol for ``kde_ai_assistant.mcp_client``:
+It implements just enough of the protocol for ``happy_bot.mcp_client``:
 ``initialize``, ``tools/list`` (paged, to exercise cursors) and ``tools/call``.
 Its tools are chosen to provoke the client's edge cases:
 

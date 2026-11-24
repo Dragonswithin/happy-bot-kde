@@ -1,15 +1,15 @@
-# Arch Linux package for KDE AI Assistant, built from this checkout.
+# Arch Linux package for Happy Bot, built from this checkout.
 #
 # Build (from this folder):  makepkg -si
 # It installs system-wide what scripts/install.sh installs per user: the
-# package in /usr/lib/kde-ai-assistant, the two commands in /usr/bin, the
+# package in /usr/lib/happy-bot, the two commands in /usr/bin, the
 # daemon as a systemd *user* unit, the panel applet, the KRunner plugin and
 # the global-shortcut entry. Each user then runs, once:
-#   systemctl --user enable --now kde-ai-assistant-daemon.service
-# and adds "AI Assistant" to a panel. Settings stay per user in
-# ~/.config/kde-ai-assistant. For publishing to the AUR, replace the local
+#   systemctl --user enable --now happy-bot-daemon.service
+# and adds "Happy Bot" to a panel. Settings stay per user in
+# ~/.config/happy-bot. For publishing to the AUR, replace the local
 # source below with a release tarball and its checksum.
-pkgname=kde-ai-assistant
+pkgname=happy-bot
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Panel search bar for KDE Plasma that finds, answers and acts using any AI model you configure"
@@ -28,20 +28,20 @@ source=()
 _root="$(realpath "${startdir}/../..")"
 
 package() {
-  install -d "${pkgdir}/usr/lib/kde-ai-assistant"
-  cp -r "${_root}/src/kde_ai_assistant" "${pkgdir}/usr/lib/kde-ai-assistant/"
-  find "${pkgdir}/usr/lib/kde-ai-assistant" -name '__pycache__' -prune -exec rm -rf {} +
-  install -Dm755 "${_root}/launchers/kde-ai-assistant" "${pkgdir}/usr/bin/kde-ai-assistant"
-  install -Dm755 "${_root}/launchers/kde-ai-assistant-daemon" "${pkgdir}/usr/bin/kde-ai-assistant-daemon"
-  sed 's|^ExecStart=%h/.local/bin/|ExecStart=/usr/bin/|' "${_root}/systemd/user/kde-ai-assistant-daemon.service" \
-    | install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/user/kde-ai-assistant-daemon.service"
+  install -d "${pkgdir}/usr/lib/happy-bot"
+  cp -r "${_root}/src/happy_bot" "${pkgdir}/usr/lib/happy-bot/"
+  find "${pkgdir}/usr/lib/happy-bot" -name '__pycache__' -prune -exec rm -rf {} +
+  install -Dm755 "${_root}/launchers/happy-bot" "${pkgdir}/usr/bin/happy-bot"
+  install -Dm755 "${_root}/launchers/happy-bot-daemon" "${pkgdir}/usr/bin/happy-bot-daemon"
+  sed 's|^ExecStart=%h/.local/bin/|ExecStart=/usr/bin/|' "${_root}/systemd/user/happy-bot-daemon.service" \
+    | install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/user/happy-bot-daemon.service"
   install -d "${pkgdir}/usr/share/plasma/plasmoids"
-  cp -r "${_root}/plasmoid/io.github.dragonswithin.kdeaiassistant" "${pkgdir}/usr/share/plasma/plasmoids/"
-  install -Dm644 "${_root}/krunner/kde-ai-assistant.desktop" "${pkgdir}/usr/share/krunner/dbusplugins/kde-ai-assistant.desktop"
-  install -Dm644 "${_root}/desktop/kde-ai-assistant-shortcuts.desktop" \
-    "${pkgdir}/usr/share/applications/kde-ai-assistant-shortcuts.desktop"
+  cp -r "${_root}/plasmoid/io.github.dragonswithin.happybot" "${pkgdir}/usr/share/plasma/plasmoids/"
+  install -Dm644 "${_root}/krunner/happy-bot.desktop" "${pkgdir}/usr/share/krunner/dbusplugins/happy-bot.desktop"
+  install -Dm644 "${_root}/desktop/happy-bot-shortcuts.desktop" \
+    "${pkgdir}/usr/share/applications/happy-bot-shortcuts.desktop"
   install -d "${pkgdir}/usr/share/kglobalaccel"
-  ln -s /usr/share/applications/kde-ai-assistant-shortcuts.desktop \
-    "${pkgdir}/usr/share/kglobalaccel/kde-ai-assistant-shortcuts.desktop"
+  ln -s /usr/share/applications/happy-bot-shortcuts.desktop \
+    "${pkgdir}/usr/share/kglobalaccel/happy-bot-shortcuts.desktop"
   install -Dm644 "${_root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

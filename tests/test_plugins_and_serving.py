@@ -22,13 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import daemon_routes, mcp_serve  # noqa: E402
-from kde_ai_assistant.daemon_http import AssistantServer  # noqa: E402
-from kde_ai_assistant.mcp_client import McpManager  # noqa: E402
-from kde_ai_assistant.settings import validate_settings  # noqa: E402
-from kde_ai_assistant.tools import catalog, plugins  # noqa: E402
+from happy_bot import daemon_routes, mcp_serve  # noqa: E402
+from happy_bot.daemon_http import AssistantServer  # noqa: E402
+from happy_bot.mcp_client import McpManager  # noqa: E402
+from happy_bot.settings import validate_settings  # noqa: E402
+from happy_bot.tools import catalog, plugins  # noqa: E402
 
-GOOD = '''from kde_ai_assistant.tools.registry import RISK_READ, Tool, object_schema
+GOOD = '''from happy_bot.tools.registry import RISK_READ, Tool, object_schema
 
 def tools():
     return [Tool("say_hello", "Greets.", object_schema({"name": {"type": "string"}}, ["name"]), RISK_READ,

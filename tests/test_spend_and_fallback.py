@@ -18,11 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import ask_stream, spend  # noqa: E402
-from kde_ai_assistant.conversation import Message, TextDelta, TurnEnd  # noqa: E402
-from kde_ai_assistant.providers.base import ProviderError  # noqa: E402
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools.registry import ToolRegistry  # noqa: E402
+from happy_bot import ask_stream, spend  # noqa: E402
+from happy_bot.conversation import Message, TextDelta, TurnEnd  # noqa: E402
+from happy_bot.providers.base import ProviderError  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools.registry import ToolRegistry  # noqa: E402
 
 LOCAL = {"provider": "openai_compatible", "base_url": "http://127.0.0.1:1/v1", "model": "small", "context_window": 32768}
 HOSTED = {"provider": "openai_compatible", "base_url": "https://api.example.com/v1", "model": "big", "context_window": 32768,

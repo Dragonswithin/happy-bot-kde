@@ -18,11 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.settings import SettingsError, validate_settings  # noqa: E402
-from kde_ai_assistant.tools import undo  # noqa: E402
-from kde_ai_assistant.tools.memory import memory_tools  # noqa: E402
-from kde_ai_assistant.tools.notes import note_tools  # noqa: E402
-from kde_ai_assistant.tools.registry import RISK_DANGER, ToolFailure  # noqa: E402
+from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.tools import undo  # noqa: E402
+from happy_bot.tools.memory import memory_tools  # noqa: E402
+from happy_bot.tools.notes import note_tools  # noqa: E402
+from happy_bot.tools.registry import RISK_DANGER, ToolFailure  # noqa: E402
 
 
 class Store:

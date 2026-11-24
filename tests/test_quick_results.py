@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant import krunner_bridge, quick_answers, quick_results  # noqa: E402
+from happy_bot import krunner_bridge, quick_answers, quick_results  # noqa: E402
 
 
 class AnswerTests(unittest.TestCase):
@@ -111,7 +111,7 @@ class QuickResultTests(unittest.TestCase):
 
     def test_reveal_asks_the_file_manager_for_existing_files_only(self) -> None:
         calls = []
-        with mock.patch("kde_ai_assistant.session_dbus.call", side_effect=lambda *a: calls.append(a)), \
+        with mock.patch("happy_bot.session_dbus.call", side_effect=lambda *a: calls.append(a)), \
                 tempfile.NamedTemporaryFile() as entry:
             quick_results.activate({"type": "reveal", "target": entry.name})
             self.assertEqual(calls[0][3:5], ("ShowItems", "ass"))
@@ -155,10 +155,10 @@ class KRunnerTests(unittest.TestCase):
         with mock.patch.object(krunner_bridge.quick_results, "activate") as activate:
             bridge.run("quick-0")
         activate.assert_called_once_with(quick[0]["action"])
-        with mock.patch.object(krunner_bridge.shutil, "which", return_value="/usr/bin/kde-ai-assistant"), \
+        with mock.patch.object(krunner_bridge.shutil, "which", return_value="/usr/bin/happy-bot"), \
                 mock.patch.object(krunner_bridge.subprocess, "Popen") as popen:
             bridge.run("ask")
-        self.assertEqual(popen.call_args[0][0], ["/usr/bin/kde-ai-assistant", "ask", "--notify", "--", "konsole"])
+        self.assertEqual(popen.call_args[0][0], ["/usr/bin/happy-bot", "ask", "--notify", "--", "konsole"])
 
 
 if __name__ == "__main__":

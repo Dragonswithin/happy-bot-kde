@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from kde_ai_assistant.shell_risk import classify_command  # noqa: E402
+from happy_bot.shell_risk import classify_command  # noqa: E402
 
 DANGEROUS = [
     "rm notes.txt", "rm -rf ~/Downloads/old", "/usr/bin/rm x", "rmdir empty", "unlink a", "shred -u secret",
@@ -114,7 +114,7 @@ class ShellRiskTests(unittest.TestCase):
         self.assertIn("removes installed software", classify_command("pacman -Rns foo")[1])
 
     def test_commands_that_need_a_password_are_recognised(self) -> None:
-        from kde_ai_assistant.shell_risk import needs_password
+        from happy_bot.shell_risk import needs_password
 
         for command in ("sudo pacman -Syu", "yay -S ladybird --noconfirm", "pacman -S x", "ls && sudo reboot",
                         "doas ls", "su -c ls", "apt install vim", "pacman -Rns x", "FOO=1 sudo ls"):

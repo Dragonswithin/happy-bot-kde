@@ -1,7 +1,7 @@
 """Keeps the test suite away from the user's real runtime state.
 
 Tools record undo entries and other transient state under
-``$XDG_RUNTIME_DIR/kde-ai-assistant`` (``runtime_paths.runtime_root``), and
+``$XDG_RUNTIME_DIR/happy-bot`` (``runtime_paths.runtime_root``), and
 spending under ``$XDG_DATA_HOME`` (``spend.py``). Every test module imports
 this first, which points both at one private temporary directory for the
 whole test process, so running the tests never adds to, or reads, the
@@ -16,11 +16,11 @@ import os
 import shutil
 import tempfile
 
-if not os.environ.get("KDE_AI_ASSISTANT_TEST_RUNTIME"):
-    _runtime = tempfile.mkdtemp(prefix="kde-ai-assistant-tests-")
+if not os.environ.get("HAPPY_BOT_TEST_RUNTIME"):
+    _runtime = tempfile.mkdtemp(prefix="happy-bot-tests-")
     os.chmod(_runtime, 0o700)
     os.environ["XDG_RUNTIME_DIR"] = _runtime
     os.makedirs(os.path.join(_runtime, "data"), mode=0o700)
     os.environ["XDG_DATA_HOME"] = os.path.join(_runtime, "data")
-    os.environ["KDE_AI_ASSISTANT_TEST_RUNTIME"] = _runtime
+    os.environ["HAPPY_BOT_TEST_RUNTIME"] = _runtime
     atexit.register(shutil.rmtree, _runtime, True)
