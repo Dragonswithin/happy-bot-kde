@@ -1,0 +1,165 @@
+/*
+    SPDX-License-Identifier: MIT
+*/
+
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
+import org.kde.plasma.components as PlasmaComponents3
+
+/**
+ * The welcome shown in a conversation that has nothing in it yet
+ * (ResultsView.qml shows it while the conversation is open and empty): a
+ * greeting with Happy Bot's picture (`assistantIcon`, tinted with `accent`),
+ * a line on what it can do, and a few starting points (find a file, search
+ * the web, desktop help). Choosing one emits `promptChosen` with the start
+ * of a request ("Find a file named "), which ResultsView.qml puts in the
+ * field the user types in (the popup's own, or the panel bar's through
+ * `panelPromptChosen`) for them to finish; nothing is sent until they press
+ * Enter. The component keeps no state.
+ */
+ColumnLayout {
+    id: welcome
+
+    required property string assistantIcon
+    required property color accent
+    signal promptChosen(string prompt)
+
+    spacing: Kirigami.Units.largeSpacing
+
+    Rectangle {
+        id: hero
+
+        readonly property int inset: Kirigami.Units.gridUnit
+        readonly property real artworkWidth: Math.min(width * 0.32, Kirigami.Units.gridUnit * 8)
+        Layout.fillWidth: true
+        implicitHeight: Math.max(Kirigami.Units.gridUnit * 6.5, intro.implicitHeight + inset * 2)
+        radius: Kirigami.Units.cornerRadius * 3
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(welcome.accent, 0.06)) }
+            GradientStop { position: 1; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(welcome.accent, 0.18)) }
+        }
+        border.color: Qt.alpha(welcome.accent, 0.23)
+
+        ColumnLayout {
+            id: intro
+            anchors.left: parent.left
+            anchors.leftMargin: hero.inset
+            anchors.verticalCenter: parent.verticalCenter
+            width: hero.width - hero.artworkWidth - hero.inset * 1.5
+            spacing: Kirigami.Units.smallSpacing
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                text: i18n("How can I help?")
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.65
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+            }
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                text: i18n("Find files, explore the web, or get things done on your desktop.")
+                opacity: 0.8
+                wrapMode: Text.Wrap
+            }
+        }
+
+        Item {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: hero.artworkWidth
+            height: Math.min(parent.height - hero.inset, width)
+            Accessible.ignored: true
+
+            Rectangle {
+                id: orbit
+                anchors.centerIn: parent
+                width: Math.min(parent.height, parent.width * 0.85)
+                height: width
+                radius: width / 2
+                color: "transparent"
+                border.color: Qt.alpha(welcome.accent, 0.25)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: parent.width * 0.76
+                    height: width
+                    radius: width / 2
+                    color: Qt.alpha(welcome.accent, 0.10)
+                    border.color: Qt.alpha(welcome.accent, 0.19)
+                }
+                Rectangle {
+                    x: parent.width * 0.15 - width / 2
+                    y: parent.height * 0.145 - height / 2
+                    width: Kirigami.Units.smallSpacing * 1.6
+                    height: width
+                    radius: width / 2
+                    color: welcome.accent
+                }
+                Kirigami.Icon {
+                    anchors.centerIn: parent
+                    width: parent.width * 0.55
+                    height: width
+                    source: welcome.assistantIcon
+                }
+            }
+        }
+    }
+
+    GridLayout {
+        id: shortcuts
+        Layout.fillWidth: true
+        columns: width >= Kirigami.Units.gridUnit * 25 ? 3 : 1
+        rowSpacing: Kirigami.Units.smallSpacing
+        columnSpacing: Kirigami.Units.largeSpacing
+        uniformCellWidths: true
+
+        Repeater {
+            model: [
+                { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: i18n("Find a file named") },
+                { label: i18n("Search the web"), icon: "globe", prompt: i18n("Search the web for") },
+                { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
+            ]
+
+            PlasmaComponents3.ItemDelegate {
+                id: shortcut
+                required property var modelData
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumWidth: 0
+                padding: Kirigami.Units.largeSpacing * 1.5
+                text: modelData.label
+                onClicked: welcome.promptChosen(modelData.prompt + " ")
+
+                background: Rectangle {
+                    radius: Kirigami.Units.cornerRadius * 2
+                    color: Qt.alpha(shortcut.hovered || shortcut.down ? welcome.accent : Kirigami.Theme.textColor,
+                                    shortcut.down ? 0.16 : shortcut.hovered ? 0.10 : 0.035)
+                    border.color: shortcut.visualFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.14)
+                }
+                contentItem: GridLayout {
+                    columns: shortcuts.columns === 1 ? 2 : 1
+                    rowSpacing: Kirigami.Units.largeSpacing
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    Kirigami.Icon {
+                        source: shortcut.modelData.icon
+                        isMask: true
+                        color: Qt.tint(Kirigami.Theme.textColor, Qt.alpha(welcome.accent, 0.55))
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    }
+                    PlasmaComponents3.Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: shortcut.text
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+        }
+    }
+}

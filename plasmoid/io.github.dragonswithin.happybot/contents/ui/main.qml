@@ -114,7 +114,9 @@ PlasmoidItem {
     property var sentRequests: []
     property int recallIndex: 0
 
-    Plasmoid.icon: Look.assistantIcon(session.ui.robot_mascot)
+    // plasmawindowed publishes this string as the tray's theme icon name.
+    Plasmoid.icon: root.standalone && session.ui.robot_mascot
+        ? Plasmoid.pluginName : Look.assistantIcon(session.ui.robot_mascot)
     Plasmoid.title: i18n("Happy Bot")
     Plasmoid.status: {
         if (wantsInput) {
@@ -188,6 +190,10 @@ PlasmoidItem {
         onHitActivated: location => root.openLocation(location)
         onResultActivated: hit => root.openHit(hit)
         onFileActionRequested: (hit, action) => root.fileAction(hit, action)
+        onPanelPromptChosen: prompt => {
+            root.setInput(prompt);
+            root.focusBar();
+        }
         onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
         onCloseRequested: root.closePopup()
         onSettingsRequested: root.openSettings()
@@ -538,8 +544,7 @@ PlasmoidItem {
         session.captureApplication();
         if (root.floating) {
             popup.visible = false;
-            root.conversationOpen = session.hasTranscript || session.busy || session.pendingApprovals > 0
-                || session.history.length > 0;
+            root.conversationOpen = true;
             session.refreshHistory();
             session.refreshStatus();
             root.floating.open();

@@ -42,6 +42,7 @@ PlasmaCore.Dialog {
     property int heightInGridUnits: 26
     property real hiddenAt: 0
 
+    signal panelPromptChosen(string prompt)
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
@@ -91,6 +92,7 @@ PlasmaCore.Dialog {
         widthInGridUnits: popup.widthInGridUnits
         heightInGridUnits: popup.heightInGridUnits
 
+        onPanelPromptChosen: prompt => popup.panelPromptChosen(prompt)
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)
         onSelectionMove: delta => popup.selectionMove(delta)

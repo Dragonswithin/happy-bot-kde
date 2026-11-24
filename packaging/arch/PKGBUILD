@@ -37,9 +37,10 @@ package() {
   install -Dm755 "${_root}/launchers/happy-bot" "${pkgdir}/usr/bin/happy-bot"
   install -Dm755 "${_root}/launchers/happy-bot-daemon" "${pkgdir}/usr/bin/happy-bot-daemon"
   install -Dm755 "${_root}/launchers/happy-bot-app" "${pkgdir}/usr/bin/happy-bot-app"
-  sed "s|^Icon=.*|Icon=/usr/share/plasma/plasmoids/io.github.dragonswithin.happybot/contents/images/happy-bot.svg|" \
-    "${_root}/desktop/io.github.dragonswithin.happybot.desktop" \
-    | install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/io.github.dragonswithin.happybot.desktop"
+  install -Dm644 "${_root}/plasmoid/io.github.dragonswithin.happybot/contents/images/happy-bot.svg" \
+    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.dragonswithin.happybot.svg"
+  install -Dm644 "${_root}/desktop/io.github.dragonswithin.happybot.desktop" \
+    "${pkgdir}/usr/share/applications/io.github.dragonswithin.happybot.desktop"
   sed 's|^ExecStart=%h/.local/bin/|ExecStart=/usr/bin/|' "${_root}/systemd/user/happy-bot-daemon.service" \
     | install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/user/happy-bot-daemon.service"
   install -d "${pkgdir}/usr/share/plasma/plasmoids"

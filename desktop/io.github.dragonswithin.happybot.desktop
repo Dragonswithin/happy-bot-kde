@@ -1,16 +1,12 @@
-# The "Happy Bot" entry in the application menu, installed by
-# scripts/install.sh into ~/.local/share/applications/ (with Icon= pointed at
-# the installed robot picture). It runs happy-bot-app: the first time it
-# starts the floating Happy Bot, later it opens it. A launch shortcut can be
-# given to it in System Settings > Shortcuts. The login entry
-# (~/.config/autostart) is a copy, made from the settings page.
+# Happy Bot application menu entry. A second launch opens the running app.
+# The login entry is a copy made from the settings page.
 [Desktop Entry]
 Type=Application
 Name=Happy Bot
 GenericName=AI Assistant
 Comment=Ask or search anything, about the app you are in
 Exec=happy-bot-app
-Icon=tools-wizard
+Icon=io.github.dragonswithin.happybot
 Terminal=false
 Categories=Utility;
 Keywords=assistant;ai;chat;search;help;

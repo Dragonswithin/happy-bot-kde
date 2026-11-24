@@ -66,6 +66,8 @@ Item {
 
     required property var session
     property bool useRobotMascot: false
+    readonly property color accent: useRobotMascot ? "#72c8bf" : Kirigami.Theme.highlightColor
+    readonly property int inset: Kirigami.Units.largeSpacing * 1.5
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
     property bool fieldAtBottom: false
     property bool showField: true
@@ -91,12 +93,13 @@ Item {
     readonly property real contentHeight: filesVisible
         ? filesColumn.implicitHeight
         : view.session.entries.count === 0
-            ? Kirigami.Units.gridUnit * 12
-            : transcriptColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
+            ? welcome.implicitHeight + inset * 2
+            : transcriptColumn.implicitHeight + view.inset * 2
     readonly property real bodyHeight: sidebarVisible
-        ? Math.max(contentHeight, Math.min(historyColumn.implicitHeight, Kirigami.Units.gridUnit * 16))
+        ? Math.max(contentHeight, Math.min(historyHeader.height + historyColumn.implicitHeight, Kirigami.Units.gridUnit * 16))
         : contentHeight
 
+    signal panelPromptChosen(string prompt)
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
@@ -139,6 +142,7 @@ Item {
 
     function setInput(text) {
         inputBar.text = text;
+        inputBar.cursorPosition = text.length;
     }
 
     // The selected match's row answers this by opening its own menu.
@@ -149,29 +153,39 @@ Item {
     }
 
     // --- header band: title, status and actions ---------------------------
-    PlasmaExtras.PlasmoidHeading {
+    Item {
         id: titleBar
 
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: view.fieldAtBottom ? parent.top : inputBar.bottom
         visible: view.headerVisible
-        position: view.fieldAtBottom ? QQC2.ToolBar.Header : QQC2.ToolBar.Footer
+        implicitHeight: headerRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+        height: visible ? implicitHeight : 0
 
-        contentItem: RowLayout {
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 1
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+        }
+        RowLayout {
+            id: headerRow
+            anchors.fill: parent
+            anchors.leftMargin: view.inset
+            anchors.rightMargin: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
                 source: view.filesVisible ? "folder-documents-symbolic" : view.assistantIcon
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                opacity: 0.7
             }
 
-            PlasmaExtras.Heading {
-                level: 5
-                text: view.filesVisible ? i18n("Files") : view.bodyHasContent ? i18n("Assistant") : i18n("Happy Bot")
-                opacity: 0.8
+            PlasmaComponents3.Label {
+                text: view.filesVisible ? i18n("Search results") : i18n("Happy Bot")
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
+                font.weight: Font.DemiBold
             }
 
             PlasmaComponents3.BusyIndicator {
@@ -207,9 +221,10 @@ Item {
             }
 
             PlasmaComponents3.ToolButton {
-                icon.name: "edit-clear-history"
+                icon.name: "list-add"
                 text: i18n("New conversation")
-                display: QQC2.AbstractButton.IconOnly
+                display: titleBar.width >= Kirigami.Units.gridUnit * 32 && view.showField
+                    ? QQC2.AbstractButton.TextBesideIcon : QQC2.AbstractButton.IconOnly
                 enabled: view.conversationVisible
                 opacity: view.conversationVisible ? 1 : 0
                 PlasmaComponents3.ToolTip.text: text
@@ -238,10 +253,11 @@ Item {
     }
 
     // --- footer band: the field --------------------------------------------
-    PlasmaExtras.PlasmoidHeading {
+    Item {
         id: inputBar
 
         property alias text: field.text
+        property alias cursorPosition: field.cursorPosition
 
         function forceFieldFocus() {
             field.forceActiveFocus();
@@ -253,46 +269,73 @@ Item {
         anchors.bottom: view.fieldAtBottom ? parent.bottom : undefined
         height: view.showField ? implicitHeight : 0
         visible: view.showField
-        position: view.fieldAtBottom ? QQC2.ToolBar.Footer : QQC2.ToolBar.Header
+        implicitHeight: composer.implicitHeight + Kirigami.Units.largeSpacing * 2
 
-        contentItem: ColumnLayout {
-            spacing: Kirigami.Units.smallSpacing
+        Rectangle {
+            anchors.top: view.fieldAtBottom ? parent.top : undefined
+            anchors.bottom: view.fieldAtBottom ? undefined : parent.bottom
+            width: parent.width
+            height: 1
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+        }
+        RowLayout {
+            id: composer
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.largeSpacing
+            spacing: Kirigami.Units.largeSpacing
 
-            RowLayout {
+            PlasmaExtras.SearchField {
+                id: field
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
-
-                PlasmaExtras.SearchField {
-                    id: field
-                    Layout.fillWidth: true
-                    placeholderText: i18n("Ask or search anything…")
-                    onTextChanged: view.queryEdited(text)
-                    Keys.onReturnPressed: view.accepted(text.trim())
-                    Keys.onEnterPressed: view.accepted(text.trim())
-                    Keys.onDownPressed: view.selectionMove(1)
-                    Keys.onUpPressed: view.selectionMove(-1)
-                    Keys.onTabPressed: view.completeRequested()
-                    // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
-                    Keys.onMenuPressed: view.openSelectedMenu()
-                    Keys.onPressed: event => {
-                        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
-                            view.openSelectedMenu();
-                            event.accepted = true;
-                        }
+                Layout.minimumWidth: 0
+                Layout.preferredHeight: Math.max(implicitHeight, Kirigami.Units.gridUnit * 2)
+                background: Rectangle {
+                    readonly property var margins: ({ left: Kirigami.Units.smallSpacing, right: Kirigami.Units.smallSpacing, top: 0, bottom: 0 })
+                    color: Kirigami.Theme.backgroundColor
+                    radius: Kirigami.Units.cornerRadius * 2
+                    border.color: field.activeFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.25)
+                }
+                rightActions: [
+                    Kirigami.Action {
+                        text: i18n("Clear search")
+                        icon.name: field.effectiveHorizontalAlignment === TextInput.AlignRight ? "edit-clear-locationbar-rtl" : "edit-clear-locationbar-ltr"
+                        visible: field.length > 0
+                        onTriggered: field.clear()
+                    },
+                    Kirigami.Action {
+                        text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
+                        icon.name: "go-next"
+                        enabled: field.text.trim().length > 0
+                        onTriggered: view.accepted(field.text.trim())
                     }
-                    Keys.onEscapePressed: {
-                        if (text.length > 0) {
-                            text = "";
-                        } else {
-                            view.closeRequested();
-                        }
+                ]
+                placeholderText: i18n("Ask or search anything…")
+                onTextChanged: view.queryEdited(text)
+                Keys.onReturnPressed: view.accepted(text.trim())
+                Keys.onEnterPressed: view.accepted(text.trim())
+                Keys.onDownPressed: view.selectionMove(1)
+                Keys.onUpPressed: view.selectionMove(-1)
+                Keys.onTabPressed: view.completeRequested()
+                // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
+                Keys.onMenuPressed: view.openSelectedMenu()
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                        view.openSelectedMenu();
+                        event.accepted = true;
                     }
                 }
-
-                // Which AI this chat uses; only when more than one is set up.
-                ModelPicker {
-                    session: view.session
+                Keys.onEscapePressed: {
+                    if (text.length > 0) {
+                        text = "";
+                    } else {
+                        view.closeRequested();
+                    }
                 }
+            }
+
+            // Which AI this chat uses; only when more than one is set up.
+            ModelPicker {
+                session: view.session
             }
         }
     }
@@ -309,8 +352,9 @@ Item {
         clip: true
 
         // --- sidebar: saved conversations ---------------------------------
-        Item {
+        Rectangle {
             id: sidebar
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.032)
 
             anchors.left: parent.left
             anchors.top: parent.top
@@ -318,8 +362,24 @@ Item {
             width: view.sidebarVisible ? view.sidebarWidth : 0
             visible: view.sidebarVisible
 
+            PlasmaComponents3.Label {
+                id: historyHeader
+                anchors.left: parent.left
+                anchors.right: parent.right
+                leftPadding: view.inset
+                topPadding: view.inset
+                bottomPadding: Kirigami.Units.smallSpacing
+                text: i18n("Conversations")
+                font: Kirigami.Theme.smallFont
+                opacity: 0.78
+                elide: Text.ElideRight
+            }
+
             PlasmaComponents3.ScrollView {
-                anchors.fill: parent
+                anchors.top: historyHeader.bottom
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
                 anchors.rightMargin: 1
 
                 Flickable {
@@ -342,7 +402,15 @@ Item {
 
                                 required property var modelData
 
-                                width: historyColumn.width
+                                x: Kirigami.Units.smallSpacing
+                                width: historyColumn.width - x * 2
+                                padding: Kirigami.Units.largeSpacing
+                                background: Rectangle {
+                                    radius: Kirigami.Units.cornerRadius * 2
+                                    color: saved.highlighted ? Qt.alpha(view.accent, 0.14)
+                                        : saved.hovered ? Qt.alpha(Kirigami.Theme.textColor, 0.07) : "transparent"
+                                    border.color: saved.visualFocus ? Kirigami.Theme.highlightColor : "transparent"
+                                }
                                 Accessible.name: i18n("Conversation: %1", modelData.title)
                                 highlighted: modelData.id === view.session.conversationId
                                 onClicked: view.session.openConversation(modelData.id)
@@ -353,14 +421,24 @@ Item {
                                 contentItem: RowLayout {
                                     spacing: Kirigami.Units.smallSpacing
 
+                                    Kirigami.Icon {
+                                        source: "dialog-messages"
+                                        Layout.alignment: Qt.AlignTop
+                                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                        opacity: 0.65
+                                    }
+
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 0
+                                        Layout.minimumWidth: 0
+                                        spacing: Kirigami.Units.smallSpacing / 2
 
                                         PlasmaComponents3.Label {
                                             id: titleLabel
                                             Layout.fillWidth: true
                                             text: saved.modelData.title || i18n("Untitled")
+                                            font.weight: saved.highlighted ? Font.DemiBold : Font.Normal
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                         }
@@ -410,6 +488,7 @@ Item {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
+                opacity: 0.45
             }
         }
 
@@ -421,7 +500,6 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            anchors.leftMargin: view.sidebarVisible ? Kirigami.Units.smallSpacing : 0
 
             ColumnLayout {
                 id: filesColumn
@@ -604,30 +682,57 @@ Item {
             }
 
             PlasmaComponents3.ScrollView {
+                id: transcriptView
                 anchors.fill: parent
-                visible: view.conversationVisible
+                visible: view.conversationVisible && view.session.entries.count > 0
+                // Keep the line width stable when the first overflowing line reveals the scrollbar.
+                leftPadding: mirrored ? QQC2.ScrollBar.vertical.implicitWidth : 0
+                rightPadding: mirrored ? 0 : QQC2.ScrollBar.vertical.implicitWidth
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
                     id: transcript
 
                     contentWidth: width
-                    contentHeight: transcriptColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
+                    contentHeight: transcriptColumn.implicitHeight + view.inset * 2
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
                     clip: true
 
-                    // Keep the newest part of the conversation in view.
+                    property bool followingEnd: true
+                    readonly property real bottomY: originY + Math.max(0, contentHeight - height)
+
                     function followEnd() {
-                        Qt.callLater(function() {
-                            transcript.contentY = Math.max(0, transcript.contentHeight - transcript.height);
-                        });
+                        if (followingEnd && !moving && !transcriptView.QQC2.ScrollBar.vertical.pressed) {
+                            contentY = bottomY;
+                        }
                     }
-                    onContentHeightChanged: followEnd()
-                    onHeightChanged: followEnd()
+
+                    // A wheel, drag or scrollbar movement can leave the bottom.
+                    // Incoming text alone changes the extent, not the reader's intent.
+                    onContentYChanged: followingEnd = contentY >= bottomY - 1
+                    onContentHeightChanged: Qt.callLater(followEnd)
+                    onHeightChanged: Qt.callLater(followEnd)
+                    onMovementEnded: Qt.callLater(followEnd)
+
+                    function resumeFollowing() {
+                        followingEnd = true;
+                        Qt.callLater(followEnd);
+                    }
+                    Connections {
+                        target: view.session
+                        function onConversationIdChanged() { transcript.resumeFollowing(); }
+                        function onBusyChanged() {
+                            if (view.session.busy) transcript.resumeFollowing();
+                        }
+                    }
 
                     Column {
                         id: transcriptColumn
 
-                        y: Kirigami.Units.smallSpacing
-                        width: transcript.width - Kirigami.Units.smallSpacing
+                        x: view.inset
+                        y: view.inset
+                        width: transcript.width - view.inset * 2
                         spacing: Kirigami.Units.smallSpacing
 
                         Repeater {
@@ -646,13 +751,33 @@ Item {
                 }
             }
 
-            PlasmaExtras.PlaceholderMessage {
-                anchors.centerIn: parent
-                width: parent.width - Kirigami.Units.gridUnit * 2
+            PlasmaComponents3.ScrollView {
+                anchors.fill: parent
                 visible: view.conversationVisible && view.session.entries.count === 0
-                iconName: view.assistantIcon
-                text: i18n("Ask anything")
-                explanation: i18n("Find files, look things up on the web, or have the computer do something for you.")
+
+                Flickable {
+                    id: welcomeArea
+                    contentWidth: width
+                    contentHeight: welcome.implicitHeight + view.inset * 2
+                    clip: true
+
+                    AssistantWelcome {
+                        id: welcome
+                        x: view.inset
+                        y: Math.max(view.inset, (welcomeArea.height - height) / 2)
+                        width: Math.max(1, welcomeArea.width - view.inset * 2)
+                        assistantIcon: view.assistantIcon
+                        accent: view.accent
+                        onPromptChosen: prompt => {
+                            if (view.showField) {
+                                view.setInput(prompt);
+                                view.focusInput();
+                            } else {
+                                view.panelPromptChosen(prompt);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

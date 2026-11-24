@@ -34,7 +34,7 @@ QQC2.ComboBox {
     // A fixed width, so the popup (which resizes itself to its content) never
     // depends on the names. Plasma's own combo box made binding loops on its
     // implicit size here; the standard one, as on the settings pages, does not.
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+    Layout.preferredWidth: Kirigami.Units.gridUnit * 7.5
     model: [i18n("Automatic")].concat(session.models.map(item => item.online ? i18n("%1 (online)", item.name) : item.name))
     currentIndex: Math.max(0, names.indexOf(session.chatModel))
     onActivated: index => session.chatModel = names[index]

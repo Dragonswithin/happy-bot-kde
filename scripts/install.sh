@@ -51,6 +51,7 @@ LAUNCHERS=(happy-bot-daemon happy-bot happy-bot-app)
 KRUNNER_SRC="${REPO_ROOT}/krunner/happy-bot.desktop"
 KRUNNER_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/krunner/dbusplugins"
 SHORTCUTS_SRC="${REPO_ROOT}/desktop/happy-bot-shortcuts.desktop"
+APP_ICON="${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor/scalable/apps/${PLASMOID_ID}.svg"
 APP_ENTRY_SRC="${REPO_ROOT}/desktop/${PLASMOID_ID}.desktop"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/autostart"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
@@ -135,7 +136,7 @@ if (( uninstall )); then
   if (( dry_run )); then
     printf 'Would stop and disable %s and remove its unit file\n' "$SERVICE_NAME"
     printf 'Would remove the reminder and routine timers the assistant created, and the KRunner plugin\n'
-    printf 'Would stop the Happy Bot app and remove its menu and login entries\n'
+    printf 'Would stop the Happy Bot app and remove its icon, menu and login entries\n'
     printf 'Would remove the search bar from every panel and uninstall the applet\n'
     printf 'Would remove %s and the launchers in %s\n' "$LIB_DIR" "$BIN_DIR"
     if (( purge )); then printf 'Would remove settings in %s\n' "$CONFIG_DIR"; else printf 'Would keep settings in %s\n' "$CONFIG_DIR"; fi
@@ -151,7 +152,7 @@ if (( uninstall )); then
     case "$unit" in *.timer|*.path) systemctl --user disable --now "$(basename -- "$unit")" >/dev/null 2>&1 || true ;; esac
     rm -f -- "$unit"
   done
-  rm -f -- "${KRUNNER_DIR}/happy-bot.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop" \
+  rm -f -- "$APP_ICON" "${KRUNNER_DIR}/happy-bot.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop" \
     "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" \
     "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
   systemctl --user daemon-reload || true
@@ -192,6 +193,7 @@ if (( dry_run )); then
   printf 'Would install %s -> %s\n' "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
   printf 'Would install %s -> %s\n' "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
   printf 'Would install %s -> %s (and link it for global shortcuts)\n' "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
+  printf 'Would install the Happy Bot icon -> %s\n' "$APP_ICON"
   printf 'Would install %s -> %s (the Happy Bot app in the menu)\n' "$APP_ENTRY_SRC" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
   if (( start_service )); then
     printf 'Would enable and restart user service: %s\n' "$SERVICE_NAME"
@@ -217,9 +219,8 @@ done
 install -m 0644 "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
 install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
 install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
-# The app's menu entry, its icon pointed at the robot picture the applet installs.
-APP_ICON="${XDG_DATA_HOME:-${HOME}/.local/share}/plasma/plasmoids/${PLASMOID_ID}/contents/images/happy-bot.svg"
-sed "s|^Icon=.*|Icon=${APP_ICON}|" "$APP_ENTRY_SRC" | install -D -m 0644 /dev/stdin "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
+install -D -m 0644 "${PLASMOID_DIR}/contents/images/happy-bot.svg" "$APP_ICON"
+install -D -m 0644 "$APP_ENTRY_SRC" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
 if [[ -f "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop" ]]; then
   install -m 0644 "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
 fi
