@@ -45,7 +45,8 @@ import org.kde.plasma.extras as PlasmaExtras
  *   `completeRequested()`: Tab, to complete the text from the top result. Escape
  *   clears the text, or closes when it is already empty (`closeRequested`).
  * - `resultActivated(hit)`: a clicked file match or quick result.
- * - `fileActionRequested(hit, action)`: a file match's right-click menu:
+ * - `fileActionRequested(hit, action)`: a file match's menu (right-click,
+ *   or the Menu key or Shift+F10 on the selected match):
  *   "reveal" (show in folder), "copy" (its path) or "ask" (about it). A
  *   file match can also be dragged into another application, and files
  *   dropped onto the popup emit `filesDropped(paths)`.
@@ -130,6 +131,13 @@ Item {
 
     function setInput(text) {
         inputBar.text = text;
+    }
+
+    // The selected match's row answers this by opening its own menu.
+    signal selectedMenuRequested()
+
+    function openSelectedMenu() {
+        view.selectedMenuRequested();
     }
 
     // --- header band: title, status and actions ---------------------------
@@ -241,6 +249,14 @@ Item {
             Keys.onDownPressed: view.selectionMove(1)
             Keys.onUpPressed: view.selectionMove(-1)
             Keys.onTabPressed: view.completeRequested()
+            // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
+            Keys.onMenuPressed: view.openSelectedMenu()
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                    view.openSelectedMenu();
+                    event.accepted = true;
+                }
+            }
             Keys.onEscapePressed: {
                 if (text.length > 0) {
                     text = "";
@@ -297,6 +313,7 @@ Item {
                                 required property var modelData
 
                                 width: historyColumn.width
+                                Accessible.name: i18n("Conversation: %1", modelData.title)
                                 highlighted: modelData.id === view.session.conversationId
                                 onClicked: view.session.openConversation(modelData.id)
                                 PlasmaComponents3.ToolTip.text: modelData.title
@@ -394,8 +411,19 @@ Item {
                         required property int index
                         required property var modelData
 
+                        Connections {
+                            target: view
+                            function onSelectedMenuRequested() {
+                                if (row.index === view.selectedIndex && row.modelData.kind !== "quick") {
+                                    fileMenu.popup(row, 0, row.height);
+                                }
+                            }
+                        }
+
                         Layout.fillWidth: true
                         highlighted: index === view.selectedIndex
+                        Accessible.name: Look.hitWhere(modelData).length > 0
+                            ? i18n("%1, in %2", modelData.title, Look.hitWhere(modelData)) : modelData.title
                         onClicked: view.resultActivated(modelData)
 
                         // A file match can be dragged into another application.
@@ -511,6 +539,7 @@ Item {
                     Layout.fillWidth: true
                     visible: view.query.length > 0
                     highlighted: view.selectedIndex < 0
+                    Accessible.name: i18n("Ask the assistant: %1", view.query)
                     onClicked: view.accepted(view.query)
 
                     contentItem: RowLayout {

@@ -5,7 +5,9 @@
 #   src/happy_bot/            -> ~/.local/lib/happy-bot/happy_bot/
 #   launchers/*                      -> ~/.local/bin/
 #   systemd/user/*.service           -> ~/.config/systemd/user/
-#   plasmoid/<id>/                   -> the user's Plasma applet store (kpackagetool6)
+#   plasmoid/<id>/                   -> the user's Plasma applet store (kpackagetool6), with
+#                                      po/*.po compiled into it (scripts/translations.sh)
+#                                      when translations exist
 #   krunner/happy-bot.desktop -> ~/.local/share/krunner/dbusplugins/ (KRunner plugin)
 #   desktop/happy-bot-shortcuts.desktop -> ~/.local/share/applications/, linked from
 #                                      ~/.local/share/kglobalaccel/ (global shortcuts)
@@ -215,11 +217,21 @@ if (( start_service )); then
   systemctl --user restart "$SERVICE_NAME"
 fi
 
+# Translations are compiled into a staged copy of the applet, never into the checkout.
+APPLET_SOURCE="$PLASMOID_DIR"
+if [[ -n "$("${REPO_ROOT}/scripts/translations.sh" languages)" ]]; then
+  applet_stage="$(mktemp -d)"
+  trap 'rm -rf -- "$applet_stage"' EXIT
+  cp -r -- "$PLASMOID_DIR" "${applet_stage}/"
+  APPLET_SOURCE="${applet_stage}/${PLASMOID_ID}"
+  "${REPO_ROOT}/scripts/translations.sh" build "$APPLET_SOURCE" >/dev/null
+fi
+
 if (( had_applet )); then
-  kpackagetool6 --type Plasma/Applet --upgrade "$PLASMOID_DIR" >/dev/null
+  kpackagetool6 --type Plasma/Applet --upgrade "$APPLET_SOURCE" >/dev/null
   printf 'Search bar upgraded. Log out and in (or restart plasmashell) to load the new version.\n'
 else
-  kpackagetool6 --type Plasma/Applet --install "$PLASMOID_DIR" >/dev/null
+  kpackagetool6 --type Plasma/Applet --install "$APPLET_SOURCE" >/dev/null
   placed=""
   if (( add_to_panel )); then
     placed="$(add_bar_to_panel | tr -d '[:space:]')"

@@ -8,3 +8,4 @@ dist/
 build/
 reports/
 *.log
+po/*.pot

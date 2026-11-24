@@ -892,6 +892,19 @@ Findings:
   matched the three commands run by hand. Installing an app from official
   sources is built but still has no real install verified; that and a real
   update need the maintainer to choose to run one.
+- Translations: `scripts/translations.sh` makes the template from every
+  `i18n`/`i18np` call (all 329 distinct source strings checked present),
+  merges `po/<lang>.po` files and compiles them into a staged copy of the
+  applet; the installer and the Arch package install that copy, so compiled
+  files never enter the checkout. A throwaway German file went through the
+  real installer into the installed applet and was removed again. No
+  translation exists; which languages to offer is the maintainer's call.
+- Accessibility: result rows, saved conversations and the "Ask the
+  assistant" row now have screen-reader names, and the Menu key or
+  Shift+F10 opens the selected match's actions (before, only a right-click
+  did). Not yet tried with Orca.
+- Publishing the AUR package and the KDE Store entry is a public action on
+  the maintainer's accounts and waits for him.
 
 ## Decisions
 

@@ -238,9 +238,15 @@ scripts/install.sh --uninstall           # keeps your settings
 scripts/install.sh --uninstall --purge   # removes them too
 ```
 
-The widget's Appearance settings switch between a search bar and a button
-and set the bar width and the results size; its Keyboard Shortcuts page sets
-a shortcut that focuses the bar.
+The widget's Search Bar settings page chooses between the icon (default) and
+a search bar in the panel, and sets the bar width and the results size; its
+Keyboard Shortcuts page sets the shortcut that opens the popup or focuses the
+bar.
+
+Translations of the widget live in `po/<language>.po`. `scripts/translations.sh
+template` writes the template to start one from, `merge` brings every
+language up to date after strings change, and the installer and the Arch
+package compile them into the widget. There are no translations yet.
 
 To test the widget in a window instead of a panel:
 

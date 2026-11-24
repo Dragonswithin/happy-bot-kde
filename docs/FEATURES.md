@@ -419,11 +419,14 @@ text-only models and stays as an option afterwards.
   (an Arch PKGBUILD builds from the checkout; publishing to the AUR, the KDE
   Store or Flatpak is deferred)
 - ● Move settings between machines through an export file.
-- ◐ Translations through i18n catalogues. (Messages.sh extracts the 291 applet
-  strings for translators; no translations exist yet)
+- ◐ Translations through i18n catalogues. (scripts/translations.sh makes
+  the template of the applet's 335 strings, merges po/<lang>.po files and
+  compiles them into the installed applet, checked end to end with a test
+  language; no translation exists yet)
 - ◐ Accessibility of the assistant's own UI: screen-reader labels, high
-  contrast, full keyboard use. (every icon button has a text label for screen
-  readers; a full review is deferred)
+  contrast, full keyboard use. (every icon button has a text label; result
+  rows, saved conversations and the Ask row now have names, and the Menu key
+  or Shift+F10 opens a match's actions; not yet tried with a screen reader)
 - ✓ Layouts for vertical panels and touch. (the bar is an icon with a popup)
 - ⏸ On several monitors, open the popup on the screen that has the cursor.
   (Plasma places the popup by its panel)

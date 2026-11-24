@@ -6,5 +6,6 @@
 #   XGETTEXT="xgettext --from-code=UTF-8 -C -ki18n -ki18np:1,2" podir=/tmp sh Messages.sh
 # Plasma loads translations for this applet from the domain
 # plasma_applet_io.github.dragonswithin.happybot. The daemon's own messages
-# (src/happy_bot) are English only for now.
+# (src/happy_bot) are English only for now. Outside KDE's tooling,
+# scripts/translations.sh makes the same template and compiles po/*.po files.
 $XGETTEXT $(find . -name '*.qml' -o -name '*.js') -o "$podir/plasma_applet_io.github.dragonswithin.happybot.pot"

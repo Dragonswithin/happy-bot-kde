@@ -4,7 +4,8 @@
 # It installs system-wide what scripts/install.sh installs per user: the
 # package in /usr/lib/happy-bot, the two commands in /usr/bin, the
 # daemon as a systemd *user* unit, the panel applet, the KRunner plugin and
-# the global-shortcut entry. Each user then runs, once:
+# the global-shortcut entry, with any po/*.po translations compiled into the
+# applet. Each user then runs, once:
 #   systemctl --user enable --now happy-bot-daemon.service
 # and adds "Happy Bot" to a panel. Settings stay per user in
 # ~/.config/happy-bot. For publishing to the AUR, replace the local
@@ -16,6 +17,7 @@ pkgdesc="Panel search bar for KDE Plasma that finds, answers and acts using any 
 arch=('any')
 license=('MIT')
 depends=('python' 'python-gobject' 'plasma-workspace' 'kpackage' 'glib2' 'qt6-declarative')
+makedepends=('gettext')
 optdepends=('tesseract: reading text in pictures'
             'imagemagick: picture conversion and edits'
             'ffmpeg: sound and video conversion'
@@ -37,6 +39,7 @@ package() {
     | install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/user/happy-bot-daemon.service"
   install -d "${pkgdir}/usr/share/plasma/plasmoids"
   cp -r "${_root}/plasmoid/io.github.dragonswithin.happybot" "${pkgdir}/usr/share/plasma/plasmoids/"
+  "${_root}/scripts/translations.sh" build "${pkgdir}/usr/share/plasma/plasmoids/io.github.dragonswithin.happybot"
   install -Dm644 "${_root}/krunner/happy-bot.desktop" "${pkgdir}/usr/share/krunner/dbusplugins/happy-bot.desktop"
   install -Dm644 "${_root}/desktop/happy-bot-shortcuts.desktop" \
     "${pkgdir}/usr/share/applications/happy-bot-shortcuts.desktop"
