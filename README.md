@@ -20,7 +20,8 @@ architecture and phase order are in `docs/ROADMAP.md`.
   shortcut set in System Settings > Shortcuts) opens or closes it.
   Right-click the floating button for Happy Bot's settings or to quit. Happy Bot knows
   which application you are in when opened this way or with the hotkey,
-  shown as "Helping with: …", which you can remove.
+  without your saying so and without showing anything; you can still ask
+  about anything else.
 - The panel widget (search bar or icon) is optional and works alongside the
   app. Its own settings are only what concerns the panel (icon or search
   bar, the bar's width); everything else is set in Happy Bot itself, so the

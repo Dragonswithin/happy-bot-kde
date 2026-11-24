@@ -154,7 +154,8 @@ class AskEndpointTests(unittest.TestCase):
         response = self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about})
         events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
         sent = self.model.requests[-1]["messages"][-1]["content"]
-        self.assertTrue(sent.startswith("[The user opened Happy Bot while using the application Kate"), sent)
+        self.assertTrue(sent.startswith("[Background, not part of the request: the user had the application Kate"), sent)
+        self.assertIn("If they name another application or ask about something else, answer that", sent)
         self.assertTrue(sent.endswith("how do I split the view?"))
         opened = self.call("GET", f"/conversation?id={events[0]['conversation_id']}")
         self.assertEqual(opened["events"][0]["text"], "how do I split the view?")  # the chat shows what was typed

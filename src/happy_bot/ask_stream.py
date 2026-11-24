@@ -234,8 +234,10 @@ def _with_application(message: str, about: Any) -> str:
     if not app and not title:
         return message
     where = f"the application {app}" + (f' (window title: "{title}")' if title else "") if app else f'the window "{title}"'
-    return (f"[The user opened Happy Bot while using {where}. Unless they say otherwise, \"this\", \"here\" and "
-            f"\"it\" mean that application; look at it or act in it with the tools when that helps.]\n\n{message}")
+    return (f"[Background, not part of the request: the user had {where} open when they asked. If the request "
+            f"is about the application they are in (\"this\", \"here\", \"how do I…\" without a name), it is "
+            f"this one, so do not ask which. If they name another application or ask about something else, answer "
+            f"that and ignore this note.]\n\n{message}")
 
 
 def _usable(settings: dict[str, Any], names: list[str]) -> tuple[list[tuple[str, dict[str, Any], Any]], list[str]]:

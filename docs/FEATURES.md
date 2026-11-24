@@ -69,7 +69,8 @@ text-only models and stays as an option afterwards.
 - ● A floating button over other windows (a layer-shell surface: anywhere on
   the screen, dragged to move, faded while not in use) and a hotkey set on
   the app's Appearance page; both open Happy Bot with the application in use
-  noted ("Helping with: …", removable) and sent with the questions. The
+  sent along with the questions as background, unseen, so nobody has to
+  say which application they mean (and can still ask about another). The
   button opens into Happy Bot itself, right where it is, so the panel is not
   needed. (the button and its open view were seen in place; clicking,
   dragging and the hotkey are not yet tried by a person)

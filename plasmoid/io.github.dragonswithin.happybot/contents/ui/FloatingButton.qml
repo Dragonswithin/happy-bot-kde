@@ -176,6 +176,7 @@ Window {
             x: floating.growLeft ? parent.width - width : 0
             y: floating.growUp ? parent.height - height : 0
             session: floating.session
+            alwaysShowHeader: true
             useRobotMascot: floating.useRobotMascot
             fieldAtBottom: floating.growUp
             showConversation: floating.showConversation

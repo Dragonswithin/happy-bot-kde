@@ -1030,6 +1030,14 @@ Findings:
   copies show the robot; each settings dialog showed the right pages.
   A change made in one copy reaches the other within the 12-second status
   check.
+- The maintainer found two X buttons when opening the floating Happy Bot:
+  the "Helping with" line's (which only stopped sharing the application)
+  and, only once something showed below the field, the header's. Clicking
+  the first did not close Happy Bot. The application awareness is now
+  invisible, as the maintainer asked: no "Helping with" line, and the note
+  to the model is worded as background that it ignores when the user asks
+  about something else. The floating Happy Bot always shows its header
+  (`ResultsView.alwaysShowHeader`), so its one close button is always there.
 
 ## Decisions
 

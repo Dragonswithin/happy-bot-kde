@@ -31,8 +31,10 @@ import QtQuick
  * `helpWith` is the application the user was in (`{app, class, title}`, from
  * `/context/app`) when the popup was opened from the floating button or the
  * hotkey (`captureApplication`), or null. While set, it is sent with every
- * request as `about_window`, so the assistant knows what "this" means; the
- * popup shows it and the user can remove it (`forgetApplication`).
+ * request as `about_window`, so the user never has to say which application
+ * they mean; nothing about it is shown, and it does not limit what they can
+ * ask about (src/happy_bot/ask_stream.py words it as background). Opening
+ * from the panel clears it (`forgetApplication`).
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState

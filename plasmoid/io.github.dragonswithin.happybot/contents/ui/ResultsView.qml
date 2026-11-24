@@ -17,9 +17,9 @@ import org.kde.plasma.extras as PlasmaExtras
  * launcher: a header band (title, status, Stop, New, Close), a body, and the
  * input field in a footer band on the side facing the panel, with the
  * chat's AI picker (ModelPicker.qml) beside it when two or more AIs are set
- * up, and above it the application the chat is helping with
- * (HelpWithChip.qml) when Happy Bot was opened from the floating button or
- * the hotkey; both go in the header instead when the field is hidden. With nothing
+ * up (`alwaysShowHeader`, set by the floating Happy Bot, keeps the header and
+ * its close button even when only the field shows); the picker goes in the
+ * header instead when the field is hidden. With nothing
  * to show the view is just the field. When the user types in the panel's
  * search bar instead (PanelBar.qml), `showField` is false, the field is
  * hidden, and `barText` is the text typed there.
@@ -69,6 +69,10 @@ Item {
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
     property bool fieldAtBottom: false
     property bool showField: true
+    // The header (title, Stop, New, Settings, Close) even when nothing else shows: the floating
+    // Happy Bot is a window of its own, so its close button must always be there.
+    property bool alwaysShowHeader: false
+    readonly property bool headerVisible: bodyHasContent || alwaysShowHeader
     property string barText: ""
     property bool showConversation: false
     property int selectedIndex: -1
@@ -123,7 +127,7 @@ Item {
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
     implicitHeight: Math.round(Math.min(maximumHeight, inputBar.height
-        + (bodyHasContent ? titleBar.implicitHeight + bodyHeight : 0)))
+        + (headerVisible ? titleBar.implicitHeight : 0) + (bodyHasContent ? bodyHeight : 0)))
 
     function focusInput() {
         inputBar.forceFieldFocus();
@@ -151,7 +155,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: view.fieldAtBottom ? parent.top : inputBar.bottom
-        visible: view.bodyHasContent
+        visible: view.headerVisible
         position: view.fieldAtBottom ? QQC2.ToolBar.Header : QQC2.ToolBar.Footer
 
         contentItem: RowLayout {
@@ -166,7 +170,7 @@ Item {
 
             PlasmaExtras.Heading {
                 level: 5
-                text: view.filesVisible ? i18n("Files") : i18n("Assistant")
+                text: view.filesVisible ? i18n("Files") : view.bodyHasContent ? i18n("Assistant") : i18n("Happy Bot")
                 opacity: 0.8
             }
 
@@ -186,13 +190,7 @@ Item {
             }
 
             // When the user types in the panel's search bar this view has no field,
-            // so the application chip and the chat's AI picker sit here instead.
-            HelpWithChip {
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 14
-                session: view.session
-                visible: !view.showField && view.session.helpWith !== null
-            }
-
+            // so the chat's AI picker sits here instead.
             ModelPicker {
                 session: view.session
                 visible: !view.showField && view.conversationVisible && view.session.models.length > 1
@@ -259,12 +257,6 @@ Item {
 
         contentItem: ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
-
-            // Which application this chat is helping with, when Happy Bot was opened from it.
-            HelpWithChip {
-                Layout.fillWidth: true
-                session: view.session
-            }
 
             RowLayout {
                 Layout.fillWidth: true
