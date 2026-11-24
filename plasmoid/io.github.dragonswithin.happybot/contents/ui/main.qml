@@ -39,8 +39,9 @@ import "barInput.js" as BarInput
  *   saved conversations with nothing typed and closes them on a second
  *   click). Focusing the bar alone opens nothing, unless an action waits
  *   for approval.
- *   Leaving the bar hides the popup and keeps the typed text; Escape on an
- *   empty bar, or the close button, closes the conversation.
+ *   Leaving the bar hides the popup, closes the conversation view and keeps
+ *   the typed text; Escape on an empty bar, or the close button, closes the
+ *   conversation too.
  * - What the popup shows. Files and the conversation take turns (see
  *   ResultsView.qml): file matches while there are any for the typed text,
  *   otherwise the conversation when `conversationOpen`. Opening the popup
@@ -188,6 +189,9 @@ PlasmoidItem {
                 root.wantsInput = false;
                 searchDelay.stop();
                 session.clearSearch();
+                // Clicking away also closes the conversation view, so focusing the
+                // bar again to type does not bring it back (the logo does).
+                root.conversationOpen = false;
             } else {
                 if (session.pendingApprovals > 0) {
                     root.conversationOpen = true;
