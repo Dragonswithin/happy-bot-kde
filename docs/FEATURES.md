@@ -193,8 +193,8 @@ text-only models and stays as an option afterwards.
 - ● Bluetooth: pair, connect and disconnect devices by name.
 - ● Audio: choose output and input devices, per-app volume, microphone mute.
 - ● Do Not Disturb with an end time ("quiet until 3pm").
-- ● Wallpaper, accent colour, fonts, cursor and icon theme. (fonts are
-  deferred)
+- ● Wallpaper (one picture, or a slideshow of a folder), accent colour,
+  fonts, cursor and icon theme. (fonts are deferred)
 - ● Keyboard layout, input methods, key repeat, touchpad settings. (layouts,
   key repeat, mouse and touchpad speed, natural scrolling, tap to click)
 - ● Printers: list, set default, show the queue, cancel a job.

@@ -122,6 +122,46 @@ class AppearanceTests(unittest.TestCase):
     def test_wallpaper_needs_an_existing_image(self) -> None:
         with self.assertRaisesRegex(ToolFailure, "not an image file"):
             appearance.set_wallpaper({"image": "/nonexistent.png"})
+        with self.assertRaisesRegex(ToolFailure, "either 'image'"):
+            appearance.set_wallpaper({})
+        with self.assertRaisesRegex(ToolFailure, "either 'image'"):
+            appearance.set_wallpaper({"image": "/a.png", "folder": "/tmp"})
+
+    def test_a_folder_becomes_a_slideshow_that_is_checked_and_can_be_undone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "sub").mkdir()
+            Path(tmp, "sub", "sky.JPG").write_bytes(b"x")
+            Path(tmp, "empty").mkdir()
+            previous = Path(tmp, "old.png")
+            previous.write_bytes(b"x")
+            scripts = []
+
+            def evaluate(script):
+                scripts.append(script)
+                if script.startswith("var d = desktops()[0]"):
+                    return json.dumps({"plugin": "org.kde.image", "image": f"file://{previous}",
+                                       "folders": "", "interval": ""})
+                return "org.kde.slideshow,org.kde.slideshow"
+
+            with mock.patch.object(appearance, "_evaluate", side_effect=evaluate):
+                with self.assertRaisesRegex(ToolFailure, "no pictures"):
+                    appearance.set_wallpaper({"folder": str(Path(tmp, "empty"))})
+                self.assertIn("changing every 2 minutes",
+                              appearance.set_wallpaper({"folder": tmp, "interval_minutes": 2}))
+            self.assertIn(json.dumps(tmp), scripts[-1])
+            self.assertIn("var interval = 120;", scripts[-1])
+            self.assertEqual(undo_journal.pending()[0]["data"], {"image": str(previous)})
+
+            # The desktop not switching is a failure, not a success.
+            with mock.patch.object(appearance, "_evaluate", side_effect=lambda script: "org.kde.image"):
+                with self.assertRaisesRegex(ToolFailure, "did not switch"):
+                    appearance.apply_slideshow([tmp], None)
+
+            # Undoing a change made from a slideshow brings the slideshow back.
+            undo_journal.record("wallpaper", "Changed the wallpaper", {"slideshow": [tmp], "interval": 600})
+            with mock.patch.object(appearance, "apply_slideshow") as apply:
+                undo.undo_change({})
+            apply.assert_called_once_with([tmp], 600)
         with self.assertRaisesRegex(ToolFailure, "'color'"):
             appearance.set_accent_color({"color": "rgb(1,2,3); rm"})
 

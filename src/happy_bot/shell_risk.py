@@ -27,6 +27,12 @@ How it looks at a command:
   parsed, so it is searched for words that delete or run other programs.
 - A ``>`` redirection onto a file that already exists overwrites it and
   counts as deletion; ``>>`` appends and does not.
+- Quitting, killing or starting the desktop itself (``plasmashell``, KWin,
+  the session manager) counts too: ending one leaves no panels or desktop,
+  and one started by hand runs inside Happy Bot's own service rather than
+  Plasma's, so it dies with Happy Bot. The reason names the safe restart,
+  ``systemctl --user restart plasma-plasmashell.service``, which is not
+  dangerous; stopping or masking a ``plasma-*`` user service is.
 - Running a script straight from the internet (``curl … | bash``,
   ``bash <(wget …)``, ``sh -c "$(curl …)"``) counts as an OS-level change:
   it runs code nobody has looked at, often with ``sudo`` inside. The reason
@@ -67,6 +73,9 @@ SYSTEM_PROGRAMS = {
     "sysctl": None, "chroot": "enters another system root", "mount": None, "umount": "unmounts a filesystem",
     "userdel": "deletes a user", "groupdel": "deletes a group", "passwd": "changes a password", "visudo": "edits sudo rules",
 }
+# The desktop's own processes, which must only be restarted through their systemd user services.
+DESKTOP_PROCESSES = ("plasmashell", "kwin_wayland", "kwin_x11", "ksmserver")
+SHELL_RESTART = "systemctl --user restart plasma-plasmashell.service"
 PRIVILEGE_PROGRAMS = {"sudo", "pkexec", "doas", "su", "run0", "kdesu", "kdesudo"}
 WRAPPERS = {"env", "nice", "ionice", "nohup", "time", "command", "exec", "stdbuf", "setsid", "chrt", "builtin"}
 WRAPPERS_WITH_ARGUMENT = {"timeout": 1, "flock": 1, "watch": 0}
@@ -215,9 +224,15 @@ def _classify_simple(command: str, cwd: str, depth: int) -> str:
         if program == "mount":
             return "mounts a filesystem" if [a for a in arguments if not a.startswith("-")] else ""
         return SYSTEM_PROGRAMS[program] or "changes the system"
+    desktop = _touches_desktop(program, arguments)
+    if desktop:
+        return desktop
     if program == "systemctl":
         verbs = [argument for argument in arguments if not argument.startswith("-")][:1]
         if "--user" in arguments:
+            units = [argument for argument in arguments if not argument.startswith("-")][1:]
+            if verbs and verbs[0] in ("stop", "kill", "mask", "disable") and any(u.startswith("plasma-") for u in units):
+                return f"stops the desktop (systemctl --user {verbs[0]}); to restart it instead: {SHELL_RESTART}"
             return ""
         if verbs and verbs[0] in ("poweroff", "reboot", "halt", "kexec", "suspend", "hibernate", "emergency", "rescue",
                                   "isolate", "mask", "disable", "stop", "kill", "set-default", "daemon-reexec"):
@@ -285,6 +300,21 @@ def _classify_simple(command: str, cwd: str, depth: int) -> str:
         return ""
     if program == "kill" and "1" in arguments:
         return "signals the init process"
+    return ""
+
+
+def _touches_desktop(program: str, arguments: list[str]) -> str:
+    """A reason if the command quits, kills or starts one of DESKTOP_PROCESSES by hand, else ''."""
+    names = [os.path.basename(argument) for argument in arguments if not argument.startswith("-")]
+    if program in ("kquitapp6", "kquitapp5", "kquitapp", "killall") and any(n in DESKTOP_PROCESSES for n in names):
+        return f"ends the desktop shell, leaving no panels or desktop; to restart it: {SHELL_RESTART}"
+    if program in ("pkill", "kill") and any(len(n) >= 4 and any(n in p or p in n for p in DESKTOP_PROCESSES)
+                                            for n in names):
+        return f"ends the desktop shell, leaving no panels or desktop; to restart it: {SHELL_RESTART}"
+    informational = any(argument in ("--version", "-v", "--help", "-h") for argument in arguments)
+    if not informational and (program in DESKTOP_PROCESSES or (
+            program in ("kstart6", "kstart5", "kstart") and any(n in DESKTOP_PROCESSES for n in names))):
+        return f"starts a second desktop shell outside Plasma's own service; to restart it: {SHELL_RESTART}"
     return ""
 
 

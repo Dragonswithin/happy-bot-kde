@@ -3,9 +3,15 @@
 Each uses the program Plasma ships for the job, the same ones its settings
 pages call: ``plasma-apply-wallpaperimage``, ``plasma-apply-colorscheme
 --accent-color``, ``plasma-apply-cursortheme``, ``plasma-apply-desktoptheme``
-and ``plasma-changeicons`` (in ``/usr/lib``). The current wallpaper is read
-through the Plasma shell's scripting interface so a change can be undone;
-the keyboard layout goes through ``org.kde.keyboard`` on the session DBus.
+and ``plasma-changeicons`` (in ``/usr/lib``). A wallpaper slideshow has no
+such program, so ``apply_slideshow`` switches every desktop to Plasma's
+``org.kde.slideshow`` wallpaper through the Plasma shell's scripting
+interface (``evaluateScript``), as the desktop's own settings do; it applies
+at once, with no shell restart. The wallpaper in use (one image, or a
+slideshow's folders and interval) is read the same way, so a change can be
+undone and so ``set_wallpaper`` can check that the change really took before
+saying so. The keyboard layout goes through ``org.kde.keyboard`` on the
+session DBus.
 
 Mice and touchpads (speed, natural scrolling, tap to click) are KWin's
 input devices on DBus (``/org/kde/KWin/InputDevice``), changed live as the
@@ -19,6 +25,7 @@ changes is ``change``; the lists are ``read``.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -30,26 +37,94 @@ from .power import run_checked
 from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, object_schema
 
 ICON_CHANGER_PATHS = ("/usr/lib/plasma-changeicons", "/usr/libexec/plasma-changeicons")
-_WALLPAPER_SCRIPT = ('var d = desktops()[0]; d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"]; '
-                     'print(d.readConfig("Image"));')
+# The first desktop's wallpaper as JSON. A slideshow's SlidePaths is one comma-separated string;
+# an empty SlideInterval means Plasma's default.
+_WALLPAPER_SCRIPT = ('var d = desktops()[0]; var p = d.wallpaperPlugin; d.currentConfigGroup = ["Wallpaper", p, "General"]; '
+                     'print(JSON.stringify({plugin: p, image: String(d.readConfig("Image") || ""), '
+                     'folders: String(d.readConfig("SlidePaths") || ""), interval: String(d.readConfig("SlideInterval") || "")}));')
+SLIDESHOW_PLUGIN = "org.kde.slideshow"
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".svg", ".avif", ".jxl", ".heic", ".tif", ".tiff")
 _THEME_COMMANDS = {"cursor": "plasma-apply-cursortheme", "plasma": "plasma-apply-desktoptheme"}
 
 
-def current_wallpaper() -> str:
+def _evaluate(script: str) -> str:
+    """Run a Plasma shell script and return what it printed, or "" when the shell cannot be reached."""
     result = run_command(["qdbus6", "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript",
-                          _WALLPAPER_SCRIPT], timeout=5) if shutil.which("qdbus6") else {"ok": False}
-    return result["stdout"].strip().removeprefix("file://") if result["ok"] else ""
+                          script], timeout=10) if shutil.which("qdbus6") else {"ok": False}
+    return result["stdout"].strip() if result["ok"] else ""
+
+
+def current_wallpaper() -> dict[str, Any]:
+    """The first desktop's wallpaper: ``{"image": path}``, ``{"slideshow": [folders], "interval": seconds|None}``,
+    or ``{}`` when it cannot be read or is another kind (a colour, a picture of the day)."""
+    try:
+        state = json.loads(_evaluate(_WALLPAPER_SCRIPT) or "{}")
+    except ValueError:
+        return {}
+    if state.get("plugin") == SLIDESHOW_PLUGIN:
+        folders = [folder for folder in str(state.get("folders", "")).split(",") if folder]
+        interval = str(state.get("interval", ""))
+        return {"slideshow": folders, "interval": int(interval) if interval.isdigit() else None} if folders else {}
+    image = str(state.get("image", "")).removeprefix("file://")
+    return {"image": image} if state.get("plugin") == "org.kde.image" and os.path.isfile(image) else {}
+
+
+def _has_images(folder: str) -> bool:
+    for _directory, _subdirectories, files in os.walk(folder):
+        if any(name.lower().endswith(IMAGE_EXTENSIONS) for name in files):
+            return True
+    return False
+
+
+def apply_slideshow(folders: list[str], interval: int | None) -> None:
+    """Show a slideshow of ``folders`` (absolute paths) on every desktop, changing picture every ``interval``
+    seconds (Plasma's default when None). Raises ToolFailure unless every desktop then shows the slideshow."""
+    script = ("var folders = %s; var interval = %s; var shown = [];\n"
+              "desktops().forEach(function (d) {\n"
+              "  d.wallpaperPlugin = %s;\n"
+              "  d.currentConfigGroup = ['Wallpaper', %s, 'General'];\n"
+              "  d.writeConfig('SlidePaths', folders);\n"
+              "  if (interval) d.writeConfig('SlideInterval', interval);\n"
+              "  d.reloadConfig();\n"
+              "  shown.push(d.wallpaperPlugin);\n"
+              "});\n"
+              "print(shown.join(','));") % (json.dumps(",".join(folders)), json.dumps(interval),
+                                            json.dumps(SLIDESHOW_PLUGIN), json.dumps(SLIDESHOW_PLUGIN))
+    shown = _evaluate(script)
+    if not shown or any(plugin != SLIDESHOW_PLUGIN for plugin in shown.split(",")):
+        raise ToolFailure("the desktop did not switch to the slideshow"
+                          + (f" (it shows {shown})" if shown else " (the Plasma shell did not answer)"))
 
 
 def set_wallpaper(arguments: dict[str, Any]) -> str:
-    image = os.path.abspath(os.path.expanduser(str(arguments.get("image") or "").strip()))
-    if not os.path.isfile(image):
-        raise ToolFailure(f"{image} is not an image file that exists")
+    image = str(arguments.get("image") or "").strip()
+    folder = str(arguments.get("folder") or "").strip()
+    if bool(image) == bool(folder):
+        raise ToolFailure("give either 'image' (one picture) or 'folder' (a slideshow of its pictures)")
     previous = current_wallpaper()
-    run_checked(["plasma-apply-wallpaperimage", image])
-    if previous and os.path.isfile(previous):
-        undo_journal.record("wallpaper", "Changed the wallpaper", {"image": previous})
-    return f"Wallpaper set to {image}."
+    if folder:
+        folder = os.path.abspath(os.path.expanduser(folder))
+        if not os.path.isdir(folder):
+            raise ToolFailure(f"{folder} is not a folder that exists")
+        if not _has_images(folder):
+            raise ToolFailure(f"{folder} has no pictures in it")
+        minutes = arguments.get("interval_minutes")
+        if minutes is not None and (not isinstance(minutes, (int, float)) or not 0 < minutes <= 7 * 24 * 60):
+            raise ToolFailure("'interval_minutes' must be a number of minutes, at most a week")
+        apply_slideshow([folder], round(minutes * 60) if minutes is not None else None)
+        done = f"Wallpaper is now a slideshow of the pictures in {folder}" + (
+            f", changing every {minutes:g} minutes." if minutes is not None else ".")
+    else:
+        image = os.path.abspath(os.path.expanduser(image))
+        if not os.path.isfile(image):
+            raise ToolFailure(f"{image} is not an image file that exists")
+        run_checked(["plasma-apply-wallpaperimage", image])
+        if current_wallpaper().get("image") not in (image, None):
+            raise ToolFailure(f"the desktop still does not show {image}")
+        done = f"Wallpaper set to {image}."
+    if previous:
+        undo_journal.record("wallpaper", "Changed the wallpaper", previous)
+    return done
 
 
 def set_accent_color(arguments: dict[str, Any]) -> str:
@@ -212,9 +287,16 @@ def set_key_repeat(arguments: dict[str, Any]) -> str:
 
 def appearance_tools() -> list[Tool]:
     return [
-        Tool("set_wallpaper", "Set the desktop wallpaper to an image file.",
-             object_schema({"image": {"type": "string"}}, ["image"]), RISK_CHANGE, set_wallpaper,
-             summarize=lambda a: f"Set the wallpaper to {a.get('image', '?')}"),
+        Tool("set_wallpaper", "Set the desktop wallpaper: one picture ('image'), or a slideshow of every picture "
+             "in a folder ('folder'). It applies at once on every screen and checks that it took; no restart is "
+             "needed.",
+             object_schema({"image": {"type": "string", "description": "A picture file"},
+                            "folder": {"type": "string", "description": "A folder of pictures, for a slideshow"},
+                            "interval_minutes": {"type": "number",
+                                                 "description": "Slideshow only: minutes per picture"}}),
+             RISK_CHANGE, set_wallpaper,
+             summarize=lambda a: f"Show a slideshow of {a['folder']} as the wallpaper" if a.get("folder")
+             else f"Set the wallpaper to {a.get('image', '?')}"),
         Tool("set_accent_color", "Set the accent colour used for highlights.",
              object_schema({"color": {"type": "string", "description": "#rrggbb or a colour name"}}, ["color"]),
              RISK_CHANGE, set_accent_color, summarize=lambda a: f"Set the accent colour to {a.get('color', '?')}"),

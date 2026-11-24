@@ -1038,6 +1038,17 @@ Findings:
   to the model is worded as background that it ignores when the user asks
   about something else. The floating Happy Bot always shows its header
   (`ResultsView.alwaysShowHeader`), so its one close button is always there.
+- Asked to put the wallpaper back to a slideshow of a folder, the model
+  (Qwen 3.6 on the NPU) found no tool for it: set_wallpaper took one
+  picture only. It wrote invented keys into kdeglobals, quit plasmashell
+  and started it again from a shell command, so the new shell lived inside
+  Happy Bot's own service, and twice said it was done without checking; the
+  wallpaper never changed. set_wallpaper now takes a folder for a slideshow
+  (through Plasma's desktop scripting, at once, no restart) and reads the
+  result back before reporting it; quitting, killing or hand-starting the
+  desktop shell or KWin is now `danger`, its reason naming
+  `systemctl --user restart plasma-plasmashell.service`; and the
+  instructions say a change is done only once seen to take.
 
 ## Decisions
 

@@ -172,7 +172,12 @@ def _undo_night_light(data: dict[str, Any]) -> str:
 
 
 def _undo_wallpaper(data: dict[str, Any]) -> str:
-    _run(["plasma-apply-wallpaperimage", data["image"]])
+    """``data`` is what ``appearance.current_wallpaper`` read before the change: an image or a slideshow."""
+    if data.get("slideshow"):
+        from . import appearance
+        appearance.apply_slideshow(data["slideshow"], data.get("interval"))
+    else:
+        _run(["plasma-apply-wallpaperimage", data["image"]])
     return "Put the previous wallpaper back."
 
 

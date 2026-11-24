@@ -158,6 +158,11 @@ def system_prompt(
         "links, each on its own line, so the user can open them. After acting, say in one line what you did.",
         "- If a tool fails, read the error, fix the call or try another way, and tell the user if it still fails. "
         "Never repeat a command that failed or was stopped without changing something.",
+        "- Change desktop settings with the tools; they apply at once, with no restart. Do not write configuration "
+        "keys you are not sure exist. Never end or start plasmashell or KWin yourself; if the desktop shell "
+        "really must be restarted, run: systemctl --user restart plasma-plasmashell.service",
+        "- A change is done only when you have seen that it took: the tool's result says so, or you read it back. "
+        "If it did not take, say so plainly; never report success you have not checked.",
         "- Installing software, and anything else that needs the user's password or takes many minutes (builds, "
         "large downloads), goes in run_in_terminal: the user watches it and types their password there. Tell the "
         "user it is waiting for them in the terminal. It returns when the command is done; report the outcome.",
