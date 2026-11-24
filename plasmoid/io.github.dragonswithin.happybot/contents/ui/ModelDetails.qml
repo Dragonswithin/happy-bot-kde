@@ -11,40 +11,36 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * "Model details" section of ConfigModels.qml: every stored property of the
- * model chosen in SetupModels.qml (the active one), editable in place.
+ * One AI's own settings, opened under its row in the list on the AI Model
+ * page (SetupModels.qml) with that row's "Settings" button.
  *
- * Fields map one to one onto a `models.<name>` entry in
- * src/happy_bot/settings.py: address (`base_url`), model id
- * (`model`), API key (`api_key`), extra request headers (`headers`),
- * context window (`context_window`, in tokens) and whether it accepts
- * images (`vision`). Each change is saved as soon as a field is left, and the
- * daemon validates it; a refused value snaps back with the daemon's message.
- *
- * Below them: the model's prices per million tokens (`input_price`,
- * `output_price`), and two `agent` settings about models: a quicker model
- * every request starts on, handing over to the chosen one when it needs
- * more steps or fails (`quick_model`, src/happy_bot/ask_stream.py), and the
- * monthly spending cap (`monthly_spend_cap`),
- * with this month's total from `GET /spend` (src/happy_bot/spend.py).
+ * Fields map one to one onto the `models.<name>` entry in
+ * src/happy_bot/settings.py: address (`base_url`), model id (`model`), API
+ * key (`api_key`), extra request headers (`headers`), context window
+ * (`context_window`, in tokens), whether it accepts images (`vision`), then
+ * how it is used in the list: whether it hands long requests to the next AI
+ * (`hand_over_long`, src/happy_bot/ask_stream.py) and, for an AI that costs
+ * money, its prices per million tokens (`input_price`, `output_price`) and
+ * its monthly limit (`monthly_cap`, src/happy_bot/spend.py) with what it has
+ * cost this month (`spent`, from `GET /spend`, given by SetupModels.qml).
+ * Each change is saved as soon as a field is left; the daemon validates it,
+ * and a refused value snaps back with the daemon's message.
  *
  * The API key and header values are secrets. The daemon never sends them:
  * a stored key arrives as `null`, shown as "stored", and typing a new one
  * replaces it; "Remove key" stores an empty key. Header values work the same
- * way through PairsEditor.qml.
+ * way through PairsEditor.qml. This component keeps no state of its own.
  */
 Kirigami.FormLayout {
     id: section
 
     required property var page
-
-    readonly property string name: page.settings ? page.settings.active_model : ""
-    readonly property var model: (page.settings && name && page.settings.models[name]) || null
+    required property string name
     property string spent: ""
+    property bool online: false
 
-    Component.onCompleted: page.client.request("GET", "/spend", null, function(data) {
-        section.spent = data.total_cost > 0 ? data.total_cost.toFixed(2) : "";
-    }, function(data) {})
+    readonly property var model: (page.settings && page.settings.models[name]) || null
+    readonly property bool priced: model !== null && (model.input_price > 0 || model.output_price > 0)
 
     function update(key, value) {
         if (!section.model || section.model[key] === value) {
@@ -54,15 +50,15 @@ Kirigami.FormLayout {
         section.page.save(function(settings) { settings.models[name][key] = value; });
     }
 
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Model details")
-        visible: section.model !== null
+    QQC2.Label {
+        visible: section.online
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        text: i18n("This AI is online: whatever Happy Bot reads for a request, such as your clipboard or a file, is sent to it.")
     }
 
     QQC2.TextField {
         Kirigami.FormData.label: i18n("Address:")
-        visible: section.model !== null
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         text: section.model ? section.model.base_url : ""
         placeholderText: "https://api.example.com/v1"
@@ -71,7 +67,6 @@ Kirigami.FormLayout {
 
     QQC2.TextField {
         Kirigami.FormData.label: i18n("Model:")
-        visible: section.model !== null
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         text: section.model ? section.model.model : ""
         onEditingFinished: section.update("model", text.trim())
@@ -79,11 +74,9 @@ Kirigami.FormLayout {
 
     RowLayout {
         Kirigami.FormData.label: i18n("API key:")
-        visible: section.model !== null
         spacing: Kirigami.Units.smallSpacing
 
         Kirigami.PasswordField {
-            id: key
             Layout.minimumWidth: Kirigami.Units.gridUnit * 14
             placeholderText: section.model && section.model.api_key === null
                 ? i18n("Stored; type to replace") : i18n("None")
@@ -106,7 +99,6 @@ Kirigami.FormLayout {
     PairsEditor {
         Kirigami.FormData.label: i18n("Extra headers:")
         Kirigami.FormData.labelAlignment: Qt.AlignTop
-        visible: section.model !== null
         pairs: section.model ? section.model.headers : ({})
         namePlaceholder: i18n("Header")
         onEdited: changed => {
@@ -117,7 +109,6 @@ Kirigami.FormLayout {
 
     QQC2.SpinBox {
         Kirigami.FormData.label: i18n("Context window:")
-        visible: section.model !== null
         Layout.minimumWidth: Kirigami.Units.gridUnit * 9
         editable: true
         from: 1024
@@ -131,16 +122,29 @@ Kirigami.FormLayout {
 
     QQC2.CheckBox {
         Kirigami.FormData.label: i18n("Images:")
-        visible: section.model !== null
-        text: i18n("This model can look at pictures")
+        text: i18n("This AI can look at pictures")
         checked: section.model ? section.model.vision : false
         onToggled: section.update("vision", checked)
+    }
+
+    QQC2.CheckBox {
+        Kirigami.FormData.label: i18n("Long requests:")
+        text: i18n("Hand them to the next AI in the list")
+        checked: section.model ? section.model.hand_over_long : false
+        onToggled: section.update("hand_over_long", checked)
+    }
+
+    QQC2.Label {
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        wrapMode: Text.Wrap
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18n("Useful for a quick AI at the top of the list: it answers small requests, and when one needs more than a few steps the next AI finishes it.")
     }
 
     component Price: QQC2.TextField {
         required property string field
 
-        visible: section.model !== null
         Layout.maximumWidth: Kirigami.Units.gridUnit * 6
         inputMethodHints: Qt.ImhFormattedNumbersOnly
         validator: DoubleValidator { bottom: 0; top: 10000; decimals: 4 }
@@ -150,7 +154,7 @@ Kirigami.FormLayout {
 
     RowLayout {
         Kirigami.FormData.label: i18n("Price per million tokens:")
-        visible: section.model !== null
+        visible: section.online
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.Label { text: i18n("in") }
@@ -159,47 +163,17 @@ Kirigami.FormLayout {
         Price { field: "output_price" }
     }
 
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("More options")
-    }
-
-    QQC2.ComboBox {
-        id: quick
-        Kirigami.FormData.label: i18n("Start with a quicker model:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 12
-        readonly property var choices: [""].concat(Object.keys((section.page.settings || {}).models || {}).sort().filter(
-            name => name !== section.name))
-        readonly property string current: (section.page.settings && section.page.settings.agent
-                                           && section.page.settings.agent.quick_model) || ""
-        model: choices.map(name => name === "" ? i18n("No, always use this one") : name)
-        currentIndex: Math.max(0, choices.indexOf(current))
-        onActivated: index => {
-            const wanted = quick.choices[index];
-            section.page.save(function(settings) { settings.agent.quick_model = wanted; });
-        }
-    }
-
-    QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-        wrapMode: Text.Wrap
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
-        text: i18n("Small requests are answered by the quicker model. When a request needs more steps, or the quicker model fails, this one takes over and finishes it.")
-    }
-
     RowLayout {
-        Kirigami.FormData.label: i18n("Monthly spending cap:")
+        Kirigami.FormData.label: i18n("Monthly limit:")
+        visible: section.online
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.TextField {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 6
+            enabled: section.priced
             validator: DoubleValidator { bottom: 0; top: 1000000; decimals: 2 }
-            text: section.page.settings && section.page.settings.agent ? String(section.page.settings.agent.monthly_spend_cap || 0) : "0"
-            onEditingFinished: {
-                const cap = Number(text) || 0;
-                section.page.save(function(settings) { settings.agent.monthly_spend_cap = cap; });
-            }
+            text: section.model ? String(section.model.monthly_cap || 0) : "0"
+            onEditingFinished: section.update("monthly_cap", Number(text) || 0)
         }
 
         QQC2.Label {
@@ -209,20 +183,13 @@ Kirigami.FormLayout {
     }
 
     QQC2.Label {
-        visible: section.model !== null
+        visible: section.online
         Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
-        text: i18n("Prices are only for totals and the cap; leave 0 for a model on this computer. 0 means no cap. Only a model on this computer is used automatically when the chosen one does not answer.")
-    }
-
-    QQC2.Label {
-        visible: section.model !== null
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-        wrapMode: Text.Wrap
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
-        text: i18n("Extra headers are only needed by some hosted services; their documentation says which. The context window is how much of a conversation the model can read at once; longer conversations are shortened to fit.")
+        text: section.priced
+            ? i18n("Once this AI has cost this much in a month, requests skip it and go to the next AI. 0 means no limit.")
+            : i18n("Enter its prices to keep track of what it costs and to set a monthly limit.")
     }
 }

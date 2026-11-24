@@ -1,4 +1,4 @@
-"""Adding an AI model with one press and giving it a job: answer first, or answer when that one fails.
+"""Adding an AI model with one press and placing it in the user's order of models to ask.
 
 The AI Model page's choices all end here (``POST /models/use``): a model service found on this
 computer, an online service picked from ``model_presets`` with the user's API key, or an address
@@ -8,9 +8,9 @@ typed by hand. ``use`` then:
    context window the service reports for that model (``list_models``), else the preset's or the
    settings default, and a suggested model's published prices, for the spending cap;
 2. names it after the preset or the model id, reusing the name of an identical entry;
-3. gives it its ``job``: ``main`` (``active_model``: it answers first), ``backup``
-   (``agent.fallback_model``: it answers when the main one does not; only a model on this
-   computer, so nothing is sent online without the user choosing that model as main) or ``none``;
+3. places it in ``model_order`` by its ``job``: ``main`` first (it answers), ``backup`` right after
+   the first (it answers when the first does not), ``none`` at the end (an existing model keeps
+   its place);
 4. saves through ``AssistantServer.replace_settings`` and checks the model (``check_model``): it
    must answer, and is asked to call a tool. A model that does not answer is removed again and the
    previous settings put back; one that answers without using the tool is kept, with a warning
@@ -31,7 +31,6 @@ from . import settings as settings_store
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .providers import ProviderError, create_provider
 from .providers.openai_compatible import list_models
-from .redaction import is_local_address
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
@@ -82,7 +81,8 @@ def _entry(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if preset:
         prices = model_presets.suggested(preset["id"], model_id)
         entry.update({key: prices[key] for key in ("input_price", "output_price") if key in prices})
-    base = f"{preset['id']}-{model_id}" if preset else model_id
+    # "claude-opus-5-5", not "claude-claude-opus-5-5": the service's name only when the id lacks it.
+    base = f"{preset['id']}-{model_id}" if preset and not model_id.lower().startswith(preset["id"]) else model_id
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", base).strip("-")[:56] or "model", entry
 
 
@@ -104,22 +104,22 @@ def use(server: "AssistantServer", body: dict[str, Any]) -> dict[str, Any]:
         wanted, entry = _entry(body)
     except ModelChoiceError as error:
         return {"ok": False, "error": str(error)}
-    if job == "backup" and not is_local_address(entry["base_url"]):
-        return {"ok": False, "error": "Only a model on this computer can be the backup, so nothing is sent online "
-                                      "unless you make an online model the main one."}
     previous = server.settings
     name = _name_for(wanted, entry, previous["models"])
     kept = previous["models"].get(name, {})
     if not entry["api_key"] and kept.get("api_key"):
         entry["api_key"] = kept["api_key"]  # re-adding a stored model without retyping its key
-    updated = {**previous, "models": {**previous["models"], name: {**kept, **entry}},
-               "agent": dict(previous.get("agent") or settings_store.default_agent())}
+    order = [other for other in previous.get("model_order", []) if other != name]
     if job == "main":
-        updated["active_model"] = name
-        if updated["agent"].get("fallback_model") == name:
-            updated["agent"]["fallback_model"] = ""
+        order.insert(0, name)
     elif job == "backup":
-        updated["agent"]["fallback_model"] = name
+        order.insert(min(1, len(order)), name)
+    elif name in previous.get("model_order", []):
+        order = list(previous["model_order"])
+    else:
+        order.append(name)
+    updated = {**previous, "models": {**previous["models"], name: {**kept, **entry}},
+               "model_order": order, "active_model": order[0]}
     try:
         stored = server.replace_settings(updated)
         result = check_model(stored["models"][name])

@@ -1,4 +1,4 @@
-"""Token use and money spent on hosted models, per calendar month, with an optional cap.
+"""Token use and money spent on hosted models, per calendar month, with an optional limit per model.
 
 A model entry may carry prices (``input_price`` and ``output_price``, in the
 user's currency per million tokens, settings.py; both default to 0 = free,
@@ -7,9 +7,10 @@ service reported (``TurnEnd`` in ``conversation.py``) and their cost to the
 ledger, ``$XDG_DATA_HOME/happy-bot/spend.json`` (0600), kept as one
 entry per month and model so it survives restarts but stays small.
 
-``agent.monthly_spend_cap`` (0 = no cap) stops new requests to priced models
-once the month's total reaches it (``over_cap``); local and unpriced models
-are never stopped. ``month_summary`` is what the CLI and the popup show.
+A model's ``monthly_cap`` (settings.py; 0 = no limit) stops new requests to
+that model once its own spending this month reaches it (``over_cap``), and
+the request goes on to the next AI in the user's order. Local and unpriced
+models are never stopped. ``month_summary`` is what the CLI and the popup show.
 
 The ledger is written under ``_lock``; a damaged file is started afresh.
 """
@@ -70,10 +71,17 @@ def month_total(path: Path | None = None) -> float:
         return round(sum(entry.get("cost", 0) for entry in _load(path or ledger_path()).get(_month(), {}).values()), 6)
 
 
-def over_cap(model: dict[str, Any], cap: float, path: Path | None = None) -> bool:
-    """Whether a request to ``model`` must be refused because this month's spending reached ``cap``."""
+def month_cost(name: str, path: Path | None = None) -> float:
+    """What the model named ``name`` has cost this month."""
+    with _lock:
+        return round(float(_load(path or ledger_path()).get(_month(), {}).get(name, {}).get("cost", 0)), 6)
+
+
+def over_cap(name: str, model: dict[str, Any], path: Path | None = None) -> bool:
+    """Whether ``model`` must be skipped because its own spending this month reached its ``monthly_cap``."""
+    cap = float(model.get("monthly_cap", 0) or 0)
     priced = float(model.get("input_price", 0)) > 0 or float(model.get("output_price", 0)) > 0
-    return bool(cap) and priced and month_total(path) >= cap
+    return bool(cap) and priced and month_cost(name, path) >= cap
 
 
 def month_summary(path: Path | None = None) -> dict[str, Any]:

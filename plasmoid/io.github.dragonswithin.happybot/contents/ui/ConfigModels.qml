@@ -12,13 +12,12 @@ import org.kde.kirigami as Kirigami
 
 /**
  * "AI Model" page of the applet's settings dialog (contents/config/config.qml):
- * which model answers and everything stored about it.
+ * the user's AIs in the order they are asked, each with its own settings,
+ * and the ways to add one (SetupModels.qml).
  *
  * The settings belong to the daemon, not to Plasma: DaemonSettings.qml loads
  * them, shows the status line and saves each change at once, and is handed
- * to SetupModels.qml and ModelDetails.qml as their `page`. The sections are
- * Kirigami.FormLayouts linked with `twinFormLayouts`, so their labels share
- * one column like a System Settings page.
+ * to SetupModels.qml as its `page`.
  */
 KCM.SimpleKCM {
     ColumnLayout {
@@ -30,19 +29,9 @@ KCM.SimpleKCM {
         }
 
         SetupModels {
-            id: modelsSection
             Layout.fillWidth: true
             visible: store.ready
             page: store
-            twinFormLayouts: [detailsSection]
-        }
-
-        ModelDetails {
-            id: detailsSection
-            Layout.fillWidth: true
-            visible: store.ready
-            page: store
-            twinFormLayouts: [modelsSection]
         }
     }
 }

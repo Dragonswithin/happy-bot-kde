@@ -362,7 +362,8 @@ def run_model(args: argparse.Namespace) -> dict[str, Any]:
         return request_json("POST", "/models/probe", {"base_url": args.url, "api_key": api_key}, timeout=30.0)
     settings = current_settings()
     if command == "list":
-        return {"ok": True, "active_model": settings["active_model"], "models": settings["models"]}
+        return {"ok": True, "active_model": settings["active_model"], "model_order": settings.get("model_order", []),
+                "models": settings["models"]}
     if command in ("use", "remove") and args.name not in settings["models"]:
         return {"ok": False, "error": f"no model named '{args.name}' is set up"}
     if command == "use":
@@ -370,7 +371,7 @@ def run_model(args: argparse.Namespace) -> dict[str, Any]:
     elif command == "remove":
         del settings["models"][args.name]
         if settings["active_model"] == args.name:
-            settings["active_model"] = next(iter(settings["models"]), "")
+            settings["active_model"] = ""  # the next model in the order becomes first
     else:
         headers = dict(item.split("=", 1) for item in args.header if "=" in item)
         probe = request_json(

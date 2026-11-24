@@ -33,10 +33,19 @@ Schema (version 1)::
           "context_window": 32768,            # default 32768; tokens, used to trim long conversations
           "vision": false,                    # default false; whether the model accepts images
           "input_price": 0,                   # default 0; cost per million input tokens, in the user's
-          "output_price": 0                   #   currency, for spending totals and the cap (spend.py)
+          "output_price": 0,                  #   currency, for spending totals and the limit (spend.py)
+          "monthly_cap": 0,                   # default 0 = no limit; once this model has cost this much this
+                                              #   month, requests skip it and go to the next model in the order
+          "hand_over_long": false             # default false; true: when a request needs more than
+                                              #   ask_stream.HAND_OVER_STEPS steps, the next model in the order
+                                              #   finishes it (a quick model first, a strong one after it)
         }
       },
-      "active_model": "<name>",               # default ""; which model answers requests
+      "model_order": ["<name>", ...],         # default: every model; the order they are asked in. The first
+                                              #   answers; when it fails (or hands a long request over) the next
+                                              #   one does. Models left out are added at the end.
+      "active_model": "<name>",               # always the first of model_order (kept for the CLI and older
+                                              #   clients); setting it moves that model to the front
       "folders": {"Documents": "/path"},      # default {}; overrides for the user's standard folders.
                                               #   Names: Desktop, Documents, Downloads, Pictures, Music,
                                               #   Videos. A folder not listed here is wherever the system
@@ -61,13 +70,6 @@ Schema (version 1)::
         "terminal": "",                       # default "" = KDE's default terminal (System Settings,
                                               #   Default Applications), else Konsole; or one of
                                               #   SUPPORTED_TERMINALS in tools/shell.py
-        "fallback_model": "",                 # default ""; a model on this computer to answer when the chosen
-                                              #   one does not respond (only a local one is used automatically)
-        "quick_model": "",                    # default "" = none; a faster model every request starts on; the
-                                              #   chosen (active) model takes over when it fails or needs more
-                                              #   than ask_stream.QUICK_MODEL_STEPS steps
-        "monthly_spend_cap": 0,               # default 0 = none; stop using priced models once this month's
-                                              #   spending (spend.py) reaches it
         "load_plugins": false,                # default false; true: load tools from the user's plugin files in
                                               #   ~/.config/happy-bot/plugins (tools/plugins.py)
         "serve_tools": false,                 # default false; true: other AI programs on this computer may use
@@ -113,8 +115,13 @@ scripts.
 
 Server names are 1 to 64 characters of letters, digits, ``_``, ``.`` or
 ``-``; model names follow the same rule. A role must point at a configured
-server and ``active_model`` at a configured model. Unknown keys are rejected
-so a typo is reported instead of silently ignored.
+server and ``model_order`` at configured models. Unknown keys are rejected
+so a typo is reported instead of silently ignored, with one exception:
+settings from before the model order (``agent.fallback_model``,
+``agent.quick_model``, ``agent.monthly_spend_cap``) are converted once
+(``_model_order``): the quick model first with ``hand_over_long``, then the
+active one, then the fallback, and the old total cap becomes each priced
+model's ``monthly_cap``.
 
 ``redacted`` is the form sent to clients: tool-server environment and header values,
 model header values and non-empty model API keys are replaced by ``None``. ``merge_redacted`` is its
@@ -181,7 +188,7 @@ def default_agent() -> dict[str, Any]:
     return {
         "instructions": SUGGESTED_INSTRUCTIONS, "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
         "command_timeout_seconds": DEFAULT_TIMEOUT_SECONDS, "terminal": "", "disabled_tool_groups": [],
-        "confirm_plans": False, "local_only": False, "fallback_model": "", "quick_model": "", "monthly_spend_cap": 0,
+        "confirm_plans": False, "local_only": False,
         "load_plugins": False, "serve_tools": False,
     }
 
@@ -228,11 +235,6 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
              f"'agent': 'terminal' must be empty (automatic) or one of {', '.join(SUPPORTED_TERMINALS)}")
     for flag in ("confirm_plans", "local_only", "load_plugins", "serve_tools"):
         _require(isinstance(merged[flag], bool), f"'agent': '{flag}' must be true or false")
-    for key in ("fallback_model", "quick_model"):
-        _require(isinstance(merged[key], str), f"'agent': '{key}' must be a model name")
-    cap = merged["monthly_spend_cap"]
-    _require(isinstance(cap, (int, float)) and not isinstance(cap, bool) and 0 <= cap <= 1_000_000,
-             "'agent': 'monthly_spend_cap' must be a number, 0 for none")
     groups = _string_list(merged["disabled_tool_groups"], "'agent': 'disabled_tool_groups'")
     for group in groups:
         _require(group in TOOL_GROUPS, f"'agent': unknown tool group '{group}' (known: {', '.join(TOOL_GROUPS)})")
@@ -250,9 +252,6 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
         "local_only": merged["local_only"],
         "load_plugins": merged["load_plugins"],
         "serve_tools": merged["serve_tools"],
-        "fallback_model": merged["fallback_model"].strip(),
-        "quick_model": merged["quick_model"].strip(),
-        "monthly_spend_cap": cap,
     }
 
 
@@ -317,7 +316,7 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
     _require(bool(_NAME_PATTERN.match(name)), f"{where}: names use letters, digits, '_', '.' or '-' (max 64)")
     _require(isinstance(raw, dict), f"{where} must be an object")
     _reject_unknown(set(raw) - {"provider", "base_url", "model", "api_key", "headers", "context_window", "vision",
-                                "input_price", "output_price"}, f"{where}: ")
+                                "input_price", "output_price", "monthly_cap", "hand_over_long"}, f"{where}: ")
     for price in ("input_price", "output_price"):
         value = raw.get(price, 0)
         _require(isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 10000,
@@ -343,6 +342,10 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
         f"{where}: 'context_window' must be a whole number of tokens, at least 1024",
     )
     _require(isinstance(raw.get("vision", False), bool), f"{where}: 'vision' must be true or false")
+    _require(isinstance(raw.get("hand_over_long", False), bool), f"{where}: 'hand_over_long' must be true or false")
+    cap = raw.get("monthly_cap", 0)
+    _require(isinstance(cap, (int, float)) and not isinstance(cap, bool) and 0 <= cap <= 1_000_000,
+             f"{where}: 'monthly_cap' must be a number, 0 for no limit")
     return {
         "provider": raw["provider"],
         "base_url": base_url.rstrip("/"),
@@ -353,13 +356,41 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
         "vision": raw.get("vision", False),
         "input_price": raw.get("input_price", 0),
         "output_price": raw.get("output_price", 0),
+        "monthly_cap": cap,
+        "hand_over_long": raw.get("hand_over_long", False),
     }
+
+
+def _model_order(raw_order: Any, active: str, models: dict[str, dict[str, Any]], legacy: dict[str, Any]) -> list[str]:
+    """Every model once, in the user's order, ``active`` first when given; converts pre-order settings.
+
+    ``models`` is changed in place only for the conversion: the old quick model gets ``hand_over_long``
+    and the old total cap becomes each priced model's ``monthly_cap``.
+    """
+    if raw_order is None:
+        quick, fallback = str(legacy.get("quick_model") or ""), str(legacy.get("fallback_model") or "")
+        raw_order = [name for name in (quick, active, fallback) if name]
+        if quick in models:
+            models[quick]["hand_over_long"] = True
+        cap = legacy.get("monthly_spend_cap") or 0
+        for model in models.values():
+            if cap and not model["monthly_cap"] and (model["input_price"] or model["output_price"]):
+                model["monthly_cap"] = cap
+    _require(isinstance(raw_order, list) and all(isinstance(name, str) for name in raw_order),
+             "'model_order' must be a list of model names")
+    # A model removed elsewhere (the CLI, an older page) simply leaves the order.
+    order = list(dict.fromkeys([*(name for name in raw_order if name in models), *sorted(models)]))
+    if active and order and order[0] != active:
+        order.remove(active)
+        order.insert(0, active)
+    return order
 
 
 def validate_settings(raw: Any) -> dict[str, Any]:
     """Return a normalised copy of ``raw`` with defaults filled in, or raise ``SettingsError``."""
     _require(isinstance(raw, dict), "settings must be an object")
-    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "active_model", "approval_policy", "folders",
+    _reject_unknown(set(raw) - {"version", "tool_servers", "roles", "models", "model_order", "active_model",
+                                "approval_policy", "folders",
                                 "history_days", "agent", "routines", "layouts", "personal"}, "")
     _require(raw.get("version", SETTINGS_VERSION) == SETTINGS_VERSION, "unsupported settings version")
     raw_servers = raw.get("tool_servers", {})
@@ -371,12 +402,13 @@ def validate_settings(raw: Any) -> dict[str, Any]:
     _require(isinstance(raw_models, dict), "'models' must be an object")
     servers = {name: _validate_server(name, value) for name, value in raw_servers.items()}
     roles = {role: _validate_role(role, value, servers) for role, value in raw_roles.items()}
+    raw_agent = dict(raw.get("agent") or {}) if isinstance(raw.get("agent", {}), dict) else raw.get("agent")
+    legacy = {key: raw_agent.pop(key) for key in ("fallback_model", "quick_model", "monthly_spend_cap")
+              if isinstance(raw_agent, dict) and key in raw_agent}
     models = {name: _validate_model(name, value) for name, value in raw_models.items()}
     _require(isinstance(active_model, str), "'active_model' must be a model name")
     _require(not active_model or active_model in models, f"'active_model': model '{active_model}' is not set up")
-    for key, label in (("fallback_model", "fallback model"), ("quick_model", "quick model")):
-        named = (raw.get("agent") or {}).get(key, "") if isinstance(raw.get("agent"), dict) else ""
-        _require(not named or named in models, f"'agent': {label} '{named}' is not set up")
+    order = _model_order(raw.get("model_order"), active_model, models, legacy)
     folders = raw.get("folders", {})
     _require(isinstance(folders, dict), "'folders' must be an object")
     for name, path in folders.items():
@@ -394,11 +426,12 @@ def validate_settings(raw: Any) -> dict[str, Any]:
         "tool_servers": servers,
         "roles": roles,
         "models": models,
-        "active_model": active_model,
+        "model_order": order,
+        "active_model": order[0] if order else "",
         "approval_policy": policy,
         "folders": {name: os.path.expanduser(path) for name, path in folders.items()},
         "history_days": history_days,
-        "agent": _validate_agent(raw.get("agent", {})),
+        "agent": _validate_agent(raw_agent),
         "routines": _validate_routines(raw.get("routines", {})),
         "layouts": _validate_layouts(raw.get("layouts", {})),
         "personal": _validate_personal(raw.get("personal", {})),

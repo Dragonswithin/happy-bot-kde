@@ -78,7 +78,14 @@ start() {
 
 stop() {
   if running; then
-    kill "$(cat "$PID_FILE")"
+    local pid
+    pid="$(cat "$PID_FILE")"
+    kill "$pid"
+    # Wait for it to finish shutting down, so "stopped" means it is gone.
+    for _ in $(seq 40); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.25
+    done
   fi
   # Only ever this script's own folder.
   [[ "$BASE" == */happy-bot-throwaway ]] && rm -rf -- "$BASE"

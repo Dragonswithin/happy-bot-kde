@@ -1,4 +1,4 @@
-"""Tests for adding an AI model with one press (``model_setup.use``) and the online-service presets.
+"""Tests for adding an AI model with one press and placing it in the order (``model_setup.use``), and the presets.
 
 ``use`` runs against a stand-in daemon whose ``replace_settings`` validates with the real settings
 schema. The model check and the service's model list are faked, so no model is asked anything and
@@ -52,21 +52,23 @@ class UseModelTests(unittest.TestCase):
         first = self.use(daemon, {"base_url": NPU, "model": "qwen3.6-moe:35b-a3b", "job": "main"})
         backup = self.use(daemon, {"base_url": GPU, "model": "qwen3.6-35b-a3b", "job": "backup"})
         self.assertTrue(first["ok"] and backup["ok"], (first, backup))
+        self.assertEqual(daemon.settings["model_order"], [first["name"], backup["name"]])
         self.assertEqual(daemon.settings["active_model"], first["name"])
-        self.assertEqual(daemon.settings["agent"]["fallback_model"], backup["name"])
         self.assertEqual(daemon.settings["models"][first["name"]]["context_window"], 65536)
 
-    def test_an_online_model_cannot_be_the_backup(self) -> None:
-        result = self.use(FakeDaemon(), {"base_url": "https://api.example.com/v1", "model": "m", "job": "backup"})
-        self.assertFalse(result["ok"])
-        self.assertIn("Only a model on this computer", result["error"])
+    def test_an_online_model_may_come_after_a_local_one(self) -> None:
+        daemon = FakeDaemon()
+        self.use(daemon, {"base_url": NPU, "model": "a", "job": "main"})
+        online = self.use(daemon, {"base_url": "https://api.example.com/v1", "model": "m", "job": "backup"})
+        self.assertTrue(online["ok"], online)
+        self.assertEqual(daemon.settings["model_order"][1], online["name"])
 
     def test_a_preset_needs_its_key_and_fills_the_address(self) -> None:
         preset = model_presets.PRESETS[0]
         daemon = FakeDaemon()
         refused = self.use(daemon, {"preset": preset["id"], "model": preset["models"][0]["id"]})
         self.assertIn("API key", refused["error"])
-        added = self.use(daemon, {"preset": preset["id"], "model": preset["models"][0]["id"], "api_key": "k"})
+        added = self.use(daemon, {"preset": preset["id"], "model": preset["models"][0]["id"], "api_key": "k", "job": "none"})
         self.assertTrue(added["ok"], added)
         self.assertEqual(daemon.settings["models"][added["name"]]["base_url"], preset["base_url"].rstrip("/"))
 
@@ -74,16 +76,14 @@ class UseModelTests(unittest.TestCase):
         daemon = FakeDaemon()
         result = self.use(daemon, {"base_url": NPU, "model": "x", "job": "main"}, check=ProviderError("refused"))
         self.assertFalse(result["ok"])
-        self.assertEqual((daemon.settings["models"], daemon.settings["active_model"]), ({}, ""))
+        self.assertEqual((daemon.settings["models"], daemon.settings["model_order"]), ({}, []))
 
-    def test_making_the_backup_the_main_one_clears_the_backup(self) -> None:
+    def test_asking_the_second_first_reorders_without_duplicates(self) -> None:
         daemon = FakeDaemon()
-        self.use(daemon, {"base_url": NPU, "model": "a", "job": "main"})
-        backup = self.use(daemon, {"base_url": GPU, "model": "b", "job": "backup"})
+        a = self.use(daemon, {"base_url": NPU, "model": "a", "job": "main"})
+        b = self.use(daemon, {"base_url": GPU, "model": "b", "job": "none"})
         self.use(daemon, {"base_url": GPU, "model": "b", "job": "main"})
-        self.assertEqual(daemon.settings["active_model"], backup["name"])
-        self.assertEqual(daemon.settings["agent"]["fallback_model"], "")
-        self.assertEqual(len(daemon.settings["models"]), 2)
+        self.assertEqual(daemon.settings["model_order"], [b["name"], a["name"]])
 
 
 class PresetTests(unittest.TestCase):

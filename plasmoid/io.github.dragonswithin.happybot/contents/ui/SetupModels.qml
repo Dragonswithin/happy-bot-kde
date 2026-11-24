@@ -11,32 +11,30 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 /**
- * The top of the AI Model page (ConfigModels.qml), written as two plain
- * questions and three ways to add an AI:
+ * The AI Model page (ConfigModels.qml): the user's AIs in the order they
+ * are asked, and three ways to add one.
  *
- * - "Ask first": the model that answers (`active_model`), with Test and
- *   Remove, and a line saying whether what it reads stays on this computer.
- * - "If it fails, ask": the model that answers when the first one does not
- *   (`agent.fallback_model`). Only models on this computer are offered, so
- *   nothing goes online unless an online model is chosen to ask first
- *   (src/happy_bot/ask_stream.py enforces the same rule).
+ * - The list follows `model_order` (src/happy_bot/settings.py): the first
+ *   AI answers, and when it fails the next one does (src/happy_bot/ask_stream.py).
+ *   Each row shows where the AI runs (this computer, with its port, or
+ *   online and where), arrows to move it up or down, Test, Remove, and
+ *   "Settings", which opens that AI's own settings under it
+ *   (ModelDetails.qml). Moving one keeps `active_model` equal to the first.
  * - "Find on this computer" (`POST /models/discover`) lists the models local
- *   services have loaded; each can be made the one asked first or the backup
- *   with one press.
+ *   services have loaded; each can be put first or added to the end.
  * - "Online service…" opens OnlineModelChooser.qml: pick the service, get
  *   and paste a key with directions, pick a model.
  * - "By hand…": an address, model id and optional key, for any other
  *   OpenAI-compatible service, self-hosted or not.
  *
  * Every addition goes through `POST /models/use`
- * (src/happy_bot/model_setup.py), which adds the model, gives it its job and
- * tests it, and removes it again if it does not answer; the result is shown
- * here. Choosing between models already added uses `page.save`
- * (DaemonSettings.qml). Model details (address, context window, prices) and
- * the quicker-model and spending options are below, in ModelDetails.qml.
+ * (src/happy_bot/model_setup.py), which adds the model, places it, tests it
+ * and removes it again if it does not answer. Reordering, removing and the
+ * per-AI settings use `page.save` (DaemonSettings.qml).
  *
- * Only transient state lives here: what a scan found, the by-hand fields,
- * the last test result. A key typed here is sent once and never read back.
+ * Only transient state lives here: what a scan found, which rows are open,
+ * the by-hand fields, the last test result and this month's costs. A key
+ * typed here is sent once and never read back.
  */
 Kirigami.FormLayout {
     id: section
@@ -49,9 +47,9 @@ Kirigami.FormLayout {
     // `models` and `activeName` update separately when settings reload, so the
     // name can briefly point at a model that is not in the map yet.
     readonly property var active: (activeName && models[activeName]) || null
-    readonly property string backupName: (page.settings && page.settings.agent && page.settings.agent.fallback_model) || ""
-    readonly property var backupChoices: [""].concat(modelNames.filter(name => name !== activeName
-                                                                           && isLocal(models[name].base_url)))
+    readonly property var order: (page.settings && page.settings.model_order) || []
+    property var costs: ({})
+    property string testedName: ""
     property var found: []
     property bool scanning: false
     property bool scanned: false
@@ -70,26 +68,48 @@ Kirigami.FormLayout {
         return match ? match[1] : address;
     }
 
-    function describe(name) {
-        const model = section.models[name];
-        if (!model) {
-            return name;
-        }
-        const port = (model.base_url || "").match(/:(\d+)(\/|$)/);
-        if (section.isLocal(model.base_url)) {
-            // Two local services can serve similar models; the port tells them apart.
-            return port ? i18n("%1 (on this computer, port %2)", name, port[1]) : i18n("%1 (on this computer)", name);
-        }
-        return i18n("%1 (online, %2)", name, section.hostOf(model.base_url));
+
+    function readCosts() {
+        section.page.client.request("GET", "/spend", null, data => section.costs = data.models || {}, () => {});
     }
+
+    function costOf(name) {
+        const entry = section.costs[name];
+        return entry && entry.cost > 0 ? Number(entry.cost).toFixed(2) : "";
+    }
+
+    /** Moves `name` by `delta` places in the order; the first one is the one that answers. */
+    function move(name, delta) {
+        section.page.save(function(settings) {
+            const order = settings.model_order.slice();
+            const from = order.indexOf(name);
+            const to = Math.max(0, Math.min(order.length - 1, from + delta));
+            order.splice(from, 1);
+            order.splice(to, 0, name);
+            settings.model_order = order;
+            settings.active_model = order[0];
+        });
+    }
+
+    function remove(name) {
+        section.testResult = "";
+        section.page.save(function(settings) {
+            delete settings.models[name];
+            settings.model_order = settings.model_order.filter(other => other !== name);
+            settings.active_model = settings.model_order[0] || "";
+        });
+    }
+
+    Component.onCompleted: readCosts()
 
     function showResult(passed, text) {
         section.testPassed = passed;
         section.testResult = text;
     }
 
-    /** Adds a model through the daemon, which tests it; `job` is "main", "backup" or "none". */
+    /** Adds a model through the daemon, which tests and places it; `job` is "main" (first) or "none" (last). */
     function use(body, job, key) {
+        section.testedName = "";
         section.usingKey = key || "";
         section.page.client.request("POST", "/models/use", Object.assign({ job: job }, body), function(data) {
             section.usingKey = "";
@@ -103,6 +123,7 @@ Kirigami.FormLayout {
     }
 
     function test(name) {
+        section.testedName = name;
         section.testing = true;
         section.testResult = "";
         section.page.client.request("POST", "/models/test", { name: name }, function(data) {
@@ -128,129 +149,179 @@ Kirigami.FormLayout {
         });
     }
 
-    // --- which AI answers ------------------------------------------------------
+    // --- the AIs, in the order they are asked ---------------------------------
     Item {
         Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Which AI answers")
+        Kirigami.FormData.label: i18n("Your AIs, in the order they are asked")
     }
 
     QQC2.Label {
-        Kirigami.FormData.label: i18n("Ask first:")
-        visible: section.modelNames.length === 0
+        visible: section.order.length === 0
         text: i18n("No AI yet. Add one below: one on this computer, or an online service.")
         wrapMode: Text.Wrap
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
-    }
-
-    RowLayout {
-        Kirigami.FormData.label: i18n("Ask first:")
-        visible: section.modelNames.length > 0
-        spacing: Kirigami.Units.smallSpacing
-
-        QQC2.ComboBox {
-            id: mainBox
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 16
-            model: section.modelNames.map(name => section.describe(name))
-            currentIndex: section.modelNames.indexOf(section.activeName)
-            onActivated: index => {
-                const name = section.modelNames[index];
-                section.page.save(function(settings) {
-                    settings.active_model = name;
-                    if (settings.agent.fallback_model === name) {
-                        settings.agent.fallback_model = "";
-                    }
-                });
-            }
-        }
-
-        QQC2.Button {
-            text: i18n("Test")
-            icon.name: "media-playback-start"
-            enabled: section.activeName.length > 0 && !section.testing
-            onClicked: section.test(section.activeName)
-        }
-
-        QQC2.ToolButton {
-            icon.name: "edit-delete"
-            text: i18n("Remove this AI")
-            display: QQC2.AbstractButton.IconOnly
-            enabled: section.activeName.length > 0
-            QQC2.ToolTip.text: text
-            QQC2.ToolTip.visible: hovered
-            onClicked: {
-                const name = section.activeName;
-                section.testResult = "";
-                section.page.save(function(settings) {
-                    delete settings.models[name];
-                    for (const key of ["fallback_model", "quick_model"]) {
-                        if (settings.agent[key] === name) {
-                            settings.agent[key] = "";
-                        }
-                    }
-                    settings.active_model = Object.keys(settings.models).sort()[0] || "";
-                });
-            }
-        }
-
-        QQC2.BusyIndicator {
-            running: section.testing
-            visible: running
-            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-        }
-    }
-
-    RowLayout {
-        visible: section.active !== null
-        spacing: Kirigami.Units.smallSpacing
         Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-
-        Kirigami.Icon {
-            source: section.active && section.isLocal(section.active.base_url) ? "computer" : "network-workgroup"
-            Layout.preferredWidth: Kirigami.Units.iconSizes.small
-            Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            Layout.alignment: Qt.AlignTop
-        }
-
-        QQC2.Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.8
-            text: section.active === null ? ""
-                : section.isLocal(section.active.base_url)
-                    ? i18n("It runs on this computer. Nothing leaves it.")
-                    : i18n("It is online at %1. Whatever Happy Bot reads for a request, such as your clipboard or a file, is sent there.",
-                           section.hostOf(section.active.base_url))
-        }
-    }
-
-    QQC2.ComboBox {
-        id: backupBox
-        Kirigami.FormData.label: i18n("If it fails, ask:")
-        visible: section.modelNames.length > 0
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 16
-        model: section.backupChoices.map(name => name === "" ? i18n("Nobody (show what went wrong)") : section.describe(name))
-        currentIndex: Math.max(0, section.backupChoices.indexOf(section.backupName))
-        onActivated: index => {
-            const wanted = section.backupChoices[index];
-            section.page.save(function(settings) { settings.agent.fallback_model = wanted; });
-        }
     }
 
     QQC2.Label {
-        visible: section.modelNames.length > 0
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        visible: section.order.length > 0
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
-        text: i18n("If the first AI does not answer, this one answers instead. Only an AI on this computer can step in, so nothing goes online unless you choose an online AI to ask first.")
+        text: i18n("The first AI answers. If it does not, the next one does, and so on. Use the arrows to change the order.")
+    }
+
+    // Repeated rows go inside one column: a Repeater placed directly in a
+    // FormLayout can insert its rows after later siblings.
+    ColumnLayout {
+        Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+        visible: section.order.length > 0
+        spacing: Kirigami.Units.smallSpacing
+
+        Repeater {
+            model: section.order
+
+            ColumnLayout {
+                id: row
+
+                required property int index
+                required property string modelData
+                readonly property var entry: section.models[modelData] || null
+                readonly property bool local: entry !== null && section.isLocal(entry.base_url)
+                property bool open: false
+
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        text: i18n("%1.", row.index + 1)
+                        font.weight: Font.Bold
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 1.5
+                    }
+
+                    Kirigami.Icon {
+                        source: row.local ? "computer" : "network-workgroup"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: row.modelData
+                            elide: Text.ElideMiddle
+                            font.weight: row.index === 0 ? Font.Bold : Font.Normal
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                            text: row.entry === null ? ""
+                                : (row.local ? i18n("On this computer, port %1", (row.entry.base_url.match(/:(\d+)/) || ["", "?"])[1])
+                                             : i18n("Online at %1", section.hostOf(row.entry.base_url)))
+                                  + (row.entry.hand_over_long ? i18n(" · hands long requests on") : "")
+                        }
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "arrow-up"
+                        text: i18n("Ask %1 earlier", row.modelData)
+                        display: QQC2.AbstractButton.IconOnly
+                        enabled: row.index > 0
+                        QQC2.ToolTip.text: i18n("Move up")
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: section.move(row.modelData, -1)
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "arrow-down"
+                        text: i18n("Ask %1 later", row.modelData)
+                        display: QQC2.AbstractButton.IconOnly
+                        enabled: row.index < section.order.length - 1
+                        QQC2.ToolTip.text: i18n("Move down")
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: section.move(row.modelData, 1)
+                    }
+
+                    QQC2.Button {
+                        text: i18n("Test")
+                        enabled: !section.testing
+                        onClicked: section.test(row.modelData)
+                    }
+
+                    QQC2.Button {
+                        text: i18n("Settings")
+                        icon.name: "configure"
+                        checkable: true
+                        checked: row.open
+                        onToggled: row.open = checked
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "edit-delete"
+                        text: i18n("Remove %1", row.modelData)
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: i18n("Remove this AI")
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: section.remove(row.modelData)
+                    }
+                }
+
+                RowLayout {
+                    visible: section.testedName === row.modelData && (section.testing || section.testResult.length > 0)
+                    Layout.leftMargin: Kirigami.Units.gridUnit * 2
+
+                    QQC2.BusyIndicator {
+                        running: section.testing
+                        visible: running
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    }
+
+                    Kirigami.InlineMessage {
+                        Layout.fillWidth: true
+                        visible: !section.testing && section.testResult.length > 0
+                        type: section.testPassed ? Kirigami.MessageType.Positive : Kirigami.MessageType.Warning
+                        text: section.testResult
+                    }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Kirigami.Units.gridUnit * 2
+                    active: row.open
+                    visible: active
+                    sourceComponent: ModelDetails {
+                        page: section.page
+                        name: row.modelData
+                        online: !row.local
+                        spent: section.costOf(row.modelData)
+                    }
+                }
+
+                Kirigami.Separator {
+                    Layout.fillWidth: true
+                    visible: row.index < section.order.length - 1
+                    opacity: 0.5
+                }
+            }
+        }
     }
 
     Kirigami.InlineMessage {
         Layout.fillWidth: true
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-        visible: section.testResult.length > 0
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+        visible: section.testedName === "" && section.testResult.length > 0
         type: section.testPassed ? Kirigami.MessageType.Positive : Kirigami.MessageType.Warning
         text: section.testResult
     }
@@ -331,7 +402,7 @@ Kirigami.FormLayout {
                         required property var modelData
                         readonly property string key: service.modelData.base_url + "|" + modelData.id
                         readonly property string job: offer.modelData.configured_as === section.activeName ? "main"
-                            : offer.modelData.configured_as && offer.modelData.configured_as === section.backupName ? "backup" : ""
+                            : offer.modelData.configured_as ? "listed" : ""
 
                         spacing: Kirigami.Units.smallSpacing
 
@@ -368,10 +439,10 @@ Kirigami.FormLayout {
                         }
 
                         QQC2.Button {
-                            text: offer.job === "backup" ? i18n("Is the backup") : i18n("Use if it fails")
-                            enabled: offer.job === "" && section.usingKey === "" && section.modelNames.length > 0
+                            text: offer.job === "" ? i18n("Add to the list") : i18n("In the list")
+                            enabled: offer.job === "" && section.usingKey === ""
                             onClicked: section.use({ base_url: service.modelData.base_url, model: offer.modelData.id },
-                                                   "backup", offer.key)
+                                                   "none", offer.key)
                         }
 
                         QQC2.BusyIndicator {

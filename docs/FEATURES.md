@@ -349,18 +349,19 @@ text-only models and stays as an option afterwards.
 - ● Online services by name: Claude, OpenAI, Google Gemini, Grok, Qwen,
   Muse, Mistral, DeepSeek, Kimi, Groq and OpenRouter, each with its key page,
   short directions and suggested models; every model added is tested and
-  removed again if it does not answer. "Ask first" and "If it fails, ask"
-  on the AI Model page set the main and backup models. (checked against each
+  removed again if it does not answer. The AI Model page lists the models
+  in the order they are asked, each with its own settings under it. (checked against each
   service's documentation 2026-11-24; no online service tried with a real
   key yet)
 - ⏸ Native providers where the compatible route loses features (Anthropic,
   Gemini), written from current vendor documentation. (the OpenAI-compatible
   route works for the hosted model in use)
 - ● A model per task: a fast one for small actions, a strong one for long
-  tasks, a vision one for screenshots. (a quick model starts every request
-  and hands the same conversation to the chosen model after four steps or
-  on failure; a request can still name its model. A vision model waits for
-  image input, which is deferred)
+  tasks, a vision one for screenshots. (the models are asked in the user's
+  order; one marked to hand long requests on passes the same conversation
+  to the next after four steps, and any that fails passes it on too; a
+  request can still name its model. A vision model waits for image input,
+  which is deferred)
 - ● Fallback when a model is unreachable, offered rather than silent when it
   would send data off the machine. (only a local fallback is used
   automatically)

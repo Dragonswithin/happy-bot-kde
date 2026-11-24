@@ -228,7 +228,9 @@ class ModelSettingsTests(unittest.TestCase):
                 validate_settings({"models": {"a": model}})
         with self.assertRaisesRegex(SettingsError, "model 'b' is not set up"):
             validate_settings({"models": {"a": good}, "active_model": "b"})
-        self.assertIsNone(settings_store.active_model(validate_settings({"models": {"a": good}})))
+        # Every model set up is in the order, so a lone model answers without being chosen.
+        self.assertEqual(settings_store.active_model(validate_settings({"models": {"a": good}}))["model"], "m")
+        self.assertIsNone(settings_store.active_model(validate_settings({})))
 
 
 class ObserveToolTests(unittest.TestCase):

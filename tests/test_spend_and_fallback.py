@@ -1,11 +1,11 @@
-"""Tests for spending records, the monthly cap, prices in settings, the local fallback model and the quick model.
+"""Tests for spending records, each model's monthly limit, and asking models in the user's order.
 
 The ledger is written into the test process's private data folder
-(``isolation``). The fallback is checked with scripted providers: a first
-model that fails before producing anything, and a local fallback that
-answers; a hosted fallback must never be used. The quick model is checked the
-same way: one that keeps calling tools runs out of its steps and hands the same
-history to the chosen model, whose final ``done`` reports both models' actions.
+(``isolation``). The order is checked with scripted providers: a model that
+fails before producing anything (the next one answers instead), a model
+that keeps calling tools and is marked to hand long requests on (the next
+one continues the same history, and the final ``done`` reports every
+action), and the conversion of settings from before the order existed.
 """
 
 from __future__ import annotations
@@ -43,17 +43,29 @@ class SpendTests(unittest.TestCase):
         summary = spend.month_summary()
         self.assertEqual(summary["total_cost"], 4.5)
         self.assertEqual(summary["models"]["small"]["input_tokens"], 5000)
-        self.assertTrue(spend.over_cap(hosted, 4))
-        self.assertFalse(spend.over_cap(hosted, 0))
-        self.assertFalse(spend.over_cap(LOCAL, 4))
+        self.assertTrue(spend.over_cap("big", {**hosted, "monthly_cap": 4}))
+        self.assertFalse(spend.over_cap("big", hosted))
+        self.assertFalse(spend.over_cap("other", {**hosted, "monthly_cap": 4}))  # its own spending, not the total
+        self.assertFalse(spend.over_cap("small", {**LOCAL, "monthly_cap": 0.001}))
 
-    def test_prices_and_fallback_are_validated(self) -> None:
+    def test_prices_and_limits_are_validated(self) -> None:
         with self.assertRaisesRegex(SettingsError, "'input_price'"):
             validate_settings({"models": {"m": {**HOSTED, "input_price": -1}}})
-        with self.assertRaisesRegex(SettingsError, "fallback model 'ghost' is not set up"):
-            validate_settings({"models": {"m": LOCAL}, "agent": {"fallback_model": "ghost"}})
-        with self.assertRaisesRegex(SettingsError, "'monthly_spend_cap'"):
-            validate_settings({"agent": {"monthly_spend_cap": "lots"}})
+        with self.assertRaisesRegex(SettingsError, "'monthly_cap'"):
+            validate_settings({"models": {"m": {**HOSTED, "monthly_cap": "lots"}}})
+        with self.assertRaisesRegex(SettingsError, "'model_order' must be a list"):
+            validate_settings({"models": {"m": LOCAL}, "model_order": "m"})
+
+    def test_settings_from_before_the_order_are_converted(self) -> None:
+        settings = validate_settings({"models": {"big": HOSTED, "small": LOCAL, "gpu": {**LOCAL, "model": "g"}},
+                                      "active_model": "big",
+                                      "agent": {"quick_model": "small", "fallback_model": "gpu", "monthly_spend_cap": 9}})
+        self.assertEqual(settings["model_order"], ["big", "small", "gpu"])  # the active one stays first
+        self.assertTrue(settings["models"]["small"]["hand_over_long"])
+        self.assertEqual(settings["models"]["big"]["monthly_cap"], 9)
+        self.assertNotIn("fallback_model", settings["agent"])
+        unordered = validate_settings({"models": {"b": LOCAL, "a": LOCAL}, "model_order": ["b", "gone"]})
+        self.assertEqual(unordered["model_order"], ["b", "a"])
 
 
 class Failing:
@@ -68,37 +80,14 @@ class Answering:
         yield TurnEnd("stop", 10, 2)
 
 
-class FallbackTests(unittest.TestCase):
-    class Conversation:
-        def __init__(self) -> None:
-            self.history = [Message("user", "hi")]
-            self.cancel = threading.Event()
-
-    def test_only_a_different_local_model_is_a_fallback(self) -> None:
-        settings = validate_settings({"models": {"big": HOSTED, "small": LOCAL, "other": {**HOSTED, "model": "x"}},
-                                      "agent": {"fallback_model": "small"}})
-        self.assertEqual(ask_stream._fallback(settings, "big"), "small")
-        self.assertEqual(ask_stream._fallback(settings, "small"), "")
-        settings["agent"]["fallback_model"] = "other"
-        self.assertEqual(ask_stream._fallback(settings, "big"), "")
-
-    def test_an_early_failure_is_held_for_the_fallback_and_usage_is_reported(self) -> None:
-        conversation, events = self.Conversation(), []
-        agent = validate_settings({})["agent"]
-        held = ask_stream._attempt(Failing(), "big", HOSTED, conversation, ToolRegistry([]), events.append, None, agent,
-                                   hold_first_error=True)
-        self.assertIn("connection refused", held["message"])
-        self.assertEqual(events, [])
-        self.assertEqual(len(conversation.history), 1)
-        held = ask_stream._attempt(Answering(), "small", LOCAL, conversation, ToolRegistry([]), events.append, None,
-                                   agent, hold_first_error=False)
-        self.assertIsNone(held)
-        done = events[-1]
-        self.assertEqual((done["model"], done["usage"]["input_tokens"], done["cost"]), ("small", 10, 0.0))
+class Conversation:
+    def __init__(self) -> None:
+        self.history = [Message("user", "hi")]
+        self.cancel = threading.Event()
 
 
 class Looping:
-    """A quick model that calls a tool on every step and never answers."""
+    """A model that calls a tool on every step and never answers."""
 
     def __init__(self) -> None:
         self.step = 0
@@ -109,42 +98,45 @@ class Looping:
         yield TurnEnd("tool_calls", 5, 1)
 
 
-class QuickModelTests(unittest.TestCase):
-    def test_the_quick_model_is_used_only_when_allowed(self) -> None:
-        settings = validate_settings({"models": {"big": HOSTED, "small": LOCAL}, "active_model": "big",
-                                      "agent": {"quick_model": "small"}})
-        self.assertEqual(ask_stream._quick(settings, "big"), "small")
-        self.assertEqual(ask_stream._quick(settings, "small"), "")
-        hosted_quick = validate_settings({"models": {"big": LOCAL, "fast": HOSTED}, "active_model": "big",
-                                          "agent": {"quick_model": "fast", "local_only": True}})
-        self.assertEqual(ask_stream._quick(hosted_quick, "big"), "")
-        with self.assertRaisesRegex(SettingsError, "quick model 'ghost' is not set up"):
-            validate_settings({"models": {"m": LOCAL}, "agent": {"quick_model": "ghost"}})
+def note_registry() -> ToolRegistry:
+    return ToolRegistry([Tool("note", "Note.", object_schema(), RISK_CHANGE, lambda a: "noted",
+                              summarize=lambda a: "Make a note")])
 
-    def test_running_out_of_steps_hands_the_same_history_to_the_chosen_model(self) -> None:
-        conversation, events = FallbackTests.Conversation(), []
-        agent = validate_settings({})["agent"]
-        registry = ToolRegistry([Tool("note", "Note.", object_schema(), RISK_CHANGE, lambda a: "noted",
-                                      summarize=lambda a: "Make a note")])
-        handed = ask_stream._attempt(Looping(), "small", LOCAL, conversation, registry, events.append, None, agent,
-                                     hold_first_error=True, hand_over=True)
-        self.assertEqual((handed["type"], handed["stop"]), ("done", "step_limit"))
-        self.assertEqual(len(handed["actions"]), ask_stream.QUICK_MODEL_STEPS)
-        self.assertNotIn("done", [event["type"] for event in events])
-        self.assertEqual(conversation.history[-1].role, "tool")
-        emit = ask_stream._with_earlier_actions(events.append, handed["actions"])
-        self.assertIsNone(ask_stream._attempt(Answering(), "big", HOSTED, conversation, registry, emit, None, agent,
-                                              hold_first_error=False))
+
+class ModelOrderTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.agent = validate_settings({})["agent"]
+
+    def test_models_that_cannot_answer_are_skipped_with_a_reason(self) -> None:
+        settings = validate_settings({"models": {"big": {**HOSTED, "monthly_cap": 1}, "small": LOCAL},
+                                      "model_order": ["big", "small"], "agent": {"local_only": True}})
+        chain, skipped = ask_stream._usable(settings, settings["model_order"])
+        self.assertEqual([name for name, _, _ in chain], ["small"])
+        self.assertIn("local only", skipped[0])
+
+    def test_a_failure_goes_to_the_next_model_with_a_notice(self) -> None:
+        conversation, events = Conversation(), []
+        chain = [("big", HOSTED, Failing()), ("small", LOCAL, Answering())]
+        ask_stream._run_chain(chain, conversation, ToolRegistry([]), events.append, None, self.agent)
+        self.assertIn("big did not answer", events[0]["message"])
         done = events[-1]
-        self.assertEqual((done["model"], len(done["actions"])), ("big", ask_stream.QUICK_MODEL_STEPS))
+        self.assertEqual((done["type"], done["model"], done["usage"]["input_tokens"]), ("done", "small", 10))
 
-    def test_a_failure_part_way_is_handed_over_not_shown(self) -> None:
-        conversation, events = FallbackTests.Conversation(), []
-        agent = validate_settings({})["agent"]
-        handed = ask_stream._attempt(Failing(), "small", LOCAL, conversation, ToolRegistry([]), events.append, None,
-                                     agent, hold_first_error=True, hand_over=True)
-        self.assertEqual(handed["type"], "error")
-        self.assertEqual(events, [])
+    def test_the_last_model_shows_its_own_failure(self) -> None:
+        events = []
+        ask_stream._run_chain([("small", LOCAL, Failing())], Conversation(), ToolRegistry([]), events.append, None,
+                              self.agent)
+        self.assertEqual(events[-1]["type"], "error")
+
+    def test_a_long_request_is_handed_on_with_the_same_history_and_all_actions(self) -> None:
+        conversation, events = Conversation(), []
+        quick = {**LOCAL, "hand_over_long": True}
+        chain = [("small", quick, Looping()), ("big", HOSTED, Answering())]
+        ask_stream._run_chain(chain, conversation, note_registry(), events.append, None, self.agent)
+        self.assertIn("small handed this to big", next(e["message"] for e in events if e["type"] == "notice"))
+        done = events[-1]
+        self.assertEqual((done["model"], len(done["actions"])), ("big", ask_stream.HAND_OVER_STEPS))
+        self.assertEqual([e["type"] for e in events].count("done"), 1)
 
 
 class BusyModelTests(unittest.TestCase):

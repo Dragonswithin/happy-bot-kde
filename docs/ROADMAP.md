@@ -931,6 +931,20 @@ Findings:
   behind, and a missing key was asked for. The maintainer's own settings
   were set the same way (NPU first, GPU if it fails, no quicker model).
   Not verified: any online service with a real key.
+- Still too confusing for the maintainer, so the page became one ordered
+  list (`model_order`) with each AI's settings under it. The order replaces
+  the main, backup and quicker-model settings: requests go down the list,
+  a model that fails hands the request to the next, and one marked
+  `hand_over_long` passes long requests on. Spending limits are per model
+  (`monthly_cap`); a model over its limit is skipped. The maintainer
+  allowed online models anywhere in the order (2026-11-24): the user places
+  them, and the page marks them online; "local only" still skips them.
+  Settings from before are converted on load (quick model first with
+  `hand_over_long`, then the active one, then the fallback; the old total
+  cap becomes each priced model's limit); the maintainer's converted to
+  NPU first, GPU second. Verified on a throwaway daemon: with an
+  unreachable model first and the GPU model second, the GPU model answered
+  after a notice.
 
 ## Decisions
 
