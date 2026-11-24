@@ -4,11 +4,34 @@
       xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
   <kcfgfile name=""/>
   <group name="General">
+    <!-- Which picture stands for the assistant on the panel and beside its
+         replies. false (default): the system's wand icon (tools-wizard).
+         true: Happy Bot's robot mascot (contents/images/happy-bot.svg). -->
+    <entry name="useRobotMascot" type="Bool">
+      <default>false</default>
+    </entry>
     <!-- Address of the per-user daemon. Empty (default) means the loopback
          port derived from the user's uid: http://127.0.0.1:(19000 + uid - 1000).
          Set only to reach a daemon started on a non-default port. -->
     <entry name="daemonUrl" type="String">
       <default></default>
+    </entry>
+    <!-- What the panel shows. false (default): the assistant's icon, which
+         opens a popup where the user types. true: a search bar (a text field
+         in the panel) where the user types, with results in a popup above
+         it. While the bar has keyboard focus Plasma draws its blue panel
+         focus indicator, which a widget cannot switch off. Vertical panels
+         always show the icon. -->
+    <entry name="inputInPanel" type="Bool">
+      <default>false</default>
+    </entry>
+    <!-- Width of the panel search bar, in Plasma grid units (one grid unit
+         is about the height of a line of text). Default 18. Range 8 to 60.
+         Used only when the panel shows the search bar. -->
+    <entry name="barWidth" type="Int">
+      <default>18</default>
+      <min>8</min>
+      <max>60</max>
     </entry>
     <!-- Size of the results popup in Plasma grid units. Defaults 30 wide by
          26 tall. Ranges: width 20 to 70, height 12 to 50. -->

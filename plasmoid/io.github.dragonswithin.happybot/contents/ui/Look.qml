@@ -8,7 +8,9 @@ import QtCore as QtCore
 import QtQuick
 
 /**
- * Shared presentation helpers for the applet: which icon stands for a search
+ * Shared presentation helpers for the applet: which icon stands for the
+ * assistant (`assistantIcon`: the wand, or the robot mascot `robotIcon`
+ * when the `useRobotMascot` setting is on), which icon stands for a search
  * hit, how to show a path compactly, and the tint used for cards. Pure
  * functions and constants only; no state and no requests. Registered as a
  * singleton in qmldir so every view formats things the same way.
@@ -17,8 +19,11 @@ QtObject {
     readonly property string homePath: String(QtCore.StandardPaths.writableLocation(
         QtCore.StandardPaths.HomeLocation)).replace(/^file:\/\//, "")
 
-    // Icon for the assistant itself, used in the bar and section headings.
-    readonly property string assistantIcon: "tools-wizard"
+    readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
+
+    function assistantIcon(useRobotMascot: bool): string {
+        return useRobotMascot ? robotIcon.toString() : "tools-wizard";
+    }
 
     readonly property var extensionIcons: ({
         pdf: "application-pdf", md: "text-x-markdown", txt: "text-plain", log: "text-x-log",

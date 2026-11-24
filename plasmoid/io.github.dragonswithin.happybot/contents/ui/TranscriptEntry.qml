@@ -29,7 +29,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - "notice": a quiet step-like line ("Stopped.").
  * - "assistant": the answer in a tinted card, rendered as Markdown, with a
  *   Copy button that puts the whole answer on the clipboard; links are
- *   passed out through `linkActivated`.
+ *   passed out through `linkActivated`. Its gutter shows the robot mascot
+ *   when `useRobotMascot` is set, and is empty otherwise.
  * - "approval": an action waiting for the user, in an attention-coloured
  *   card: "Allow this?", what will run in small fixed-width text, why it
  *   asks when that adds something, then Deny / Always this session / Allow.
@@ -52,6 +53,7 @@ Item {
     required property bool canRemember
     required property real started
     required property string progress
+    property bool useRobotMascot: false
     readonly property bool running: kind === "tool" && stage === "running"
     property real now: Date.now()
 
@@ -153,6 +155,7 @@ Item {
                         source: {
                             switch (entry.kind) {
                             case "user": return "im-user";
+                            case "assistant": return entry.useRobotMascot ? Look.robotIcon : "";
                             case "tool": return entry.stage === "failed" ? "dialog-warning"
                                 : entry.stage === "ok" ? "checkmark" : "chronometer";
                             case "notice": return "media-playback-stop-symbolic";

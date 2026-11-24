@@ -13,7 +13,9 @@ import org.kde.kirigami as Kirigami
 
 /**
  * "Search Bar" page of the applet's settings dialog: the applet's own
- * behaviour in the panel. Live file results while typing (on or off, how
+ * behaviour in the panel. The assistant's icon (the wand or the robot
+ * mascot), what the panel shows (the icon, or a search bar of a chosen
+ * width), live file results while typing (on or off, how
  * many characters, how long a pause, how many matches), the size of the
  * popup, and the address of the daemon for unusual setups.
  *
@@ -26,6 +28,8 @@ import org.kde.kirigami as Kirigami
 KCM.SimpleKCM {
     id: page
 
+    property bool cfg_inputInPanel
+    property alias cfg_barWidth: barWidth.value
     property alias cfg_instantSearch: instantSearch.checked
     property alias cfg_instantMinChars: instantMinChars.value
     property alias cfg_instantDelayMs: instantDelayMs.value
@@ -33,8 +37,52 @@ KCM.SimpleKCM {
     property alias cfg_popupWidth: popupWidth.value
     property alias cfg_popupHeight: popupHeight.value
     property alias cfg_daemonUrl: daemonUrl.text
+    property alias cfg_useRobotMascot: robotMascot.checked
 
     Kirigami.FormLayout {
+        RowLayout {
+            Kirigami.FormData.label: i18n("Assistant icon:")
+            QQC2.CheckBox {
+                id: robotMascot
+                text: i18n("Use robot mascot")
+            }
+            Kirigami.Icon {
+                source: Look.assistantIcon(robotMascot.checked)
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: implicitWidth
+                Accessible.ignored: true
+            }
+        }
+
+        QQC2.RadioButton {
+            Kirigami.FormData.label: i18n("Show in panel:")
+            text: i18n("Icon that opens the assistant")
+            checked: !page.cfg_inputInPanel
+            onToggled: if (checked) page.cfg_inputInPanel = false
+        }
+
+        QQC2.RadioButton {
+            text: i18n("Search bar")
+            checked: page.cfg_inputInPanel
+            onToggled: if (checked) page.cfg_inputInPanel = true
+        }
+
+        QQC2.SpinBox {
+            id: barWidth
+            Kirigami.FormData.label: i18n("Search bar width:")
+            enabled: page.cfg_inputInPanel
+            from: 8
+            to: 60
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            text: i18n("While you type in the search bar, Plasma outlines the panel in its focus colour; the icon avoids that. Vertical panels always show the icon.")
+        }
+
         Item {
             Kirigami.FormData.isSection: true
             Kirigami.FormData.label: i18n("While typing")

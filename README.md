@@ -8,9 +8,11 @@ architecture and phase order are in `docs/ROADMAP.md`.
 
 ## What Works Today
 
-- A text field in the Plasma panel with one results popup. A vertical panel,
-  or the widget's "Button" setting, shows an icon and puts the field inside
-  the popup instead.
+- The assistant's icon in the Plasma panel, which opens one popup where you
+  type (Meta+Space or a click). Or, under **Show in panel: Search bar**, a
+  text field in the panel itself with results in a popup above it; while
+  you type there, Plasma outlines the panel in its focus colour. Vertical
+  panels always show the icon.
 - Live file search while typing, through a search tool you already have,
   with no AI model involved. Down and Enter, or a click, opens a result.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones
@@ -63,6 +65,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
 
 Right-click the assistant's icon and choose Configure. Every setting has a
 control there; no file needs editing.
+
+On the **Search Bar** page, check **Use robot mascot** and click **Apply**
+to show the robot on the panel and beside Happy Bot’s replies. Uncheck it
+to return to the wand.
 
 - **AI Model:** which model answers; find one running on this computer or
   add a hosted one; its address, model id, API key, extra request headers,

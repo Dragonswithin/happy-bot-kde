@@ -60,6 +60,9 @@ text-only models and stays as an option afterwards.
 
 - ✓ Meta+Space popup, live file hits while typing, Enter sends to the
   assistant.
+- ✓ A choice of panel form: the icon with the popup (default), or a search
+  bar typed into in the panel itself (the `inputInPanel` setting), which
+  accepts Plasma's blue panel focus indicator while it has focus.
 - ✓ Streamed answers, tool activity lines, approval cards, Stop.
 - ✓ Saved conversations sidebar with `history_days` expiry.
 - ● Instant results that are not files: apps, System Settings pages, open

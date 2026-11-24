@@ -16,7 +16,9 @@ import org.kde.plasma.extras as PlasmaExtras
  * Everything inside the assistant's popup, laid out like Plasma's own
  * launcher: a header band (title, status, Stop, New, Close), a body, and the
  * input field in a footer band on the side facing the panel. With nothing
- * to show the view is just the field.
+ * to show the view is just the field. When the user types in the panel's
+ * search bar instead (PanelBar.qml), `showField` is false, the field is
+ * hidden, and `barText` is the text typed there.
  *
  * The body shows one thing at a time:
  *
@@ -58,7 +60,11 @@ Item {
     id: view
 
     required property var session
+    property bool useRobotMascot: false
+    readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
     property bool fieldAtBottom: false
+    property bool showField: true
+    property string barText: ""
     property bool showConversation: false
     property int selectedIndex: -1
     property int widthInGridUnits: 30
@@ -71,7 +77,7 @@ Item {
     readonly property bool bodyHasContent: filesVisible || conversationVisible
     readonly property bool sidebarVisible: bodyHasContent && session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
-    readonly property string query: inputBar.text.trim()
+    readonly property string query: (showField ? inputBar.text : barText).trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
     readonly property real contentHeight: filesVisible
         ? filesColumn.implicitHeight
@@ -111,7 +117,7 @@ Item {
     // Rounded, and computed only from exact sizes (plain columns, never a
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
-    implicitHeight: Math.round(Math.min(maximumHeight, inputBar.implicitHeight
+    implicitHeight: Math.round(Math.min(maximumHeight, inputBar.height
         + (bodyHasContent ? titleBar.implicitHeight + bodyHeight : 0)))
 
     function focusInput() {
@@ -140,7 +146,7 @@ Item {
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
-                source: view.filesVisible ? "folder-documents-symbolic" : Look.assistantIcon
+                source: view.filesVisible ? "folder-documents-symbolic" : view.assistantIcon
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
                 opacity: 0.7
@@ -222,6 +228,8 @@ Item {
         anchors.right: parent.right
         anchors.top: view.fieldAtBottom ? undefined : parent.top
         anchors.bottom: view.fieldAtBottom ? parent.bottom : undefined
+        height: view.showField ? implicitHeight : 0
+        visible: view.showField
         position: view.fieldAtBottom ? QQC2.ToolBar.Footer : QQC2.ToolBar.Header
 
         contentItem: PlasmaExtras.SearchField {
@@ -432,7 +440,9 @@ Item {
                             }
                             QQC2.MenuItem {
                                 text: i18n("Ask about this")
-                                icon.name: "tools-wizard"
+                                icon.name: view.useRobotMascot ? "" : view.assistantIcon
+                                icon.source: view.useRobotMascot ? Look.robotIcon : ""
+                                icon.color: "transparent"
                                 onTriggered: view.fileActionRequested(row.modelData, "ask")
                             }
                         }
@@ -507,7 +517,7 @@ Item {
                         spacing: Kirigami.Units.largeSpacing
 
                         Kirigami.Icon {
-                            source: Look.assistantIcon
+                            source: view.assistantIcon
                             Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                             Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                         }
@@ -565,6 +575,7 @@ Item {
                             model: view.session.entries
 
                             TranscriptEntry {
+                                useRobotMascot: view.useRobotMascot
                                 width: transcriptColumn.width
                                 onLinkActivated: link => view.hitActivated(link)
                                 onApprovalAnswered: (approvalId, decision, remember) =>
@@ -580,7 +591,7 @@ Item {
                 anchors.centerIn: parent
                 width: parent.width - Kirigami.Units.gridUnit * 2
                 visible: view.conversationVisible && view.session.entries.count === 0
-                iconName: Look.assistantIcon
+                iconName: view.assistantIcon
                 text: i18n("Ask anything")
                 explanation: i18n("Find files, look things up on the web, or have the computer do something for you.")
             }

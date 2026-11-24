@@ -394,6 +394,8 @@ his decision.
 - The fallback exists anyway as the applet's `inputInPopup` setting and is
   what vertical panels use: icon in the panel, focused popup with the field
   inside. It loads without errors but has not been exercised by a person.
+  (Later inverted: the icon became the default and the field the
+  `inputInPanel` option; see "After Phase 6" below.)
 - Not yet verified by a person: focusing the bar with the applet's
   activation shortcut. Check it in Phase 6.
 - QML load errors do not reach the terminal. Read them from
@@ -635,6 +637,13 @@ his decision.
 - The panel shows only the assistant's icon; typing happens in a popup
   above it (Meta+Space or a click). Typing inside the panel made Plasma draw
   its own blue panel focus indicator, which a widget cannot switch off.
+  The maintainer then asked for the panel search bar back as an option, the
+  indicator accepted by whoever picks it: "Show in panel: Search bar" (the
+  applet's `inputInPanel` and `barWidth` settings) restores the Phase 0
+  field (`PanelBar.qml`), and the popup then only shows results, as a
+  tooltip-type window that never takes focus. The icon stays the default
+  and vertical panels always use it. It loads without QML errors in
+  `plasmawindowed`; not yet tried by a person in a real panel.
 - File matches and the conversation take turns in the popup instead of
   sharing it; saved conversations are listed in a sidebar and kept for
   `history_days` (default 30) in `$XDG_DATA_HOME/happy-bot`.

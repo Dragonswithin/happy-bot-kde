@@ -10,9 +10,11 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
 
 /**
- * The applet's only panel form: the assistant's wand icon. A left click
- * opens or closes the popup (ResultsPopup.qml), where all typing happens; a
- * right click asks for the applet's menu. Both are reported as signals and
+ * The applet's default panel form: a button showing the selected assistant
+ * icon (the other form, chosen with the `inputInPanel` setting, is the
+ * search bar in PanelBar.qml). A left click opens or closes the popup
+ * (ResultsPopup.qml), where all typing happens in this form; a right click
+ * asks for the applet's menu. Both are reported as signals and
  * main.qml decides what they do. The applet's activation shortcut does the
  * same as a left click.
  *
