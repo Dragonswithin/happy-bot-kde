@@ -28,6 +28,38 @@ def result(stdout: str = "", ok: bool = True) -> dict:
     return {"ok": ok, "stdout": stdout, "stderr": "", "returncode": 0 if ok else 1}
 
 
+class UpdateCheckTests(unittest.TestCase):
+    def check(self, replies: dict[str, dict], reboot: str = "", programs=("checkupdates", "yay", "flatpak")) -> str:
+        def fake_run(command, timeout=5.0):
+            return replies[command[0]]
+        with mock.patch.object(software.shutil, "which", side_effect=lambda name: name if name in programs else None), \
+                mock.patch.object(software, "run_command", side_effect=fake_run), \
+                mock.patch("happy_bot.tools.shell.pending_reboot", return_value=reboot):
+            return software.check_updates({})
+
+    @staticmethod
+    def reply(code: int, stdout: str = "") -> dict:
+        return {"ok": code == 0, "returncode": code, "stdout": stdout, "stderr": ""}
+
+    def test_waiting_updates_are_listed_with_one_command_and_a_kernel_restart_note(self) -> None:
+        text = self.check({"checkupdates": self.reply(0, "linux 6.1-1 -> 6.2-1\nfirefox 1 -> 2\n"),
+                           "yay": self.reply(1), "flatpak": self.reply(0, "org.kde.kate\t24.1\n")})
+        self.assertTrue(text.startswith("3 updates waiting: 2 from distribution, 1 from Flatpak"))
+        self.assertIn("a restart will be needed afterwards", text)
+        self.assertIn("yay -Syu && flatpak update -y", text)
+
+    def test_a_source_that_could_not_be_checked_is_not_counted_as_up_to_date(self) -> None:
+        text = self.check({"checkupdates": self.reply(1), "yay": self.reply(1), "flatpak": self.reply(0)},
+                          reboot="the running kernel (6.1) was replaced by an update")
+        self.assertIn("0 updates waiting.", text)
+        self.assertIn("Could not check: distribution", text)
+        self.assertIn("A restart is already needed", text)
+        self.assertNotIn("To update everything", text)
+
+    def test_without_the_programs_it_points_to_discover(self) -> None:
+        self.assertIn("plasma-discover --mode update", self.check({}, programs=()))
+
+
 class SoftwareTests(unittest.TestCase):
     def test_search_labels_every_source(self) -> None:
         outputs = {

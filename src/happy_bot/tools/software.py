@@ -1,4 +1,4 @@
-"""Software tools: one search across every source, update history, Flatpak permissions, firmware.
+"""Software tools: one search across every source, waiting updates, update history, Flatpak permissions, firmware.
 
 Installing, updating and removing software stays with ``run_in_terminal``
 (``tools/shell.py``), where the user sees it and types their password, and
@@ -9,6 +9,15 @@ model what it needs to choose well and report accurately:
   the AUR (``yay -Ss --aur``, when yay is installed) and every Flatpak remote
   (``flatpak search``) at once, and labels each hit with its source, so the
   model never misses the AUR or a project's own Flatpak remote again.
+- ``check_updates`` lists what is waiting, without changing anything: the
+  distribution's packages (``checkupdates``, which syncs a private copy of
+  the package lists), the AUR (``yay -Qua``) and Flatpak apps (``flatpak
+  remote-ls --updates``); says whether the kernel is among them (a restart
+  will be needed) or a restart is already pending (``shell.pending_reboot``);
+  and gives the one command that updates all of it, for ``run_in_terminal``.
+  A source that could not be checked is named rather than counted as
+  "nothing to update". Without these programs it points to Discover's
+  Updates page instead.
 - ``recent_updates`` reads ``/var/log/pacman.log`` for the last upgrade
   transactions: what was installed, upgraded or removed, and when.
 - ``flatpak_permissions`` shows an app's sandbox permissions, and
@@ -88,6 +97,58 @@ def recent_updates(arguments: dict[str, Any]) -> str:
     return f"{'Changes to ' + wanted if wanted else 'Latest update day ' + last_day}: {summary}\n{body}{note}"
 
 
+UPDATE_LIST_LIMIT = 25
+_KERNEL = re.compile(r"^linux(-[a-z]+)?$")
+
+
+def _waiting(command: list[str], none_code: int | None, timeout: float) -> list[str] | None:
+    """Lines listing updates, [] for none, or None when the source could not be checked."""
+    if not shutil.which(command[0]):
+        return []
+    result = run_command(command, timeout=timeout)
+    if result["ok"]:
+        return [line.strip() for line in result["stdout"].splitlines() if line.strip()]
+    return [] if none_code is not None and result["returncode"] == none_code and not result["stdout"].strip() else None
+
+
+def check_updates(arguments: dict[str, Any]) -> str:
+    from .shell import pending_reboot
+
+    if not shutil.which("checkupdates") and not shutil.which("flatpak"):
+        return ("This computer's updates are not checked here. Open Discover's Updates page with the command "
+                "plasma-discover --mode update.")
+    sources = {
+        "distribution": _waiting(["checkupdates"], 2, 180),
+        "AUR": _waiting(["yay", "-Qua"], 1, 180),
+        "Flatpak": _waiting(["flatpak", "remote-ls", "--updates", "--columns=application,version"], None, 120),
+    }
+    failed = [name for name, lines in sources.items() if lines is None]
+    found = {name: lines for name, lines in sources.items() if lines}
+    total = sum(len(lines) for lines in found.values())
+    report = [f"{total} update{'s' if total != 1 else ''} waiting" + (
+        ": " + ", ".join(f"{len(lines)} from {name}" for name, lines in found.items()) if found else ".")]
+    for name, lines in found.items():
+        report.append(f"{name}:")
+        report += [f"  {line}" for line in lines[:UPDATE_LIST_LIMIT]]
+        if len(lines) > UPDATE_LIST_LIMIT:
+            report.append(f"  … and {len(lines) - UPDATE_LIST_LIMIT} more")
+    if failed:
+        report.append("Could not check: " + ", ".join(failed) + " (offline, or the source is not set up).")
+    if any(_KERNEL.match(line.split()[0]) for line in found.get("distribution", [])):
+        report.append("The kernel is among them: a restart will be needed afterwards.")
+    reboot = pending_reboot()
+    if reboot:
+        report.append(f"A restart is already needed: {reboot}.")
+    steps = []
+    if "distribution" in found or "AUR" in found:
+        steps.append("yay -Syu" if shutil.which("yay") else "sudo pacman -Syu")
+    if "Flatpak" in found:
+        steps.append("flatpak update -y")
+    if steps:
+        report.append("To update everything, run in a terminal (it asks for the password): " + " && ".join(steps))
+    return "\n".join(report)
+
+
 def flatpak_permissions(arguments: dict[str, Any]) -> str:
     app = str(arguments.get("app") or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_.-]{3,120}", app):
@@ -129,6 +190,10 @@ def software_tools() -> list[Tool]:
              "the AUR and Flatpak remotes, each result labelled with where it comes from. Use before installing.",
              object_schema({"query": {"type": "string"}}, ["query"]), RISK_READ, search_software,
              summarize=lambda a: f"Search for {a.get('query', '?')} in every software source"),
+        Tool("check_updates", "What updates are waiting (distribution, AUR, Flatpak), whether a restart will be "
+             "needed, and the one command that installs them all. Use before updating the computer, then run that "
+             "command with run_in_terminal.", object_schema(), RISK_READ, check_updates,
+             summarize=lambda a: "Check for updates"),
         Tool("recent_updates", "What the last system update installed, upgraded or removed (or the history of one "
              "package), and whether a reboot is needed.", object_schema({"package": {"type": "string"}}),
              RISK_READ, recent_updates, summarize=lambda a: "Check the update history"),

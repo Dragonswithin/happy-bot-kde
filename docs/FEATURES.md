@@ -237,7 +237,11 @@ text-only models and stays as an option afterwards.
 
 - ◐ Install apps from official sources first, ask before third-party ones,
   verify in the launcher (built; a real install is not verified).
-- ◐ System update with reboot detection.
+- ● System update with reboot detection. (check_updates lists what is
+  waiting from the distribution, the AUR and Flatpak, warns when the kernel
+  is among them, and gives the one command run_in_terminal uses; after it,
+  the shell tool reports a pending restart. Checked on the maintainer's
+  computer with nothing waiting; a real update has not been run through it)
 - ● One search across repositories, AUR and Flatpak, with the official source
   marked. (checked live)
 - ✓ Clean uninstall including leftovers (`danger`). (through run_in_terminal,

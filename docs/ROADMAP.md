@@ -883,6 +883,15 @@ Findings:
   daemon: an unreachable quick model handed a request to the local GPU
   model, which answered, and the notice was recorded. Not verified: a real
   quick model running out of steps (covered by a scripted test).
+- Updates: `check_updates` (read) reports what is waiting from the
+  distribution (`checkupdates`), the AUR (`yay -Qua`) and Flatpak, warns
+  when the kernel is among them, names any source it could not check
+  instead of calling it up to date, and gives the single update command for
+  `run_in_terminal`, after which the shell tool's existing restart check
+  applies. On the maintainer's computer it reported nothing waiting, which
+  matched the three commands run by hand. Installing an app from official
+  sources is built but still has no real install verified; that and a real
+  update need the maintainer to choose to run one.
 
 ## Decisions
 
