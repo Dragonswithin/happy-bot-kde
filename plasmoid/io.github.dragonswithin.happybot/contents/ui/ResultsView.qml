@@ -17,7 +17,9 @@ import org.kde.plasma.extras as PlasmaExtras
  * launcher: a header band (title, status, Stop, New, Close), a body, and the
  * input field in a footer band on the side facing the panel, with the
  * chat's AI picker (ModelPicker.qml) beside it when two or more AIs are set
- * up (in the header instead when the field is hidden). With nothing
+ * up, and above it the application the chat is helping with
+ * (HelpWithChip.qml) when Happy Bot was opened from the floating button or
+ * the hotkey; both go in the header instead when the field is hidden. With nothing
  * to show the view is just the field. When the user types in the panel's
  * search bar instead (PanelBar.qml), `showField` is false, the field is
  * hidden, and `barText` is the text typed there.
@@ -184,7 +186,13 @@ Item {
             }
 
             // When the user types in the panel's search bar this view has no field,
-            // so the chat's AI picker sits here instead.
+            // so the application chip and the chat's AI picker sit here instead.
+            HelpWithChip {
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 14
+                session: view.session
+                visible: !view.showField && view.session.helpWith !== null
+            }
+
             ModelPicker {
                 session: view.session
                 visible: !view.showField && view.conversationVisible && view.session.models.length > 1
@@ -249,39 +257,50 @@ Item {
         visible: view.showField
         position: view.fieldAtBottom ? QQC2.ToolBar.Footer : QQC2.ToolBar.Header
 
-        contentItem: RowLayout {
+        contentItem: ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
 
-            PlasmaExtras.SearchField {
-                id: field
+            // Which application this chat is helping with, when Happy Bot was opened from it.
+            HelpWithChip {
                 Layout.fillWidth: true
-                placeholderText: i18n("Ask or search anything…")
-                onTextChanged: view.queryEdited(text)
-                Keys.onReturnPressed: view.accepted(text.trim())
-                Keys.onEnterPressed: view.accepted(text.trim())
-                Keys.onDownPressed: view.selectionMove(1)
-                Keys.onUpPressed: view.selectionMove(-1)
-                Keys.onTabPressed: view.completeRequested()
-                // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
-                Keys.onMenuPressed: view.openSelectedMenu()
-                Keys.onPressed: event => {
-                    if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
-                        view.openSelectedMenu();
-                        event.accepted = true;
-                    }
-                }
-                Keys.onEscapePressed: {
-                    if (text.length > 0) {
-                        text = "";
-                    } else {
-                        view.closeRequested();
-                    }
-                }
+                session: view.session
             }
 
-            // Which AI this chat uses; only when more than one is set up.
-            ModelPicker {
-                session: view.session
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaExtras.SearchField {
+                    id: field
+                    Layout.fillWidth: true
+                    placeholderText: i18n("Ask or search anything…")
+                    onTextChanged: view.queryEdited(text)
+                    Keys.onReturnPressed: view.accepted(text.trim())
+                    Keys.onEnterPressed: view.accepted(text.trim())
+                    Keys.onDownPressed: view.selectionMove(1)
+                    Keys.onUpPressed: view.selectionMove(-1)
+                    Keys.onTabPressed: view.completeRequested()
+                    // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
+                    Keys.onMenuPressed: view.openSelectedMenu()
+                    Keys.onPressed: event => {
+                        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                            view.openSelectedMenu();
+                            event.accepted = true;
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        if (text.length > 0) {
+                            text = "";
+                        } else {
+                            view.closeRequested();
+                        }
+                    }
+                }
+
+                // Which AI this chat uses; only when more than one is set up.
+                ModelPicker {
+                    session: view.session
+                }
             }
         }
     }

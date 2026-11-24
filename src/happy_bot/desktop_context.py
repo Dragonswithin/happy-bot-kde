@@ -101,6 +101,38 @@ def active_window_context() -> dict[str, Any]:
     return {"available": True, "source": "kwin", "window": window, "error": ""}
 
 
+def application_name(resource_class: str) -> str:
+    """A window's application as people know it: the ``Name`` of its desktop entry, else its class."""
+    cls = (resource_class or "").strip()
+    if not cls:
+        return ""
+    dirs = [os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
+            *(os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":")]
+    for directory in dirs:
+        for candidate in (cls, cls.lower()):
+            path = os.path.join(directory, "applications", f"{candidate}.desktop")
+            try:
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    for line in handle:
+                        if line.startswith("Name="):
+                            return line[5:].strip()
+            except OSError:
+                continue
+    return cls.rsplit(".", 1)[-1].replace("-", " ").capitalize()
+
+
+def current_application() -> dict[str, str]:
+    """``{"app", "class", "title"}`` of the window the user is working in, or empty strings.
+
+    The popup asks for this when it is opened from the floating button or the hotkey, so the
+    assistant knows which application the question is about (``ask_stream`` adds it to the request).
+    """
+    context = active_window_context()
+    window = context.get("window") or {}
+    cls = str(window.get("app") or "")
+    return {"app": application_name(cls), "class": cls, "title": str(window.get("title") or "")[:200]}
+
+
 def session_context() -> dict[str, Any]:
     entry = pwd.getpwuid(os.getuid())
     return {

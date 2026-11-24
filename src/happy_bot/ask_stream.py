@@ -11,7 +11,12 @@ A body with ``"ephemeral": true`` is not kept in the conversation history
 (``eval`` uses it). A body may name a configured ``model`` to use for this request instead of
 the user's order (the popup's per-chat picker, ``happy-bot eval --model``);
 the name, or "" for the order, is kept on the conversation as its ``model``
-so the popup can show the pick again when the chat is reopened.
+so the popup can show the pick again when the chat is reopened. A body may
+also carry ``about_window`` (``{"app", "class", "title"}``, from ``GET
+/context/app``) when the popup was opened from the floating button or the
+hotkey: the model's copy of the request then starts with a note naming
+that application (``_with_application``); the conversation shows the
+request as typed.
 
 Routines and dry runs: the system prompt lists the user's routines, and the
 registry includes the routine tools, which change settings through
@@ -152,7 +157,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             conversation.history.append(
                 Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
                                                 agent["confirm_plans"], settings.get("routines"))))
-        conversation.history.append(Message("user", message))
+        conversation.history.append(Message("user", _with_application(message, body.get("about_window"))))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")
 
@@ -214,6 +219,23 @@ def model_busy(base_url: str) -> bool:
 
 
 HAND_OVER_STEPS = 4
+MAX_WINDOW_TITLE_CHARS = 200
+
+
+def _with_application(message: str, about: Any) -> str:
+    """The request as the model reads it: with the application the user came from, when the popup sent one.
+
+    Only the model's copy carries this note; the conversation shows what the user typed.
+    """
+    if not isinstance(about, dict):
+        return message
+    app = str(about.get("app") or about.get("class") or "").strip()[:100]
+    title = str(about.get("title") or "").strip()[:MAX_WINDOW_TITLE_CHARS]
+    if not app and not title:
+        return message
+    where = f"the application {app}" + (f' (window title: "{title}")' if title else "") if app else f'the window "{title}"'
+    return (f"[The user opened Happy Bot while using {where}. Unless they say otherwise, \"this\", \"here\" and "
+            f"\"it\" mean that application; look at it or act in it with the tools when that helps.]\n\n{message}")
 
 
 def _usable(settings: dict[str, Any], names: list[str]) -> tuple[list[tuple[str, dict[str, Any], Any]], list[str]]:

@@ -62,6 +62,13 @@ import "barInput.js" as BarInput
  *   through the hits. Enter opens the selected hit; with no selection it
  *   sends the text to the assistant.
  *
+ * The floating button (FloatingButton.qml, the `floatingButton` setting) and
+ * the hotkey (the widget's global shortcut) both call `openForApplication`:
+ * the popup (or the bar) opens with the application the user is in noted
+ * (`session.captureApplication`), so questions are about it. Opening from
+ * the panel clears that note. The button's position is saved in
+ * `floatingX`/`floatingY` when it is dragged.
+ *
  * A right-click on the icon or the bar opens the applet's own small menu
  * (settings, new conversation, remove).
  *
@@ -160,8 +167,29 @@ PlasmoidItem {
         busy: session.busy
         needsAttention: session.pendingApprovals > 0
         open: popup.visible
-        onClicked: root.togglePopup()
+        onClicked: {
+            session.forgetApplication();  // opened from the panel, not from an application
+            root.togglePopup();
+        }
         onMenuRequested: contextMenu.openRelative()
+    }
+
+    // The floating button over other windows (FloatingButton.qml), when switched on in the settings.
+    Loader {
+        active: Plasmoid.configuration.floatingButton
+        sourceComponent: FloatingButton {
+            posX: Plasmoid.configuration.floatingX
+            posY: Plasmoid.configuration.floatingY
+            idleOpacity: Plasmoid.configuration.floatingOpacity / 100
+            iconSource: Plasmoid.icon
+            busy: session.busy
+            onClicked: root.openForApplication()
+            onMenuRequested: contextMenu.openRelative()
+            onMoved: (x, y) => {
+                Plasmoid.configuration.floatingX = x;
+                Plasmoid.configuration.floatingY = y;
+            }
+        }
     }
 
     // The search-bar form, shown inline in the panel when `barMode`. The
@@ -176,7 +204,10 @@ PlasmoidItem {
         iconName: Plasmoid.icon
         widthInGridUnits: Plasmoid.configuration.barWidth
 
-        onFocusRequested: root.focusBar()
+        onFocusRequested: {
+            session.forgetApplication();  // clicked in the panel, not opened from an application
+            root.focusBar();
+        }
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
         onSelectionMove: delta => root.moveSelection(delta)
@@ -307,6 +338,16 @@ PlasmoidItem {
         root.setInput("");
     }
 
+    /** The floating button and the hotkey: open Happy Bot noting the application the user is in. */
+    function openForApplication() {
+        session.captureApplication();
+        if (root.barMode) {
+            root.focusBar();
+        } else if (!popup.visible) {
+            root.openPopup();
+        }
+    }
+
     function togglePopup() {
         // A click on the icon first deactivates the open popup, which hides
         // it; that same click must not reopen it.
@@ -411,11 +452,12 @@ PlasmoidItem {
 
     Connections {
         target: Plasmoid
+        // The hotkey (the widget's global shortcut): Happy Bot for the application in use.
         function onActivated() {
-            if (root.barMode) {
-                root.focusBar();
+            if (!root.barMode && (popup.visible || Date.now() - popup.hiddenAt < 300)) {
+                root.closePopup();
             } else {
-                root.togglePopup();
+                root.openForApplication();
             }
         }
     }

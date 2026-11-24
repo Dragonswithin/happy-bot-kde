@@ -147,6 +147,18 @@ class AskEndpointTests(unittest.TestCase):
         self.assertNotEqual(self.ask("hello")[0]["conversation_id"], conversation_id)
         self.assertEqual(len(self.model.requests[2]["messages"]), 2)
 
+    def test_the_application_the_user_came_from_reaches_the_model_only(self) -> None:
+        self.configure()
+        self.model.replies.append(chunks_for("Use Ctrl+Shift+L."))
+        about = {"app": "Kate", "class": "org.kde.kate", "title": "notes.txt — Kate"}
+        response = self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about})
+        events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
+        sent = self.model.requests[-1]["messages"][-1]["content"]
+        self.assertTrue(sent.startswith("[The user opened Happy Bot while using the application Kate"), sent)
+        self.assertTrue(sent.endswith("how do I split the view?"))
+        opened = self.call("GET", f"/conversation?id={events[0]['conversation_id']}")
+        self.assertEqual(opened["events"][0]["text"], "how do I split the view?")  # the chat shows what was typed
+
     def test_errors_are_events_not_broken_streams(self) -> None:
         self.assertEqual(self.ask("hi")[0]["code"], "not_configured")
         self.configure()

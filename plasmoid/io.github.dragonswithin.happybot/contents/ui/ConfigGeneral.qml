@@ -10,14 +10,23 @@ import QtQuick.Layouts
 
 import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
+import org.kde.kquickcontrols
+import org.kde.plasma.plasmoid
 
 /**
  * "Search Bar" page of the applet's settings dialog: the applet's own
  * behaviour in the panel. The assistant's icon (the wand or the robot
  * mascot), what the panel shows (the icon, or a search bar of a chosen
- * width), live file results while typing (on or off, how
- * many characters, how long a pause, how many matches), the size of the
- * popup, and the address of the daemon for unusual setups.
+ * width), the floating button over other windows (on or off, how faded,
+ * back to its corner) and the hotkey, live file results while typing (on or
+ * off, how many characters, how long a pause, how many matches), the size
+ * of the popup, and the address of the daemon for unusual setups.
+ *
+ * The hotkey is the widget's own global shortcut (`Plasmoid.globalShortcut`,
+ * the same one as on Plasma's Keyboard Shortcuts page); like that page,
+ * this one stores it in `saveConfig`, which the dialog calls on Apply.
+ * Both the hotkey and the floating button open Happy Bot knowing which
+ * application the user is in (main.qml, `openForApplication`).
  *
  * Plasma binds each `cfg_<name>` property to the entry of the same name in
  * contents/config/main.xml and writes it back when the user applies; the
@@ -38,6 +47,16 @@ KCM.SimpleKCM {
     property alias cfg_popupHeight: popupHeight.value
     property alias cfg_daemonUrl: daemonUrl.text
     property alias cfg_useRobotMascot: robotMascot.checked
+    property alias cfg_floatingButton: floatingButton.checked
+    property alias cfg_floatingOpacity: floatingOpacity.value
+    property int cfg_floatingX
+    property int cfg_floatingY
+    property bool unsavedChanges: false
+
+    function saveConfig() {
+        Plasmoid.globalShortcut = hotkey.keySequence;
+        page.unsavedChanges = false;
+    }
 
     Kirigami.FormLayout {
         RowLayout {
@@ -81,6 +100,61 @@ KCM.SimpleKCM {
             font: Kirigami.Theme.smallFont
             opacity: 0.7
             text: i18n("While you type in the search bar, Plasma outlines the panel in its focus colour; the icon avoids that. Vertical panels always show the icon.")
+        }
+
+        Item {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Quick access from any application")
+        }
+
+        KeySequenceItem {
+            id: hotkey
+            Kirigami.FormData.label: i18n("Hotkey:")
+            keySequence: Plasmoid.globalShortcut
+            patterns: ShortcutPattern.Modifier | ShortcutPattern.ModifierAndKey
+            onKeySequenceModified: page.unsavedChanges = keySequence !== Plasmoid.globalShortcut
+        }
+
+        QQC2.CheckBox {
+            id: floatingButton
+            Kirigami.FormData.label: i18n("Floating button:")
+            text: i18n("Show a Happy Bot button over other windows")
+        }
+
+        RowLayout {
+            Kirigami.FormData.label: i18n("When not in use:")
+            enabled: floatingButton.checked
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Slider {
+                id: floatingOpacity
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 10
+                from: 15
+                to: 100
+                stepSize: 5
+            }
+
+            QQC2.Label {
+                text: floatingOpacity.value >= 100 ? i18n("fully visible") : i18n("%1% visible", floatingOpacity.value)
+            }
+        }
+
+        QQC2.Button {
+            enabled: floatingButton.checked && (page.cfg_floatingX >= 0 || page.cfg_floatingY >= 0)
+            text: i18n("Put it back in the corner")
+            icon.name: "edit-undo"
+            onClicked: {
+                page.cfg_floatingX = -1;
+                page.cfg_floatingY = -1;
+            }
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            text: i18n("Press the hotkey or click the button while using any application, and Happy Bot opens knowing which application you are in, so you can ask about it. Drag the button to move it anywhere; it fades until the pointer is over it.")
         }
 
         Item {

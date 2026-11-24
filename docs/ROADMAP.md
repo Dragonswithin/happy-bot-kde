@@ -964,6 +964,22 @@ Findings:
   unchanged through `echo`, which OpenAI requires with the tool results that
   follow. The OpenAI preset uses it; everything else stays on chat
   completions. Tested against recorded-style events; not yet with a real key.
+- Floating button and hotkey, at the maintainer's request:
+  `FloatingButton.qml` is a LayerShellQt surface on the top layer (above
+  windows, below full screen, never focused), so the application in use
+  stays active. Its position is the layer-shell margins from the screen's
+  top left, saved as `floatingX`/`floatingY`; a test showed margins set
+  after the window appears take effect only with a new frame, so each move
+  redraws, and that QML must assign them as a plain `{left, top, ...}`
+  object (`Qt.rect` gives wrong values). The hotkey is the widget's global
+  shortcut, now also on the Search Bar page. Both call
+  `openForApplication`: `GET /context/app` names the window in use (the
+  topmost ordinary window, so the popup itself is never it; the name comes
+  from its desktop entry), the popup shows "Helping with: …", and each
+  request carries it as `about_window`, which `ask_stream` turns into a
+  note at the start of the model's copy only. Seen working: the button
+  appearing in place from the widget (checked by its colour in a
+  screenshot). Not yet tried by a person: clicking, dragging, the hotkey.
 
 ## Decisions
 

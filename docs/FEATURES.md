@@ -60,6 +60,12 @@ text-only models and stays as an option afterwards.
 
 - ✓ Meta+Space popup, live file hits while typing, Enter sends to the
   assistant.
+- ● A floating button over other windows (a layer-shell surface: anywhere on
+  the screen, dragged to move, faded while not in use) and a hotkey set on
+  the Search Bar page; both open Happy Bot with the application in use
+  noted ("Helping with: …", removable) and sent with the questions. (the
+  button was seen in place; clicking, dragging and the hotkey are not yet
+  tried by a person)
 - ✓ A choice of panel form: the icon with the popup (default), or a search
   bar typed into in the panel itself (the `inputInPanel` setting), which
   accepts Plasma's blue panel focus indicator while it has focus.

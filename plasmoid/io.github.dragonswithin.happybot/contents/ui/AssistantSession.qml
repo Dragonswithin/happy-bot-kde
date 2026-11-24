@@ -22,6 +22,11 @@ import QtQuick
  * daemon keeps it with the conversation, and opening a saved chat restores
  * it; a new chat starts on "", and a pick whose AI was removed falls back
  * to "".
+ * `helpWith` is the application the user was in (`{app, class, title}`, from
+ * `/context/app`) when the popup was opened from the floating button or the
+ * hotkey (`captureApplication`), or null. While set, it is sent with every
+ * request as `about_window`, so the assistant knows what "this" means; the
+ * popup shows it and the user can remove it (`forgetApplication`).
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
@@ -94,6 +99,7 @@ Item {
     property string conversationId: ""
     property var models: []
     property string chatModel: ""
+    property var helpWith: null
 
     readonly property ListModel entries: ListModel {}
     property var history: []
@@ -318,6 +324,19 @@ Item {
         });
     }
 
+    /** Notes the application the user is in, for the next requests; called before the popup opens. */
+    function captureApplication() {
+        request("GET", "/context/app", null, function(data) {
+            session.helpWith = data.app || data.title ? { app: data.app, "class": data["class"], title: data.title } : null;
+        }, function(data) {
+            session.helpWith = null;
+        });
+    }
+
+    function forgetApplication() {
+        session.helpWith = null;
+    }
+
     function newChat() {
         if (session.busy) {
             cancel();
@@ -370,7 +389,11 @@ Item {
                 session.finishStream();
             }
         };
-        xhr.send(JSON.stringify({ message: text, conversation_id: session.conversationId, model: session.chatModel }));
+        const body = { message: text, conversation_id: session.conversationId, model: session.chatModel };
+        if (session.helpWith) {
+            body.about_window = session.helpWith;
+        }
+        xhr.send(JSON.stringify(body));
     }
 
     function consumeStream(xhr) {

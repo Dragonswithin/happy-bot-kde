@@ -33,6 +33,29 @@
       <min>8</min>
       <max>60</max>
     </entry>
+    <!-- The floating Happy Bot button: a small round button above other
+         windows that can be dragged anywhere and fades while not in use.
+         Clicking it (like the hotkey) opens Happy Bot knowing which
+         application the user was in. floatingButton: shown or not (default
+         false). floatingX, floatingY: its position in logical pixels from
+         the top left of the screen; -1 (default) puts it near the bottom
+         right. floatingOpacity: how visible it is while not in use, in
+         percent (default 40, range 15 to 100; it is fully visible under the
+         pointer). -->
+    <entry name="floatingButton" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="floatingX" type="Int">
+      <default>-1</default>
+    </entry>
+    <entry name="floatingY" type="Int">
+      <default>-1</default>
+    </entry>
+    <entry name="floatingOpacity" type="Int">
+      <default>40</default>
+      <min>15</min>
+      <max>100</max>
+    </entry>
     <!-- Size of the results popup in Plasma grid units. Defaults 30 wide by
          26 tall. Ranges: width 20 to 70, height 12 to 50. -->
     <entry name="popupWidth" type="Int">

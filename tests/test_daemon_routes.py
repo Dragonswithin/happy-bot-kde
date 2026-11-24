@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -223,6 +224,25 @@ class RouteTests(unittest.TestCase):
     def test_import_of_unknown_server_is_refused(self) -> None:
         status, reply = self.call("POST", "/tools/import", {"name": "definitely-not-configured-anywhere-xyz"})
         self.assertEqual(status, 404)
+
+
+class CurrentApplicationTests(unittest.TestCase):
+    def test_the_window_in_use_is_named_after_its_desktop_entry(self) -> None:
+        import tempfile
+        from happy_bot import desktop_context
+
+        with tempfile.TemporaryDirectory() as data:
+            apps = Path(data) / "applications"
+            apps.mkdir()
+            (apps / "org.example.notes.desktop").write_text("[Desktop Entry]\nName=Notes Pro\nExec=notes\n")
+            window = {"available": True, "window": {"app": "org.example.notes", "title": "todo.md — Notes Pro"}}
+            with mock.patch.dict("os.environ", {"XDG_DATA_HOME": data, "XDG_DATA_DIRS": data}), \
+                    mock.patch.object(desktop_context, "active_window_context", return_value=window):
+                self.assertEqual(desktop_context.current_application(),
+                                 {"app": "Notes Pro", "class": "org.example.notes", "title": "todo.md — Notes Pro"})
+            self.assertEqual(desktop_context.application_name("org.example.unknown-app"), "Unknown app")
+            with mock.patch.object(desktop_context, "active_window_context", return_value={"available": False}):
+                self.assertEqual(desktop_context.current_application(), {"app": "", "class": "", "title": ""})
 
 
 if __name__ == "__main__":

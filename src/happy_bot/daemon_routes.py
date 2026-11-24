@@ -11,6 +11,9 @@ Endpoints:
 - ``GET /health``: daemon status, which parts of setup are complete, and the
   user's AIs in order (name and whether online) for the popup's per-chat picker.
 - ``GET /context``: desktop context capture (``desktop_context``).
+- ``GET /context/app``: the application the user is working in (name, class,
+  window title), for the popup's "Helping with" when it is opened from the
+  floating button or the hotkey (``desktop_context.current_application``).
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
   The read also carries what the settings page needs to offer choices:
@@ -139,6 +142,10 @@ def context(server: "AssistantServer", query: dict[str, list[str]], body: dict[s
     captured = desktop_context.combined_context(kind)
     server.state.update(last_context_kind=kind)
     return 200, {"ok": True, "context": captured}
+
+
+def current_application(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, **desktop_context.current_application()}
 
 
 def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -480,6 +487,7 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
+    ("GET", "/context/app"): current_application,
     ("GET", "/search"): search,
     ("GET", "/settings"): get_settings,
     ("PUT", "/settings"): put_settings,
