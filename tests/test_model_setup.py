@@ -1,8 +1,8 @@
 """Tests for adding an AI model with one press and placing it in the order (``model_setup.use``), and the presets.
 
 ``use`` runs against a stand-in daemon whose ``replace_settings`` validates with the real settings
-schema. The model check and the service's model list are faked, so no model is asked anything and
-nothing goes online. The presets are checked for the fields the settings page relies on.
+schema. The model check, the service's model list and its picture support are faked, so no model
+or service is asked anything and nothing goes online. The presets are checked for the fields the settings page relies on.
 """
 
 from __future__ import annotations
@@ -37,12 +37,26 @@ class FakeDaemon:
 
 
 class UseModelTests(unittest.TestCase):
-    def use(self, daemon: FakeDaemon, body: dict[str, Any], check: Any = None) -> dict[str, Any]:
+    def use(self, daemon: FakeDaemon, body: dict[str, Any], check: Any = None, sees: bool | None = None) -> dict[str, Any]:
         passing = [{"check": "answers", "status": "pass", "detail": "ready"},
                    {"check": "tool_call", "status": "pass", "detail": "get_weather"}]
         with mock.patch.object(model_setup, "list_models", return_value=[{"id": body.get("model"), "context_window": 65536}]), \
+                mock.patch.object(model_setup.model_discovery, "sees_pictures", return_value=sees), \
                 mock.patch.object(model_setup.model_check, "run", return_value=check or passing):
             return model_setup.use(daemon, body)
+
+    def test_a_local_model_whose_service_says_it_sees_pictures_is_marked(self) -> None:
+        daemon = FakeDaemon()
+        seeing = self.use(daemon, {"base_url": GPU, "model": "qwen3.6-35b-a3b", "job": "main"}, sees=True)
+        self.assertTrue(daemon.settings["models"][seeing["name"]]["vision"])
+        blind = self.use(daemon, {"base_url": NPU, "model": "qwen3.6-moe:35b-a3b", "job": "backup"}, sees=None)
+        self.assertFalse(daemon.settings["models"][blind["name"]]["vision"])
+        with mock.patch.object(model_setup.model_discovery, "sees_pictures") as asked, \
+                mock.patch.object(model_setup, "list_models", return_value=[]), \
+                mock.patch.object(model_setup.model_check, "run",
+                                  return_value=[{"check": "answers", "status": "pass", "detail": "ready"}]):
+            model_setup.use(daemon, {"base_url": "https://api.example.com/v1", "model": "m", "job": "none"})
+        asked.assert_not_called()  # online services are not asked
 
     def test_npu_first_and_gpu_if_it_fails(self) -> None:
         daemon = FakeDaemon()

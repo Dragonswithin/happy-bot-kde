@@ -17,7 +17,9 @@ the model a few small requests through the same provider code a conversation use
 - ``handover``: a conversation whose earlier tool call came from another AI (no echo), as when a
   request is handed down the model order; the service must accept it.
 - ``picture`` (only for a model marked ``vision``): a small generated picture of one colour, which
-  the model must name (``Message.images``).
+  the model must name (``Message.images``). A model not marked whose service on this computer
+  says it accepts images (``model_discovery.sees_pictures``) gets a ``warn`` that says so, since
+  the user may have added picture support to it after adding the model.
 
 Each result is ``{"check", "status", "detail"}`` with status ``pass``, ``warn`` (works, with a
 limitation worth knowing), ``fail`` (a request failed or Happy Bot misread the reply), or ``skip``.
@@ -38,6 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from .conversation import Message, TextDelta, ToolCall, ToolCallReady, ToolSpec, TurnEnd
+from . import model_discovery
 from .providers import ProviderError, create_provider
 from .redaction import is_local_address
 
@@ -187,7 +190,12 @@ def run(model: dict[str, Any]) -> list[dict[str, str]]:
         results.append(_result("handover", "fail", f"refuses a conversation another AI started: {error}"))
 
     if not model.get("vision"):
-        results.append(_result("picture", "skip", "not marked as seeing pictures"))
+        base_url = str(model.get("base_url") or "")
+        if is_local_address(base_url) and model_discovery.sees_pictures(base_url, str(model.get("model") or "")):
+            results.append(_result("picture", "warn", "its service says it can look at pictures; tick \"This AI can "
+                                                      "look at pictures\" in its settings to send it some"))
+        else:
+            results.append(_result("picture", "skip", "not marked as seeing pictures"))
     else:
         with tempfile.TemporaryDirectory() as folder:
             picture = Path(folder, "red.png")

@@ -19,6 +19,15 @@ rather than what it is serving. Services that also answer the widely copied
 marked ``loaded`` true or false with the loaded ones first; ``loaded_known``
 says whether the service told us. Setup shows loaded models by default.
 
+Whether a model can look at pictures (``sees_pictures``) is asked of a service on this computer
+when a model is added or checked: services that call themselves OpenAI-compatible report it in
+different places, so the answers below are tried in turn, each one short ``GET`` or ``POST``:
+the model list's ``architecture.input_modalities`` holding "image" or its ``models`` entries'
+``capabilities`` holding "multimodal" or "vision" (llama.cpp), then ``POST <root>/api/show``'s
+``capabilities`` holding "vision" (Ollama and services that copy its API, such as FastFlowLM).
+The answer is True, False when a service described the model without pictures, or None when no
+service said.
+
 Nothing here assumes a vendor or a well-known port.
 """
 
@@ -30,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from .providers.base import ProviderError
 from .providers.openai_compatible import list_models
@@ -112,3 +121,47 @@ def discover_local(skip_ports: tuple[int, ...] = (), ports: list[int] | None = N
         return []
     with ThreadPoolExecutor(max_workers=24) as pool:
         return [found for found in pool.map(_probe, candidates) if found]
+
+
+_PICTURE_CAPABILITIES = ("multimodal", "vision")
+
+
+def _fetch_json(url: str, body: dict[str, Any] | None = None) -> Any:
+    """One short request to a local service; None when it does not answer with JSON."""
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(url, data=data, method="POST" if data else "GET",
+                      headers={"Content-Type": "application/json"} if data else {})
+    try:
+        with urlopen(request, timeout=PROBE_TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8", errors="replace"))
+    except HTTPError as error:
+        error.close()
+        return None
+    except (URLError, TimeoutError, OSError, ValueError, http.client.HTTPException):
+        return None
+
+
+def sees_pictures(base_url: str, model_id: str) -> bool | None:
+    """Whether the service at ``base_url`` says ``model_id`` accepts images (see the module docstring)."""
+    root = base_url.rstrip("/")
+    said = False
+    listing = _fetch_json(f"{root}/models")
+    if isinstance(listing, dict):
+        for entry in listing.get("data") or []:
+            if isinstance(entry, dict) and entry.get("id") == model_id and isinstance(entry.get("architecture"), dict):
+                said = True
+                if "image" in (entry["architecture"].get("input_modalities") or []):
+                    return True
+        for entry in listing.get("models") or []:
+            if isinstance(entry, dict) and model_id in (entry.get("name"), entry.get("model")) \
+                    and isinstance(entry.get("capabilities"), list):
+                said = True
+                if any(item in _PICTURE_CAPABILITIES for item in entry["capabilities"]):
+                    return True
+    service_root = root[:-3] if root.endswith("/v1") else root
+    shown = _fetch_json(f"{service_root}/api/show", {"model": model_id})
+    if isinstance(shown, dict) and isinstance(shown.get("capabilities"), list):
+        said = True
+        if "vision" in shown["capabilities"]:
+            return True
+    return False if said else None

@@ -6,7 +6,9 @@ typed by hand. ``use`` then:
 
 1. builds the model entry: the preset's address (or the given one), the model id, the key, the
    context window the service reports for that model (``list_models``), else the preset's or the
-   settings default, and a suggested model's published prices, for the spending cap;
+   settings default, whether it can look at pictures when a service on this computer says so
+   (``model_discovery.sees_pictures``; otherwise the earlier setting stays), and a suggested
+   model's published prices, for the spending cap;
 2. names it after the preset or the model id, reusing the name of an identical entry;
 3. places it in ``model_order`` by its ``job``: ``main`` first (it answers), ``backup`` right after
    the first (it answers when the first does not), ``none`` at the end (an existing model keeps
@@ -28,11 +30,12 @@ import re
 import threading
 from typing import TYPE_CHECKING, Any
 
-from . import model_check, model_presets
+from . import model_check, model_discovery, model_presets
 from . import settings as settings_store
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .providers import ProviderError, create_provider
 from .providers.openai_compatible import list_models
+from .redaction import is_local_address
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
@@ -80,6 +83,8 @@ def _entry(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         pass  # some services do not list models; the preset's or the default window is used
     entry = {"provider": (preset or {}).get("provider", "openai_compatible"), "base_url": base_url, "model": model_id, "api_key": api_key,
              "context_window": window or (preset or {}).get("context_window") or settings_store.DEFAULT_CONTEXT_WINDOW}
+    if is_local_address(base_url) and model_discovery.sees_pictures(base_url, model_id):
+        entry["vision"] = True
     if preset:
         prices = model_presets.suggested(preset["id"], model_id)
         entry.update({key: prices[key] for key in ("input_price", "output_price") if key in prices})

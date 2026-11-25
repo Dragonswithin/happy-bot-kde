@@ -17,7 +17,7 @@ import org.kde.kirigami as Kirigami
  * - The list follows `model_order` (src/happy_bot/settings.py): the first
  *   AI answers, and when it fails the next one does (src/happy_bot/ask_stream.py).
  *   Each row shows where the AI runs (this computer, with its port, or
- *   online and where), arrows to move it up or down, Test (the full
+ *   online and where) and whether it sees pictures (`vision`), arrows to move it up or down, Test (the full
  *   compatibility check, `POST /models/check`, src/happy_bot/model_check.py,
  *   summarised as passed, works-with-a-note or a problem), Remove, and
  *   "Settings", which opens that AI's own settings under it
@@ -230,6 +230,7 @@ Kirigami.FormLayout {
                             text: row.entry === null ? ""
                                 : (row.local ? i18n("On this computer, port %1", (row.entry.base_url.match(/:(\d+)/) || ["", "?"])[1])
                                              : i18n("Online at %1", section.hostOf(row.entry.base_url)))
+                                  + (row.entry.vision ? i18n(" · sees pictures") : "")
                                   + (row.entry.hand_over_long ? i18n(" · hands long requests on") : "")
                         }
                     }
