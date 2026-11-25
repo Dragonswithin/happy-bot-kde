@@ -107,6 +107,15 @@ used.
   The AI is asked only from the "Ask Happy Bot about …" row under the
   results: click it, or press Down to it and Enter (when nothing matches it
   is already selected).
+- **Search bar speed-ups**: click into the empty bar to see what you used
+  last (applications, files, settings pages, chats, and websites when
+  switched on) as buttons; Down and Enter pick one. Type a command such as
+  "volume 30", "mute", "dark mode", "timer 10m", "lock", "wifi off" or
+  "dnd 30m" and Enter does it at once, no AI involved. "emoji heart" or
+  "euro sign" lists characters and Enter copies one. Right-click an
+  application to update it, uninstall it (in a terminal, where you
+  confirm) or start it at login; right-click a file to send it to your
+  phone (KDE Connect).
 - **Talk to it**: switch on the microphone under AI Model → Voice ("Find on
   this computer" finds a local Whisper), then click the microphone in the
   panel bar, the popup or the floating Happy Bot, or press the "Talk to Happy

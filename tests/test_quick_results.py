@@ -148,7 +148,7 @@ class KRunnerTests(unittest.TestCase):
         self.assertEqual(bridge.matches("ko"), [])
         with mock.patch.object(krunner_bridge.quick_results, "activate") as activate:
             bridge.run("quick-0")
-        activate.assert_called_once_with(quick[0]["action"])
+        activate.assert_called_once_with(quick[0]["action"], bridge.server)
         with mock.patch.object(krunner_bridge.shutil, "which", return_value="/usr/bin/happy-bot"), \
                 mock.patch.object(krunner_bridge.subprocess, "Popen") as popen:
             bridge.run("ask")

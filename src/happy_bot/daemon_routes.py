@@ -91,10 +91,21 @@ Endpoints:
 - ``GET /spend``: this month's tokens and cost per model (``spend``).
 - ``GET /check``: the self-check (``self_check.run_checks``): every
   dependency's state with a fix for each problem.
-- ``GET /quick?q=...``: results the bar shows besides files (answers,
-  applications, settings pages, browser bookmarks and history when the user
-  switched them on, conversations; ``quick_results``).
-- ``POST /quick/activate``: ``{"action": {...}}`` from one of those results.
+- ``GET /quick?q=...``: results the bar shows besides files (instant
+  commands, answers, characters, applications, settings pages, browser
+  bookmarks and history when the user switched them on, conversations;
+  ``quick_results``).
+- ``GET /quick/recent``: what the empty bar suggests (recent applications,
+  files, settings pages, chats, and websites when recent websites are
+  switched on; ``quick_results.recent``).
+- ``POST /quick/activate``: ``{"action": {...}}`` from one of those results;
+  an instant command runs its tool here and is written to the action log.
+- ``GET /quick/app?path=...``: what an application result's menu offers
+  (``{package, source, update, uninstall, autostart}``, ``app_actions``);
+  ``POST /quick/app`` (``{"path", "action"}``) does one: ``update`` or
+  ``uninstall`` opens a terminal running the user's package manager, where
+  the user confirms; ``autostart_on``/``autostart_off`` change the login
+  entry. Each is written to the action log.
 - ``GET /reminders``: reminders and timers that are set
   (``{id, when, text}``, soonest first; ``tools/reminders.py``).
 - ``POST /reminders/cancel``: ``{"id": ...}``.
@@ -126,7 +137,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import (app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+from . import (app_actions, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
@@ -639,14 +650,41 @@ def quick(server: "AssistantServer", query: dict[str, list[str]], body: dict[str
         text, server.conversations.list(), ui.get("search_bookmarks") is True, ui.get("search_history") is True)}
 
 
+def quick_recent(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    ui = server.settings.get("ui") or {}
+    return 200, {"ok": True, "results": quick_results.recent(server.conversations.list(),
+                                                             ui.get("search_history") is True)}
+
+
 def quick_activate(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     action = body.get("action")
     if not isinstance(action, dict):
         return _error(400, "action is required", "invalid")
     try:
-        return 200, {"ok": True, "message": quick_results.activate(action)}
+        return 200, {"ok": True, "message": quick_results.activate(action, server)}
     except quick_results.ActivationError as error:
         return _error(400, str(error), "invalid")
+
+
+def quick_app(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        return 200, {"ok": True, **app_actions.describe(_first(query, "path"))}
+    except app_actions.AppActionError as error:
+        return _error(404, str(error), "invalid")
+
+
+def quick_app_action(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    from .permissions import append_audit
+
+    path, action = str(body.get("path") or ""), str(body.get("action") or "")
+    try:
+        message = app_actions.carry_out(path, action, str(server.settings["agent"].get("terminal", "")))
+    except app_actions.AppActionError as error:
+        return _error(400, str(error), "invalid")
+    append_audit(server.runtime_dir, {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "tool": f"app_{action}",
+                                      "risk": "danger" if action == "uninstall" else "change",
+                                      "outcome": "chosen from the search bar's menu", "arguments": path[:2000]})
+    return 200, {"ok": True, "message": message}
 
 
 def list_reminders(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -711,7 +749,10 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/export"): export,
     ("POST", "/import"): import_,
     ("GET", "/quick"): quick,
+    ("GET", "/quick/recent"): quick_recent,
     ("POST", "/quick/activate"): quick_activate,
+    ("GET", "/quick/app"): quick_app,
+    ("POST", "/quick/app"): quick_app_action,
     ("GET", "/reminders"): list_reminders,
     ("POST", "/reminders/cancel"): cancel_reminder,
 }

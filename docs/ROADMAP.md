@@ -394,6 +394,17 @@ works: Set up next to Files, Set up next to Web, Allow typing, each one press
 with no typing except an API key the user chooses to use; then each later
 item passes its own check recorded under Phase 7 findings.
 
+**Phase 8: Search speed-ups** (placed by the maintainer on 2026-11-25, from
+the ideas chosen that day in `docs/FEATURES.md`). The panel bar finds,
+launches and now does, still with no AI: recent items as chips on the empty
+bar, instant commands, emoji and special characters, and actions on an
+application or file result.
+*Exit:* in the real panel, a person sees the empty bar's chips and opens
+one from the keyboard, runs "volume 30" and "timer 10m" with Enter, copies
+a character found with "emoji heart", and uses an application's Start at
+login and a file's Send to phone from their right-click menus.
+Status: built, exit check not yet passed (see Phase 8 findings).
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
 priority order the maintainer chose for after the first release, is in
@@ -1176,6 +1187,46 @@ Findings:
   `y`); the finished-request notification can be switched off and shows the
   mascot when that is chosen.
 
+**Phase 8 (built 2026-11-25).**
+
+- Instant commands (`quick_commands.py`) are recognised from a fixed set of
+  phrasings and come first in the results ("Do it now"); the result carries
+  only the typed words, which the daemon parses again before running the
+  built-in tool, so a request can do no more than typing. Words that are
+  commands only when read loosely ("play", "sleep") are left out because
+  Enter runs them at once. Checked live: "volume N" at the current volume
+  ran `set_volume` for real and wrote the action log. A command that ran
+  shows its title in Plasma's on-screen display (`org.kde.osdService`);
+  one that fails opens the popup with the error.
+- Characters (`characters.py`): emoji come from Plasma's own emoji picker
+  dictionaries (`/usr/share/plasma/emoji/<language>.dict`, plasma-desktop),
+  which turned out to be Qt's `qCompress` of a little-endian `QDataStream`;
+  all 3,943 English entries parse exactly. Symbols come from Python's
+  Unicode names over the blocks people type symbols from. Whole-word
+  matches rank above prefixes ("pi character" gives π, not "pick"), and
+  "right" counts as whole in "rightwards".
+- Recent items (`usage_history.py`, `quick_results.recent`) read KDE's
+  activity manager database read-only, the record the launcher's own
+  Recent lists use. On the maintainer's account it holds applications, files,
+  System Settings pages and, from Chromium, web pages; web pages are shown
+  only with recent websites switched on. Files under `/tmp`, `/run` and the
+  runtime folder are skipped, as is Happy Bot's own launcher. The chips are
+  the same hits as rows (`RecentChips.qml`), so Down/Up and Enter work on
+  them; nothing starts selected, so Enter on the empty bar still opens the
+  popup, and Up from the field still recalls earlier requests.
+- Application actions (`app_actions.py`): the package is found from the
+  launcher file (Flatpak export folder, else `pacman -Qqo`, AUR when
+  foreign). Update and Uninstall open a terminal with the user's package
+  manager (Shelly's `update`/`remove` when installed), where the user
+  confirms; without Shelly a distribution package's Update is the whole
+  `sudo pacman -Syu`, because Arch does not support updating one package
+  alone. Start at login writes the autostart entry, or `Hidden=true` over a
+  system one. Each is written to the action log.
+- Rendered offscreen with the KDE theme (rows with glyphs, chips with a
+  selection) and checked against a throwaway daemon (commands, characters,
+  application info, refusals). Not yet seen in the real panel: installing
+  the widget replaces the running one, which waits for the maintainer.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
@@ -1210,3 +1261,9 @@ Findings:
   switches each on, and are read on this computer only (2026-11-25).
 - What is said into the microphone goes to the AI at once, without a
   review step (the maintainer's choice, 2026-11-25).
+- Choosing an instant command or an application's menu action in the bar
+  is the user's consent to that one action, so the approval policy's
+  `change` prompts do not apply to it; a command the tool classes as
+  `danger` is refused there. Uninstalling, a deletion, runs only in a
+  terminal where the package manager asks the user to confirm (made while
+  building Phase 8 and kept by the maintainer, 2026-11-25).

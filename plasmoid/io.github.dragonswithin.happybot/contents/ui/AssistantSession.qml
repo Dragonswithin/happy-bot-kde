@@ -99,8 +99,16 @@ import QtQuick
  * searches the same way as the panel bar. `searching` is true until
  * both replies are in and `searchedText` is the text they are for, so Enter
  * typed before the results can wait for them. A quick hit has `kind`
- * "quick" and an `action`; `activateQuick` carries it out, and also a file
- * match's actions (show in the file manager, copy the path). Replies can
+ * "quick" and an `action`; `activateQuick` carries it out (an instant
+ * command runs in the daemon), and also a file match's actions (show in the
+ * file manager, copy the path, send it to the phone). `appInfo` and
+ * `appAction` serve an application result's menu (`/quick/app`: update,
+ * uninstall, start at login; src/happy_bot/app_actions.py).
+ * Before anything is typed, `showRecent` asks for the empty bar's
+ * suggestions (`/quick/recent`: recent applications, files, settings, chats,
+ * and websites when switched on); while they are shown `showingRecent` is
+ * true and `hits` holds them instead of matches. Searching or `clearSearch`
+ * ends that. Replies can
  * arrive out of order, so each request carries a sequence number and a
  * reply is applied only if it is the newest one sent. A file hit is
  * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
@@ -155,7 +163,9 @@ Item {
     property bool findingFiles: false
     property var quickHits: []
     property var fileHits: []
-    readonly property var hits: Look.groupHits(quickHits.concat(fileHits))
+    property var recentHits: []
+    property bool showingRecent: false
+    readonly property var hits: Look.groupHits(showingRecent ? recentHits : quickHits.concat(fileHits))
     property bool searching: false
     property string searchedText: ""
     property string searchError: ""
@@ -254,12 +264,38 @@ Item {
 
     function clearSearch() {
         session.searchSequence += 1;
+        session.showingRecent = false;
+        session.recentHits = [];
         session.quickHits = [];
         session.fileHits = [];
         session.searching = false;
         session.searchedText = "";
         session.searchError = "";
         session.searchErrorCode = "";
+    }
+
+    /** The empty bar's suggestions (`/quick/recent`); a search started meanwhile wins. */
+    function showRecent() {
+        session.searchSequence += 1;
+        const sequence = session.searchSequence;
+        request("GET", "/quick/recent", null, function(data) {
+            if (sequence === session.searchSequence) {
+                session.recentHits = data.results || [];
+                session.showingRecent = true;
+            }
+        }, function(data) {});
+    }
+
+    /** What an application result's menu offers (`{update, uninstall, autostart, ...}`), or null. */
+    function appInfo(path, onInfo) {
+        request("GET", "/quick/app?path=" + encodeURIComponent(path), null, onInfo, function(data) { onInfo(null); });
+    }
+
+    /** One of an application's menu actions: "update", "uninstall", "autostart_on" or "autostart_off". */
+    function appAction(path, action) {
+        request("POST", "/quick/app", { path: path, action: action }, function(data) {}, function(data) {
+            session.appendEntry("error", data.error || i18n("That did not work"));
+        });
     }
 
     /** "Find a file": typing now shows matching files, until `stopFindingFiles`. */
@@ -281,6 +317,7 @@ Item {
             return;
         }
         session.searchSequence += 1;
+        session.showingRecent = false;
         const sequence = session.searchSequence;
         const inFinder = session.findingFiles;
         let pending = 2;
@@ -354,14 +391,18 @@ Item {
     }
 
     /** Carries out an action (`{type, target}`) through the daemon's `/quick/activate`, such as a file match's
-     *  "show in the file manager" or "copy path"; a conversation is opened here instead. */
-    function activateQuick(hit) {
+     *  "show in the file manager" or "copy path"; a conversation is opened here instead. A failure becomes
+     *  an error entry, and `onFailure` (optional) is called after it. */
+    function activateQuick(hit, onFailure) {
         if (hit.action.type === "conversation") {
             openConversation(hit.action.target);
             return;
         }
         request("POST", "/quick/activate", { action: hit.action }, function(data) {}, function(data) {
             session.appendEntry("error", data.error || i18n("Could not open %1", hit.title));
+            if (onFailure) {
+                onFailure();
+            }
         });
     }
 

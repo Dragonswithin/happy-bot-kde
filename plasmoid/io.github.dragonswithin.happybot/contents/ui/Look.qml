@@ -63,7 +63,8 @@ QtObject {
     }
 
     // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
-    readonly property var hitGroups: ["answer", "applications", "settings", "bookmarks", "websites", "chats", "files"]
+    readonly property var hitGroups: ["command", "answer", "characters", "applications", "settings", "bookmarks",
+                                      "websites", "chats", "files"]
 
     /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
     function hitGroup(hit) {
@@ -73,15 +74,26 @@ QtObject {
         if (hit.kind !== "quick") {
             return "files";
         }
-        const groups = { copy: "answer", launch: "applications", settings: "settings", bookmark: "bookmarks",
-                         visited: "websites", conversation: "chats" };
+        const groups = { command: "command", copy: "answer", character: "characters", launch: "applications",
+                         settings: "settings", bookmark: "bookmarks", visited: "websites", conversation: "chats" };
         return groups[hit.action ? hit.action.type : ""] || "applications";
     }
 
-    /** The heading over a kind of result. */
-    function hitGroupTitle(group) {
+    /** The heading over a kind of result; `recent` for the empty bar's suggestions (`session.showingRecent`). */
+    function hitGroupTitle(group, recent) {
+        if (recent) {
+            switch (group) {
+            case "applications": return i18n("Recent applications");
+            case "settings": return i18n("Recent settings");
+            case "websites": return i18n("Recent websites");
+            case "chats": return i18n("Recent chats");
+            default: return i18n("Recent files");
+            }
+        }
         switch (group) {
+        case "command": return i18n("Do it now");
         case "answer": return i18n("Answer");
+        case "characters": return i18n("Characters");
         case "applications": return i18n("Applications");
         case "settings": return i18n("Settings");
         case "bookmarks": return i18n("Bookmarks");

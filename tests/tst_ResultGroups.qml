@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Checks how search results are grouped under headings (Look.qml: hitGroup, groupHits, hitWhere),
 // as the panel bar's list and the popup's "Find a file" show them: each kind together, applications
-// first and files last, the daemon's order kept within a kind, and a quick result's detail shown
-// without the kind its heading already names.
+// first and files last (after any instant command, answer and characters), the daemon's order kept
+// within a kind, and a quick result's detail shown without the kind its heading already names.
 // Run with the Qt 6 runner:
 //   /usr/lib/qt6/bin/qmltestrunner -input tests/tst_ResultGroups.qml
 import QtQuick
@@ -29,6 +29,14 @@ TestCase {
                 ["2+2 = 4", "Prism Launcher", "Steam", "Sound", "Arch Wiki", "KDE", "minecraft", "a.txt"]);
         compare(Look.groupHits(hits).map(hit => Look.hitGroup(hit)),
                 ["answer", "applications", "applications", "settings", "bookmarks", "websites", "chats", "files"]);
+    }
+
+    function test_commandsThenAnswersThenCharactersBeforeApplications() {
+        const hits = [quick("Lockscreen app", "launch", "Application"), quick("€", "character", "Character · U+20AC · Enter copies it"),
+                      quick("Lock the screen", "command", "Command · Press Enter to do it"), quick("= 4", "copy", "2+2")];
+        compare(Look.groupHits(hits).map(hit => Look.hitGroup(hit)), ["command", "answer", "characters", "applications"]);
+        compare(Look.hitWhere(hits[2]), "Press Enter to do it");
+        compare(Look.hitWhere(hits[1]), "U+20AC · Enter copies it");
     }
 
     function test_detailWithoutTheKind() {

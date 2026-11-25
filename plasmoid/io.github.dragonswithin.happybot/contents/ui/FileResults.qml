@@ -26,12 +26,21 @@ import org.kde.plasma.components as PlasmaComponents3
  * while no result is selected (`selectedIndex` -1), so it is plain when
  * Enter asks rather than opens.
  *
+ * Characters (emoji, symbols) show their glyph in place of an icon. While
+ * the empty bar's suggestions are shown (`session.showingRecent`), the same
+ * hits are drawn as chips, a row of small buttons under each "Recent …"
+ * heading (`RecentChips`), in the same order, so `selectedIndex` means the
+ * same thing in both forms.
+ *
  * `selectedIndex` (owned by main.qml) is only drawn, and the scroll follows
  * it; new matches start at the top. A match can be clicked
  * (`resultActivated(hit)`), dragged into another application, or given a
- * menu action with a right-click or `openSelectedMenu` (the Menu key):
- * `fileActionRequested(hit, action)` with "reveal", "copy" or "ask". The
- * ask row emits `askRequested(query)`. `naturalHeight` is the exact height
+ * menu action with a right-click or `openSelectedMenu` (the Menu key): a
+ * file's `fileActionRequested(hit, action)` with "reveal", "copy", "phone"
+ * (send it to the phone) or "ask"; an application's Update, Uninstall and
+ * Start at login, which this component asks the daemon about and carries
+ * out itself (`session.appInfo`, `session.appAction`: the first two open a
+ * terminal where the user confirms). The ask row emits `askRequested(query)`. `naturalHeight` is the exact height
  * of everything unscrolled, from plain columns, so the window can size to
  * it without jumping. The component keeps no other state.
  */
@@ -45,6 +54,7 @@ Item {
     property bool useRobotMascot: false
 
     readonly property bool hasHits: session.hits.length > 0
+    readonly property bool chips: session.showingRecent
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property real naturalHeight: filesColumn.implicitHeight + (askRow.visible ? askRow.implicitHeight : 0)
 
@@ -105,9 +115,17 @@ Item {
                 width: filesFlick.width
                 spacing: 0
 
+                RecentChips {
+                    Layout.fillWidth: true
+                    visible: results.chips
+                    hits: results.chips ? results.session.hits : []
+                    selectedIndex: results.selectedIndex
+                    onActivated: hit => results.resultActivated(hit)
+                }
+
                 Repeater {
                     id: hitRows
-                    model: results.session.hits
+                    model: results.chips ? [] : results.session.hits
 
                         // One result, under a heading where a new kind of result starts (Applications, Files...).
                         ColumnLayout {
@@ -116,6 +134,8 @@ Item {
                             required property int index
                             required property var modelData
                             readonly property string group: Look.hitGroup(modelData)
+                            readonly property bool isFile: modelData.kind !== "quick"
+                            readonly property bool isApp: modelData.kind === "quick" && modelData.action.type === "launch"
                             readonly property bool startsGroup: index === 0
                                 || Look.hitGroup(results.session.hits[index - 1]) !== group
 
@@ -140,8 +160,13 @@ Item {
                                 Connections {
                                     target: results
                                     function onSelectedMenuRequested() {
-                                        if (entry.index === results.selectedIndex && entry.modelData.kind !== "quick") {
+                                        if (entry.index !== results.selectedIndex) {
+                                            return;
+                                        }
+                                        if (entry.isFile) {
                                             fileMenu.popup(row, 0, row.height);
+                                        } else if (entry.isApp) {
+                                            appMenu.show(row, 0, row.height);
                                         }
                                     }
                                 }
@@ -166,11 +191,54 @@ Item {
                                     target: null
                                 }
 
-                                // A file match's own actions, on right-click.
+                                // A file's or an application's own actions, on right-click.
                                 TapHandler {
                                     acceptedButtons: Qt.RightButton
-                                    enabled: entry.modelData.kind !== "quick"
-                                    onTapped: fileMenu.popup()
+                                    enabled: entry.isFile || entry.isApp
+                                    onTapped: entry.isFile ? fileMenu.popup() : appMenu.show()
+                                }
+
+                                QQC2.Menu {
+                                    id: appMenu
+
+                                    property var info: null  // from session.appInfo; null until it answers
+                                    readonly property string path: entry.isApp ? entry.modelData.action.target : ""
+
+                                    /** Opens the menu (at the pointer, or at `x`,`y` in `item`) and asks what it can offer. */
+                                    function show(item, x, y) {
+                                        appMenu.info = null;
+                                        results.session.appInfo(appMenu.path, info => appMenu.info = info);
+                                        if (item) {
+                                            appMenu.popup(item, x, y);
+                                        } else {
+                                            appMenu.popup();
+                                        }
+                                    }
+
+                                    QQC2.MenuItem {
+                                        text: i18n("Open")
+                                        icon.name: "system-run"
+                                        onTriggered: results.resultActivated(entry.modelData)
+                                    }
+                                    QQC2.MenuItem {
+                                        text: i18n("Update…")
+                                        icon.name: "update-none"
+                                        enabled: !!(appMenu.info && appMenu.info.update)
+                                        onTriggered: results.session.appAction(appMenu.path, "update")
+                                    }
+                                    QQC2.MenuItem {
+                                        text: i18n("Uninstall…")
+                                        icon.name: "edit-delete-remove"
+                                        enabled: !!(appMenu.info && appMenu.info.uninstall)
+                                        onTriggered: results.session.appAction(appMenu.path, "uninstall")
+                                    }
+                                    QQC2.MenuItem {
+                                        text: i18n("Start at login")
+                                        checkable: true
+                                        checked: !!(appMenu.info && appMenu.info.autostart)
+                                        enabled: appMenu.info !== null
+                                        onTriggered: results.session.appAction(appMenu.path, checked ? "autostart_on" : "autostart_off")
+                                    }
                                 }
 
                                 QQC2.Menu {
@@ -193,6 +261,12 @@ Item {
                                         onTriggered: results.fileActionRequested(entry.modelData, "copy")
                                     }
                                     QQC2.MenuItem {
+                                        text: i18n("Send to phone")
+                                        icon.name: "kdeconnect"
+                                        enabled: entry.modelData.kind === "file"
+                                        onTriggered: results.fileActionRequested(entry.modelData, "phone")
+                                    }
+                                    QQC2.MenuItem {
                                         text: i18n("Ask about this")
                                         icon.name: results.useRobotMascot ? "" : results.assistantIcon
                                         icon.source: results.useRobotMascot ? Look.robotIcon : ""
@@ -205,9 +279,22 @@ Item {
                                     spacing: Kirigami.Units.largeSpacing
 
                                     Kirigami.Icon {
+                                        visible: !entry.modelData.glyph
                                         source: Look.hitIcon(entry.modelData)
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+                                    }
+
+                                    // An emoji or symbol shows itself.
+                                    PlasmaComponents3.Label {
+                                        visible: !!entry.modelData.glyph
+                                        text: entry.modelData.glyph || ""
+                                        textFormat: Text.PlainText
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font.pixelSize: Math.round(Kirigami.Units.iconSizes.medium * 0.8)
+                                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+                                        Accessible.ignored: true
                                     }
 
                                     ColumnLayout {

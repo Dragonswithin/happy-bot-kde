@@ -94,7 +94,7 @@ class KRunnerBridge:
         if chosen is None:
             return
         if chosen["kind"] == "quick":
-            quick_results.activate(chosen["action"])
+            quick_results.activate(chosen["action"], self.server)
         elif chosen["kind"] == "open":
             from .desktop_actions import open_location
             open_location(chosen["location"])

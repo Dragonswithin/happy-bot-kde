@@ -57,25 +57,32 @@ read with OCR (``text_from_image``) for text-only models.
 - ⏸ Voice output: optional spoken answers through a text-to-speech endpoint
   the user chooses.
 
-## Ideas Chosen 2026-11-25 (Not Started)
+## Ideas Chosen 2026-11-25
 
 From a brainstorm of what fits Happy Bot, the maintainer chose these for the
 backlog. Unmarked: not started; each is planned only once placed in a phase
-in ``docs/ROADMAP.md``. Spoken answers and a wake word were left out: both
+in ``docs/ROADMAP.md``. The search speed-ups were placed as Phase 8 and
+built the same day. Spoken answers and a wake word were left out: both
 need new local inference or always-on listening, which are the maintainer's
 call.
 
 Search speed-ups (the panel bar finds and launches; no AI involved):
 
-- Zero-typing start: focusing the empty bar shows recent applications,
-  files, chats and websites as chips.
-- Instant commands from the results: "volume 30", "dark mode", "timer 10m",
+- ◐ Zero-typing start: focusing the empty bar shows recent applications,
+  files, chats and websites as chips. (Built from KDE's own record of what
+  was used; websites only with recent websites switched on. Not yet seen in
+  the real panel.)
+- ◐ Instant commands from the results: "volume 30", "dark mode", "timer 10m",
   "lock" run at once through the existing tools, without asking the AI.
-- Actions on a result: an application's Update, Uninstall (through the
-  user's package manager), Autostart on or off and Send to phone; a file's
-  Send to phone and Ask about this.
-- Emoji and special characters: "emoji heart", "euro sign" put the character
-  on the clipboard.
+  (Also mute, brightness, night light, Wi-Fi, Bluetooth, Do Not Disturb.
+  Checked live through the tool; not yet from the real panel.)
+- ◐ Actions on a result: an application's Update, Uninstall (through the
+  user's package manager) and Autostart on or off; a file's Send to phone
+  and Ask about this. (An application's Send to phone was dropped by the
+  maintainer, as it has no clear meaning. Not yet used from the real panel.)
+- ◐ Emoji and special characters: "emoji heart", "euro sign" put the character
+  on the clipboard. (Emoji from Plasma's own emoji dictionaries; not yet
+  seen in the real panel.)
 
 Fix the selected text:
 

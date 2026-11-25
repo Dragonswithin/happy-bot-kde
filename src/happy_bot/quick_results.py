@@ -2,18 +2,29 @@
 
 ``gather(text, conversations, bookmarks, history)`` returns up to
 ``MAX_RESULTS`` results, best first (at most five applications, three
-settings pages, four bookmarks, four recently visited websites and three
-conversations):
+settings pages, eight characters, four bookmarks, four recently visited
+websites and three conversations):
 
-1. a computed answer (``quick_answers``: arithmetic, conversions, dates,
+1. an instant command (``quick_commands``: "volume 30", "dark mode",
+   "timer 10m", "lock"...), which runs at once through the built-in tools;
+2. a computed answer (``quick_answers``: arithmetic, conversions, dates,
    world clocks), whose action copies it;
-2. installed applications (``tools/apps.match_applications``), to start;
-3. System Settings pages (the ``kcm_*.desktop`` entries Plasma ships, which
+3. emoji and special characters (``characters``: "emoji heart", "euro
+   sign"), which copy the character;
+4. installed applications (``tools/apps.match_applications``), to start;
+5. System Settings pages (the ``kcm_*.desktop`` entries Plasma ships, which
    the launcher hides), to open;
-4. browser bookmarks and recently visited websites, each only when the user
+6. browser bookmarks and recently visited websites, each only when the user
    switched it on (``ui.search_bookmarks``, ``ui.search_history``), from the
    in-memory ``browsers.BrowserIndex``, to open in the default browser;
-5. saved conversations whose title matches, to reopen.
+7. saved conversations whose title matches, to reopen.
+
+``recent(conversations, websites)`` is what the empty bar suggests before
+anything is typed: the applications, files and System Settings pages used
+last (``usage_history``, KDE's own record of them), recent websites from that
+record only when the user switched recent websites on, and the latest saved
+chats. Files are file hits (``{title, location, snippet, kind}``, as the
+file search returns) so their menu works as for any file.
 
 Open windows are not offered: the maintainer found them odd among search
 results (the task switcher is for those).
@@ -21,8 +32,11 @@ results (the task switcher is for those).
 Each result is ``{"kind": "quick", "title", "subtitle", "icon", "action":
 {"type", "target"}}``. The applet shows them above the file matches and sends
 the action back to ``activate`` (``POST /quick/activate``), except
-``conversation``, which it opens itself. Action types: ``copy`` (put
-``target`` on the clipboard), ``launch``
+``conversation``, which it opens itself. Action types: ``copy`` and
+``character`` (put ``target`` on the clipboard), ``command`` (run the
+instant command typed as ``target``; needs the daemon, see ``activate``),
+``phone`` (send the file ``target`` to the user's phone through KDE Connect,
+``tools/phone.send_to_device``), ``launch``
 (start the ``.desktop`` file at ``target``), ``settings`` (open System
 Settings at the module ``target``), ``bookmark`` and ``visited`` (open the
 web address ``target`` with ``xdg-open``), ``reveal`` (show the file ``target``
@@ -37,6 +51,7 @@ is skipped, never fatal.
 from __future__ import annotations
 
 import configparser
+import os
 import re
 import shutil
 import subprocess
@@ -45,7 +60,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import browsers, quick_answers
+from . import browsers, characters, quick_answers, quick_commands, usage_history
 from .tools import apps
 
 MAX_RESULTS = 20
@@ -137,13 +152,17 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None,
            bookmarks: bool = False, history: bool = False) -> list[dict[str, Any]]:
     """Quick results for the typed text, best first (see module docstring)."""
     text = text.strip()
-    results: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = quick_commands.match(text) if text else []
     answer = quick_answers.answer(text) if text else None
     if answer:
         results.append({"kind": "quick", "title": answer["title"], "subtitle": answer["subtitle"],
                         "icon": "accessories-calculator", "action": {"type": "copy", "target": answer["value"]}})
     if len(text) < MIN_CHARS or answer:
         return results
+    try:
+        results.extend(characters.find(text))
+    except Exception:  # noqa: BLE001 - an unreadable emoji dictionary must not hide the rest
+        pass
     for source, most in ((_applications, 5), (_settings, 3)):
         try:
             results.extend(source(text)[:most])
@@ -157,6 +176,56 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None,
     return results[:MAX_RESULTS]
 
 
+TRANSIENT_FOLDERS = ("/tmp/", "/run/", "/proc/", "/dev/")  # files there are gone or not the user's own
+RECENT_LIMITS = {"applications": 6, "files": 6, "settings": 3, "websites": 4, "chats": 3}
+
+
+def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = False,
+           database: Path | None = None) -> list[dict[str, Any]]:
+    """What the empty bar suggests: recently used applications, files, settings, websites and chats."""
+    found: dict[str, list[dict[str, Any]]] = {kind: [] for kind in RECENT_LIMITS}
+    try:
+        applications = {app["id"]: app for app in _cached("apps", apps.installed_applications)}
+        pages = {page["module"]: page for page in _cached("settings", settings_pages)}
+    except Exception:  # noqa: BLE001 - without the lists, only files, websites and chats are suggested
+        applications, pages = {}, {}
+    from .app_control import DESKTOP_FILE
+    transient = TRANSIENT_FOLDERS + ((os.environ["XDG_RUNTIME_DIR"].rstrip("/") + "/",)
+                                     if os.environ.get("XDG_RUNTIME_DIR") else ())
+    for item in usage_history.recent_resources(database):
+        target = item.target
+        if target.startswith("applications:"):
+            app = applications.get(target.removeprefix("applications:"))
+            if app and app["id"] != DESKTOP_FILE:
+                found["applications"].append({
+                    "kind": "quick", "title": app["name"], "subtitle": "Application" + (f" · {app['generic']}" if app["generic"] else ""),
+                    "icon": _desktop_icon(app["path"]), "action": {"type": "launch", "target": app["path"]}})
+        elif target.startswith("kcm:"):
+            page = pages.get(target.removeprefix("kcm:"))
+            if page:
+                found["settings"].append({"kind": "quick", "title": page["name"], "subtitle": "System Settings",
+                                          "icon": page["icon"], "action": {"type": "settings", "target": page["module"]}})
+        elif target.startswith(("http://", "https://")):
+            if websites:
+                found["websites"].append({"kind": "quick", "title": item.title or browsers.host(target),
+                                          "subtitle": f"Visited · {browsers.host(target)}", "icon": "internet-web-browser",
+                                          "action": {"type": "visited", "target": target}})
+        else:
+            path = target.removeprefix("file://")
+            if path.startswith("/") and not path.startswith(transient) and os.path.exists(path):
+                name = os.path.basename(path.rstrip("/")) or path
+                found["files"].append({"title": name, "location": path, "snippet": "",
+                                       "kind": "folder" if os.path.isdir(path) else "file"})
+    found["chats"] = [{"kind": "quick", "title": item["title"], "subtitle": "Earlier conversation", "icon": "view-history",
+                       "action": {"type": "conversation", "target": item["id"]}}
+                      for item in sorted(conversations or [], key=lambda c: c.get("updated", 0), reverse=True)]
+    unique: dict[str, dict[str, Any]] = {}
+    for kind, items in found.items():
+        for item in items[:RECENT_LIMITS[kind]]:
+            unique.setdefault(item.get("location") or f"{item['action']['type']}:{item['action']['target']}", item)
+    return list(unique.values())
+
+
 def _start(command: list[str]) -> None:
     if not shutil.which(command[0]):
         raise ActivationError(f"'{command[0]}' is not installed")
@@ -167,12 +236,36 @@ def _start(command: list[str]) -> None:
         raise ActivationError(str(error)) from error
 
 
-def activate(action: dict[str, Any]) -> str:
-    """Carry out a result's action; returns a short description, or raises ``ActivationError``."""
+def activate(action: dict[str, Any], server: Any = None) -> str:
+    """Carry out a result's action; returns a short description, or raises ``ActivationError``.
+
+    ``command`` and ``phone`` need ``server`` (the daemon: its settings and
+    runtime directory, for the tools and the action log); without it they are
+    refused.
+    """
     kind, target = action.get("type"), str(action.get("target") or "")
     if not target:
         raise ActivationError("the result has no target")
-    if kind == "copy":
+    if kind in ("command", "phone") and server is None:
+        raise ActivationError("only Happy Bot's daemon can do that")
+    if kind == "command":
+        try:
+            return quick_commands.run(target, server.settings.get("agent"), server.runtime_dir)
+        except quick_commands.CommandError as error:
+            raise ActivationError(str(error)) from error
+    if kind == "phone":
+        from .permissions import append_audit
+        from .tools.phone import send_to_device
+        from .tools.registry import ToolFailure
+        try:
+            report = send_to_device({"file_or_url": target})
+        except ToolFailure as error:
+            raise ActivationError(str(error)) from error
+        append_audit(server.runtime_dir, {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "tool": "send_to_device",
+                                          "risk": "change", "outcome": "ran from the search bar",
+                                          "arguments": target[:2000]})
+        return report
+    if kind in ("copy", "character"):
         if shutil.which("wl-copy"):
             _start(["wl-copy", "--", target])
         else:

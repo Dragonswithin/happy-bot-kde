@@ -12,11 +12,12 @@ import org.kde.plasma.core as PlasmaCore
 /**
  * The panel search bar's results, shown right above the bar (beside it on
  * a side panel) while the user types there, like the application
- * launcher's search: installed applications first, then settings pages,
- * answers, saved chats and files, with an "Ask Happy Bot about …" row
- * below. main.qml shows it only in the search-bar form, while
- * the bar has the keyboard and holds text; the popup and the floating
- * Happy Bot do not search as the user types.
+ * launcher's search: an instant command, an answer and characters first,
+ * then installed applications, settings pages, saved chats and files, with
+ * an "Ask Happy Bot about …" row below. Before anything is typed it shows
+ * what was used last as chips instead (`session.showingRecent`). main.qml
+ * shows it only in the search-bar form, while the bar has the keyboard; the
+ * popup and the floating Happy Bot do not search as the user types.
  *
  * It is a Plasma dialog that never takes the keyboard
  * (`Qt.WindowDoesNotAcceptFocus`, as Plasma's own panel-edit indicators

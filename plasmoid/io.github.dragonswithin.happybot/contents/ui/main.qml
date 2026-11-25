@@ -29,8 +29,8 @@ import "barInput.js" as BarInput
  *   launcher's. As the user types, after a short pause (`searchDelay`,
  *   `session.search`), what matches on this computer shows right above the
  *   bar (PanelResults.qml, which never takes the keyboard, so typing stays
- *   in the bar): installed applications, settings pages,
- *   quick answers, saved chats, then files, with an "Ask Happy Bot about …"
+ *   in the bar): instant commands, quick answers, characters, installed
+ *   applications, settings pages, saved chats, then files, with an "Ask Happy Bot about …"
  *   row below. The top result is selected (`barSelectedIndex`); Down and Up
  *   move the selection, Down past the last result reaches the Ask row.
  *   Enter opens the selected result, and Enter typed before the results
@@ -38,8 +38,14 @@ import "barInput.js" as BarInput
  *   Enter starts the launcher rather than asking. The assistant is asked
  *   only from the Ask row (clicked, or selected with Enter, as it is when
  *   nothing matched): the popup opens with the request (`askFromBar`).
- *   Enter on an empty bar, the logo or the widget shortcut opens the popup
- *   (text already typed moves into its field). The bar is cleared once a
+ *   Before anything is typed, focusing the bar shows what was used last as
+ *   chips (`session.showRecent`: applications, files, settings, chats);
+ *   nothing is selected, Down steps into them and Up from the first goes
+ *   back to the field (Up there recalls earlier requests). Typing replaces
+ *   them with matches. Instant commands ("volume 30", "lock") are results
+ *   too; one that fails opens the popup, where the error shows.
+ *   Enter on an empty bar with no chip selected, the logo or the widget
+ *   shortcut opens the popup (text already typed moves into its field). The bar is cleared once a
  *   result is opened or the request asked, and when the user clicks away
  *   from the bar or from the popup it opened (`barBlur`, `onDismissed`), so
  *   it is empty for the next search.
@@ -196,8 +202,9 @@ PlasmoidItem {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
         // The top result starts selected, so Enter opens it; with none, the Ask row is selected (-1).
+        // The empty bar's suggestions start with nothing selected, so Enter there still opens the popup.
         onHitsChanged: {
-            popup.selectedIndex = session.hits.length > 0 ? 0 : -1;
+            popup.selectedIndex = session.hits.length > 0 && !session.showingRecent ? 0 : -1;
             root.barSelectedIndex = popup.selectedIndex;
             if (root.floating) {
                 root.floating.selectedIndex = popup.selectedIndex;
@@ -350,6 +357,9 @@ PlasmoidItem {
             if (inputFocused) {
                 barBlur.stop();
                 root.barFocused = true;
+                if (root.barText.length === 0 && !session.showingRecent) {
+                    session.showRecent();
+                }
             } else {
                 root.wantsInput = false;
                 barBlur.restart();
@@ -377,8 +387,9 @@ PlasmoidItem {
         session: session
         visualParent: root.fullRepresentationItem
         location: Plasmoid.location
-        visible: root.barMode && root.barFocused && root.barText.length > 0 && !popup.visible
-            && (session.searching || session.searchedText.length > 0)
+        visible: root.barMode && root.barFocused && !popup.visible
+            && (root.barText.length > 0 ? session.searching || session.searchedText.length > 0
+                                        : session.showingRecent && session.hits.length > 0)
         query: root.barText
         selectedIndex: root.barSelectedIndex
         assistantIcon: Look.assistantIcon(session.ui.robot_mascot)
@@ -654,13 +665,18 @@ PlasmoidItem {
         } else {
             searchDelay.stop();
             session.clearSearch();
+            if (root.barFocused) {
+                session.showRecent();
+            }
         }
     }
 
     /** Enter in the panel bar: open the selected result, or ask from the Ask row (see the header). */
     function barAccepted(text) {
         if (text.length === 0) {
-            if (session.needsSetup) {
+            if (session.showingRecent && root.barSelectedIndex >= 0 && root.barSelectedIndex < session.hits.length) {
+                root.openBarHit(session.hits[root.barSelectedIndex]);
+            } else if (session.needsSetup) {
                 root.openSettings();
             } else {
                 root.openPopup();
@@ -686,6 +702,12 @@ PlasmoidItem {
     /** Down and Up in the panel bar: through its results and the Ask row; with none, earlier requests. */
     function moveBarSelection(delta) {
         const count = session.hits.length;
+        // The empty bar's chips: -1 is the field itself, before the first chip.
+        if (root.barText.length === 0 && session.showingRecent && count > 0
+                && !(root.barSelectedIndex < 0 && delta < 0)) {
+            root.barSelectedIndex = Math.max(-1, Math.min(count - 1, root.barSelectedIndex + delta));
+            return;
+        }
         if (count === 0 || root.barText.length === 0) {
             root.recall(delta);
             return;
@@ -777,7 +799,8 @@ PlasmoidItem {
      *  A saved conversation opens in Happy Bot, which stays open. */
     function openHit(hit) {
         if (hit.kind === "quick") {
-            session.activateQuick(hit);
+            // An instant command that fails is shown in the popup, since nothing else would show it.
+            session.activateQuick(hit, hit.action.type === "command" ? () => root.openPopup() : null);
             if (hit.action.type === "conversation") {
                 searchDelay.stop();
                 root.clearInput();
