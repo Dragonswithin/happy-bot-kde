@@ -47,7 +47,7 @@ Window {
     property int posX: -1
     property int posY: -1
     property real idleOpacity: 0.4
-    property string iconSource: "tools-wizard"
+    required property IconActivity activity
     property bool busy: false
     property bool useRobotMascot: false
     property int selectedIndex: -1
@@ -215,7 +215,7 @@ Window {
         width: floating.size
         height: floating.size
         visible: floating.reveal < 1
-        opacity: (1 - floating.reveal) * (mouse.containsMouse || mouse.pressed || floating.busy ? 1 : floating.idleOpacity)
+        opacity: (1 - floating.reveal) * (mouse.containsMouse || mouse.pressed || floating.busy || floating.activity.recording ? 1 : floating.idleOpacity)
 
         Behavior on opacity {
             enabled: !floating.expanded
@@ -231,11 +231,12 @@ Window {
             border.color: Qt.alpha(Kirigami.Theme.textColor, 0.2)
         }
 
-        Kirigami.Icon {
+        MascotIcon {
             anchors.centerIn: parent
             width: Kirigami.Units.iconSizes.medium
             height: width
-            source: floating.iconSource
+            activity: floating.activity
+            mascot: floating.useRobotMascot
         }
 
         // Turns while Happy Bot is working on a request.
@@ -273,6 +274,7 @@ Window {
 
             Accessible.role: Accessible.Button
             Accessible.name: i18n("Ask Happy Bot about this application")
+            Accessible.description: floating.activity.recording ? i18n("Recording microphone") : ""
             Accessible.onPressAction: floating.clicked()
 
             onPressed: event => {

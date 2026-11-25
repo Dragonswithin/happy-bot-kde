@@ -54,6 +54,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import desktop_context, routines, user_timers, voice
 from . import settings as settings_store
+from .icon_activity import IconActivity
 from .ask_stream import ClientGone, stream_ask
 from .conversation_archive import ConversationArchive
 from .conversations import ConversationStore
@@ -179,8 +180,9 @@ class AssistantServer(ThreadingHTTPServer):
         self.unit_dir = unit_dir or (user_timers.default_unit_dir() if self.manage_units
                                      else self.config_file.parent / "systemd-user")
         self.mcp = McpManager()
+        self.activity = IconActivity()
         self.approvals = ApprovalBroker()
-        self.voice = voice.Listener(self.runtime_dir)
+        self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:

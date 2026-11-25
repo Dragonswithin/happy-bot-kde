@@ -99,6 +99,27 @@ class ListeningTests(unittest.TestCase):
         self.assertEqual(list((self.runtime / "voice").iterdir()), [])
         self.assertFalse(self.listener.active)
 
+    def test_capture_indicator_clears_before_transcription(self) -> None:
+        changes = []
+        listener = voice.Listener(self.runtime, changes.append)
+
+        def transcribe(settings, audio):
+            self.assertEqual(changes, [True, False])
+            self.assertTrue(listener.active)
+            return "hello"
+
+        with self.microphone(quiet=5, loud=8), mock.patch.object(voice, "transcribe", transcribe):
+            self.assertEqual(listener.listen(self.voice, local_only=True), {"text": "hello"})
+        self.assertEqual(changes, [True, False])
+
+    def test_device_that_never_opens_does_not_show_recording(self) -> None:
+        changes = []
+        listener = voice.Listener(self.runtime, changes.append)
+        with mock.patch.object(voice, "_recorder", return_value=[sys.executable, "-c", "pass"]):
+            with self.assertRaises(voice.VoiceError):
+                listener.listen(self.voice, local_only=True)
+        self.assertEqual(changes, [])
+
     def test_quiet_speech_is_loudness_normalized_before_it_is_sent(self) -> None:
         with self.microphone(quiet=5, loud=8, level=1500):
             self.listener.listen(self.voice, local_only=False)

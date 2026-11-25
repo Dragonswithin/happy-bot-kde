@@ -152,6 +152,7 @@ if (( uninstall )); then
     case "$unit" in *.timer|*.path) systemctl --user disable --now "$(basename -- "$unit")" >/dev/null 2>&1 || true ;; esac
     rm -f -- "$unit"
   done
+  python3 "${SCRIPT_DIR}/mascot_tray_icons.py" --remove "$(dirname -- "$APP_ICON")"
   rm -f -- "$APP_ICON" "${KRUNNER_DIR}/happy-bot.desktop" "${KGLOBALACCEL_DIR}/happy-bot-shortcuts.desktop" \
     "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" \
     "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
@@ -220,6 +221,7 @@ install -m 0644 "$SERVICE_SRC" "${SERVICE_DIR}/${SERVICE_NAME}"
 install -D -m 0644 "$KRUNNER_SRC" "${KRUNNER_DIR}/happy-bot.desktop"
 install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.desktop"
 install -D -m 0644 "${PLASMOID_DIR}/contents/images/happy-bot.svg" "$APP_ICON"
+python3 "${SCRIPT_DIR}/mascot_tray_icons.py" "$(dirname -- "$APP_ICON")"
 install -D -m 0644 "$APP_ENTRY_SRC" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
 if [[ -f "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop" ]]; then
   install -m 0644 "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"

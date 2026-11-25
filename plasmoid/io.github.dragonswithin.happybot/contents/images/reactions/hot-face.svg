@@ -1,0 +1,6 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect x="10" y="18" width="28" height="17" rx="7" fill="#194852"/>
+  <path d="m14 23 5 2m9 0 5-2" fill="none" stroke="#adfff1" stroke-width="2.7" stroke-linecap="round"/>
+  <ellipse cx="23.5" cy="30" rx="2.5" ry="2.8" fill="#adfff1"/>
+</svg>
