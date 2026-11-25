@@ -109,6 +109,7 @@ PlasmoidItem {
     // Enter pressed while the search for this text was still running: acted on when it finishes.
     property string acceptAfterSearch: ""
     property bool acceptFromBar: false  // that Enter came from the panel bar (`barAccepted`)
+    property string talkSource: ""  // where listening started: "bar" or "assistant" (`talk`)
     // The panel bar's results (PanelResults.qml): the selected one, and whether the bar has the
     // keyboard (kept a moment after it loses it, so a click on a result still lands).
     property int barSelectedIndex: -1
@@ -209,6 +210,7 @@ PlasmoidItem {
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
         onAskRequested: text => root.askAssistant(text)
+        onTalkRequested: root.talk("assistant")
         onSelectionMove: delta => root.moveSelection(delta)
         onCompleteRequested: root.completeFromTop()
         onHitActivated: location => root.openLocation(location)
@@ -220,6 +222,7 @@ PlasmoidItem {
         onDismissed: {
             searchDelay.stop();
             session.stopFindingFiles();
+            root.cancelTalking();
             if (root.barMode && root.fullRepresentationItem) {
                 root.fullRepresentationItem.setText(popup.inputText);
             }
@@ -262,6 +265,7 @@ PlasmoidItem {
             onQueryEdited: text => root.handleEdited(text)
             onAccepted: text => root.handleAccepted(text)
             onAskRequested: text => root.askAssistant(text)
+            onTalkRequested: root.talk("assistant")
             onSelectionMove: delta => root.moveSelection(delta)
             onCompleteRequested: root.completeFromTop()
             onHitActivated: location => root.openLocation(location)
@@ -273,6 +277,7 @@ PlasmoidItem {
             onDismissed: {
                 searchDelay.stop();
                 session.stopFindingFiles();
+                root.cancelTalking();
                 clearInput();
             }
         }
@@ -298,6 +303,10 @@ PlasmoidItem {
                 root.focusBar();
             }
         }
+        voiceEnabled: session.voiceEnabled
+        listening: session.listening
+        voiceProblem: session.voiceProblem
+        onMicClicked: root.talk("bar")
         onAccepted: text => root.barAccepted(text)
         onTextEdited: text => root.barEdited(text)
         onSelectionMove: delta => root.moveBarSelection(delta)
@@ -444,6 +453,12 @@ PlasmoidItem {
                                                  : data.age >= 0 && data.age < 30;
             if (fresh && data.action === "settings") {
                 root.openSettings();
+            } else if (fresh && data.action === "talk") {
+                // The "Talk to Happy Bot" shortcut: open here, listening (pressed again: stop and send).
+                if (!session.listening) {
+                    root.openForApplication();
+                }
+                root.talk("assistant");
             } else if (fresh && root.showRequests >= 0) {
                 if (root.floatingOpen) {
                     root.closePopup();
@@ -651,6 +666,33 @@ PlasmoidItem {
             return;
         }
         root.openHit(hit);
+    }
+
+    /** The microphone (in the panel bar, the popup or the floating Happy Bot, or the Talk shortcut):
+     *  listen, then send what was said to the assistant at once, as the maintainer chose. From the
+     *  bar it goes the way of the Ask row (the popup opens with the answer); elsewhere into the open
+     *  view. Clicking it again while listening stops and sends what was said so far. */
+    function talk(source) {
+        if (!session.listening) {
+            root.talkSource = source;
+        }
+        session.talk(function(text) {
+            if (source === "bar") {
+                root.askFromBar(text);
+                return;
+            }
+            if (!root.floatingOpen && !popup.visible) {
+                root.openPopup();
+            }
+            root.askAssistant(text);
+        }, function(message, code) {});
+    }
+
+    /** Closing Happy Bot while it listens for it drops the recording; listening for the bar goes on. */
+    function cancelTalking() {
+        if (session.listening && root.talkSource === "assistant") {
+            session.stopListening(true);
+        }
     }
 
     /** The panel bar's Ask row: the popup opens and the assistant gets the text as a request. */

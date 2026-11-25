@@ -18,7 +18,8 @@ The server refuses to bind to a non-loopback address.
 The server object is also where the daemon's long-lived parts hang: its
 ``DaemonState`` (mirrored to ``daemon.json`` in the runtime directory so
 clients can find the base URL), the current settings, the conversations, the
-``ApprovalBroker`` holding approval requests that await the user, and the
+``ApprovalBroker`` holding approval requests that await the user, the
+``voice.Listener`` that records a spoken request, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
 manager and brings the routines' systemd units in step (``routines.sync``),
@@ -51,7 +52,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import desktop_context, routines, user_timers
+from . import desktop_context, routines, user_timers, voice
 from . import settings as settings_store
 from .ask_stream import ClientGone, stream_ask
 from .conversation_archive import ConversationArchive
@@ -179,6 +180,7 @@ class AssistantServer(ThreadingHTTPServer):
                                      else self.config_file.parent / "systemd-user")
         self.mcp = McpManager()
         self.approvals = ApprovalBroker()
+        self.voice = voice.Listener(self.runtime_dir)
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:

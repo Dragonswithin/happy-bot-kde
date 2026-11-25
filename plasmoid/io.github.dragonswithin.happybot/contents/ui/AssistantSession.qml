@@ -108,6 +108,12 @@ import QtQuick
  * finder's last file search failed (outside the finder a failed file search
  * just shows no files).
  *
+ * Talking: `talk` asks the daemon to listen (`POST /voice/listen`, which
+ * records until the user pauses and returns the text Whisper or another
+ * speech service heard); `stopListening` ends it early. `voiceEnabled`
+ * (from `/health`) says whether the microphone button shows; `listening`
+ * whether it is recording now.
+ *
  * Nothing here blocks: all requests are asynchronous on the GUI thread. A
  * failed or unreachable daemon sets `status` to "offline" and adds an error
  * entry instead of throwing. `status` is one of "starting", "idle",
@@ -134,6 +140,11 @@ Item {
         imported: []
     })
     property bool uiLoaded: false
+    // Talking: the microphone button shows when the user switched voice on and set a speech service
+    // (`voice` in /health); `listening` while the daemon records and turns speech into text.
+    property bool voiceEnabled: false
+    property bool listening: false
+    property string voiceProblem: ""  // the last listening problem, shown in the field for a few seconds
 
     readonly property ListModel entries: ListModel {}
     property var history: []
@@ -231,6 +242,7 @@ Item {
                 session.ui = data.ui;
             }
             session.uiLoaded = true;
+            session.voiceEnabled = !!(data.voice && data.voice.enabled);
             if (session.chatModel && !session.models.some(item => item.name === session.chatModel)) {
                 session.chatModel = "";
             }
@@ -306,6 +318,39 @@ Item {
             }
             finished();
         });
+    }
+
+    /** Listens until the user pauses (`POST /voice/listen`) and calls `onText` with what was said;
+     *  while listening, it stops instead and what was said so far is sent (see voice.py). Problems
+     *  ("did not hear anything", the service failing) come back through `onProblem`. */
+    function talk(onText, onProblem) {
+        if (session.listening) {
+            stopListening(false);
+            return;
+        }
+        session.listening = true;
+        request("POST", "/voice/listen", {}, function(data) {
+            session.listening = false;
+            if (data.text) {
+                onText(data.text);
+            }
+        }, function(data) {
+            session.listening = false;
+            session.voiceProblem = data.error || i18n("Happy Bot could not listen.");
+            voiceProblemShown.restart();
+            onProblem(session.voiceProblem, data.code || "");
+        });
+    }
+
+    Timer {
+        id: voiceProblemShown
+        interval: 5000
+        onTriggered: session.voiceProblem = ""
+    }
+
+    /** Ends listening now; `discard` drops what was said instead of sending it. */
+    function stopListening(discard) {
+        request("POST", "/voice/stop", { discard: discard === true }, function(data) {}, function(data) {});
     }
 
     /** Carries out an action (`{type, target}`) through the daemon's `/quick/activate`, such as a file match's

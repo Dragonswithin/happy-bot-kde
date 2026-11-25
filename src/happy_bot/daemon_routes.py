@@ -18,7 +18,8 @@ Endpoints:
   Bot, run by ``happy-bot-app``) is running and starts at login; start it,
   or turn starting at login on or off (``app_control``).
 - ``POST /app/show``, ``GET /app/wait?seen=N``: a second launch asks the
-  running app to open (``happy-bot app show``); the app waits on
+  running app to open (``happy-bot app show``), or to open and listen
+  (``happy-bot app talk``); the app waits on
   ``/app/wait``, which answers when a request arrives or after 25 seconds.
 - ``GET /panel``, ``POST /panel``: the Happy Bot widgets on the user's panels,
   whether they show a search bar or the icon and the bar's width;
@@ -99,6 +100,14 @@ Endpoints:
 - ``POST /approve``: the user's answer to an approval request
   (``{"id", "decision": "allow"|"deny", "remember": bool}``).
 - ``POST /screenshot``.
+- ``POST /voice/listen``: records the microphone until the user pauses
+  and returns ``{"text"}`` as the speech service heard it; it blocks for
+  as long as the user talks (``voice.Listener``). ``POST /voice/stop``
+  (``{"discard": bool}``) ends a recording early: the microphone clicked
+  again sends what was said, Escape discards it. ``POST /voice/check``
+  sends half a second of silence to the configured service, for the
+  settings page's Test button; ``POST /voice/find`` tries the model
+  services on this computer that way and returns the first that answers. Errors carry ``voice.VoiceError``'s code.
 
 ``POST /ask`` is not here: it streams, so ``daemon_http`` hands it to
 ``ask_stream``.
@@ -116,7 +125,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import (app_context, app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+from . import (app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
@@ -158,6 +167,10 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"])}
                          for name in server.settings.get("model_order", [])]
     payload["ui"] = server.settings.get("ui") or {}
+    # The microphone button shows when the user switched it on and a speech service is set.
+    voice_settings = server.settings.get("voice") or {}
+    payload["voice"] = {"enabled": bool(voice_settings.get("enabled") and voice_settings.get("base_url")),
+                        "listening": server.voice.active}
     payload["settings_error"] = server.settings_error
     return 200, payload
 
@@ -225,6 +238,47 @@ def panel_change(server: "AssistantServer", query: dict[str, list[str]], body: d
 def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     action = str(body.get("action") or "open")
     return 200, {"ok": True, "count": app_control.waker.notify(action), "running": app_control.running()}
+
+
+def _voice_error(error: "voice.VoiceError") -> Reply:
+    status = {"busy": 409, "not_set_up": 400, "local_only": 403, "no_speech": 422}.get(error.code, 502)
+    return status, {"ok": False, "error": str(error), "code": error.code}
+
+
+def voice_listen(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    agent = server.settings.get("agent") or {}
+    try:
+        heard = server.voice.listen(server.settings.get("voice") or voice.VOICE_DEFAULTS, bool(agent.get("local_only")))
+    except voice.VoiceError as error:
+        return _voice_error(error)
+    return 200, {"ok": True, **heard}
+
+
+def voice_stop(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "was_listening": server.voice.stop(discard=body.get("discard") is True)}
+
+
+def voice_check(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """Checks ``body["voice"]`` (the settings page's unsaved fields) or else the saved voice settings."""
+    agent = server.settings.get("agent") or {}
+    try:
+        wanted = voice.validate_voice(body["voice"]) if isinstance(body.get("voice"), dict) \
+            else server.settings.get("voice") or voice.VOICE_DEFAULTS
+        return 200, voice.check_service(wanted, bool(agent.get("local_only")))
+    except voice.VoiceSettingsError as error:
+        return 400, {"ok": False, "error": str(error), "code": "invalid"}
+    except voice.VoiceError as error:
+        return _voice_error(error)
+
+
+def voice_find(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """A speech-to-text service on this computer: the user's local AIs' addresses first, then any found."""
+    known = [model["base_url"] for model in server.settings.get("models", {}).values()]
+    found = voice.find_service(known) or voice.find_service([item["base_url"] for item in model_discovery.discover_local()])
+    if not found:
+        return 404, {"ok": False, "code": "not_found",
+                     "error": "No speech-to-text service answered on this computer."}
+    return 200, {"ok": True, "base_url": found}
 
 
 def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -607,6 +661,10 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,
     ("POST", "/app/show"): app_show,
+    ("POST", "/voice/listen"): voice_listen,
+    ("POST", "/voice/stop"): voice_stop,
+    ("POST", "/voice/check"): voice_check,
+    ("POST", "/voice/find"): voice_find,
     ("GET", "/panel"): panel_status,
     ("POST", "/panel"): panel_change,
     ("GET", "/app/wait"): app_wait,

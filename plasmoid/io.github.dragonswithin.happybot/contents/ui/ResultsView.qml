@@ -39,7 +39,9 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * - `queryEdited(text)`: the text changed. `accepted(text)`: Enter, trimmed.
  *   `askRequested(text)`: the Ask row under the results was clicked, which
- *   always asks the assistant whatever result is selected. `selectionMove(delta)`: Down (+1) or Up (-1).
+ *   always asks the assistant whatever result is selected.
+ *   `talkRequested()`: the microphone in the field (shown when
+ *   `session.voiceEnabled`), to start or stop listening. `selectionMove(delta)`: Down (+1) or Up (-1).
  *   `completeRequested()`: Tab, to complete the text from the top result. Escape
  *   clears the text, or closes when it is already empty (`closeRequested`).
  * - `resultActivated(hit)`: a clicked file match or quick result.
@@ -95,6 +97,7 @@ Rectangle {
     signal queryEdited(string text)
     signal accepted(string text)
     signal askRequested(string text)
+    signal talkRequested()
     signal selectionMove(int delta)
     signal completeRequested()
     signal hitActivated(string location)
@@ -287,6 +290,15 @@ Rectangle {
                     border.color: field.activeFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.25)
                 }
                 rightActions: [
+                    // Talk instead of typing: shown when voice is on in the settings; click again to stop.
+                    Kirigami.Action {
+                        text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
+                        icon.name: view.session.listening ? "media-record" : "audio-input-microphone"
+                        visible: view.session.voiceEnabled
+                        checkable: true
+                        checked: view.session.listening
+                        onTriggered: view.talkRequested()
+                    },
                     Kirigami.Action {
                         text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
                         icon.name: "go-next"
@@ -294,7 +306,9 @@ Rectangle {
                         onTriggered: view.accepted(field.text.trim())
                     }
                 ]
-                placeholderText: view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
+                placeholderText: view.session.listening ? i18n("Listening… talk, then pause")
+                    : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
+                    : view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
                 Keys.onEnterPressed: view.accepted(text.trim())

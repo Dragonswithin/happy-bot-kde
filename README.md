@@ -104,6 +104,12 @@ used.
   The AI is asked only from the "Ask Happy Bot about …" row under the
   results: click it, or press Down to it and Enter (when nothing matches it
   is already selected).
+- **Talk to it**: switch on the microphone under AI Model → Voice ("Find on
+  this computer" finds a local Whisper), then click the microphone in the
+  panel bar, the popup or the floating Happy Bot, or press the "Talk to Happy
+  Bot" shortcut you set in System Settings. Talk and pause: what you said
+  goes to the AI. Only recordings with speech are sent, and each is deleted
+  right after.
 - In the popup and the floating Happy Bot, what you type is a request for
   the assistant, which searches files or the web when it needs to. "Find a
   file" on the welcome screen searches as you type there, the same way as

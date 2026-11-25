@@ -12,8 +12,9 @@ launcher. This module is the daemon's side of it:
   ``$XDG_CONFIG_HOME/autostart``, so it starts when the user logs in.
 - ``Waker`` lets a second launch (the menu entry or the hotkey while the app runs) and the panel
   widget reach the running app: ``happy-bot app show`` (or ``settings``) calls ``POST /app/show``
-  (``notify``) with what to show, ``open`` (the floating Happy Bot) or ``settings`` (its settings,
-  which hold nearly all of Happy Bot's settings); the app waits on ``GET /app/wait`` (``wait``),
+  (``notify``) with what to show, ``open`` (the floating Happy Bot), ``settings`` (its settings,
+  which hold nearly all of Happy Bot's settings) or ``talk`` (open and listen to the microphone:
+  the "Talk to Happy Bot" shortcut, ``happy-bot app talk``); the app waits on ``GET /app/wait`` (``wait``),
   which answers as soon as the count of requests grows or after ``WAIT_SECONDS``, so the app asks
   again. The answer carries the last request's action and age, so an app that was just started
   for a request (``start``, then ``notify``) still acts on it. Only the app waits.
@@ -82,7 +83,7 @@ def set_autostart(enabled: bool) -> None:
     target.write_text(text, encoding="utf-8")
 
 
-ACTIONS = ("open", "settings")
+ACTIONS = ("open", "settings", "talk")
 
 
 class Waker:

@@ -1,8 +1,10 @@
 # Global shortcuts for Happy Bot, installed by scripts/install.sh into
 # ~/.local/share/applications/ and linked from ~/.local/share/kglobalaccel/,
 # which is where KDE's shortcut service looks for applications' shortcuts.
-# Each action asks the assistant in the background (happy-bot ask
-# --notify) and shows the answer as a notification. No key is preset, so
+# "Talk to Happy Bot" opens the Happy Bot app listening to the microphone
+# (happy-bot app talk; press again to stop and send). The others ask the
+# assistant in the background (happy-bot ask --notify) and show the answer
+# as a notification. No key is preset, so
 # nothing clashes; the user assigns keys in System Settings > Shortcuts >
 # "Happy Bot Shortcuts".
 [Desktop Entry]
@@ -12,7 +14,7 @@ Comment=Ask Happy Bot about the selected text or the window you are in
 Icon=tools-wizard
 Exec=happy-bot ask --notify -- "Explain the text I have selected (use selected_text)."
 NoDisplay=true
-Actions=ExplainSelection;AskAboutWindow;
+Actions=TalkToHappyBot;ExplainSelection;AskAboutWindow;
 X-KDE-Shortcuts=
 
 [Desktop Action ExplainSelection]
@@ -23,4 +25,9 @@ X-KDE-Shortcuts=
 [Desktop Action AskAboutWindow]
 Name=Ask about this window
 Exec=happy-bot ask --notify -- "Look at the window I am working in (use ui_snapshot on the current window) and tell me briefly what it shows and anything that needs my attention."
+X-KDE-Shortcuts=
+
+[Desktop Action TalkToHappyBot]
+Name=Talk to Happy Bot
+Exec=happy-bot app talk
 X-KDE-Shortcuts=

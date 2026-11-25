@@ -31,28 +31,29 @@ Chosen by the maintainer on 2026-11-23, in this order, to follow the Phase 6 exi
 4. **Bar quick results** (§1): apps, settings pages, calculator and
    conversions while typing, with no model call.
 
-## Image And Voice Input (Requested 2026-11-23, Deferred by the maintainer)
+## Image And Voice Input (Requested 2026-11-23)
 
-The maintainer asked for both, to be planned now and built later (⏸ below: "don't do
-that now, just add it to the features/roadmap"). Neither configured
-model takes images or audio today: the local GPU service runs
-Qwen3.6-35B-A3B without a vision projector (llama.cpp reports vision and
-audio off), and the hosted model is marked as not seeing images. Until then,
-text in pictures is read with OCR (``text_from_image``), which works with
-text-only models and stays as an option afterwards.
+The maintainer first deferred both, then (2026-11-25) gave the GPU service's
+Qwen3.6-35B-A3B a vision projector and the NPU service Whisper V3 Turbo for
+speech to text, and asked Happy Bot to use them. Text in pictures is still
+read with OCR (``text_from_image``) for text-only models.
 
-- ⏸ Choose and set up a local model that takes images, and one for speech to
-  text, on the GPU (llama.cpp) or NPU (FastFlowLM) service, so both can be
-  tested locally. This changes the development machine's model services and needs the maintainer's
-  go-ahead on which model; candidates seen in the NPU catalogue include
-  ``qwen3vl-it:4b``, ``qwen2.5vl-it:3b``, ``minicpm-v-4.7-moe:35b-a3b`` and
-  the Gemma 4 models.
-- ⏸ Image input: send screenshots and pictures to models marked "can see
-  images", as image parts of the request; a "look at the screen" tool for
-  them; OCR stays for text-only models.
-- ⏸ Voice input: push-to-talk in the popup (microphone button and shortcut),
-  recorded with PipeWire and sent to a speech-to-text endpoint the user
-  chooses in settings; the text fills the bar or is sent at once.
+- ● Local models that take images and speech: the GPU model sees pictures
+  (llama.cpp reports vision); FastFlowLM serves Whisper at
+  ``/v1/audio/transcriptions``.
+- ● Image input: a "Help with …" screenshot goes to models marked "can look at
+  pictures" as image parts of the request. Whether a model on this computer
+  takes images is now asked of its service when it is added
+  (``model_discovery.sees_pictures``), the check warns when a service says so
+  but the box is off, and the AI list shows "sees pictures".
+- ● Voice input: a microphone in the panel's search bar, the popup and the
+  floating Happy Bot, and a "Talk to Happy Bot" shortcut (key chosen in
+  System Settings). PipeWire records until the user pauses (or clicks
+  again); only audio with speech in it is sent, loudness-normalized 16 kHz
+  mono with the language set (as Whisper needs), to the speech-to-text service
+  set on the AI Model page (Voice), and the text goes to the AI at once, as
+  the maintainer chose. The recording is deleted as soon as it is sent.
+  (tested with a fake microphone and service; not yet tried by voice)
 - ⏸ Voice output: optional spoken answers through a text-to-speech endpoint
   the user chooses.
 
@@ -150,8 +151,9 @@ text-only models and stays as an option afterwards.
   yet seen by a person in the popup)
 - ● A KRunner plugin so the same assistant answers from KRunner. (checked live
   over DBus)
-- ⏸ Push-to-talk voice input through a speech-to-text endpoint the user
-  configures, and optional spoken replies. (see Image And Voice Input)
+- ● Talk instead of typing: the microphone and the Talk shortcut, through a
+  speech-to-text service the user sets. Spoken replies are not done. (see
+  Image And Voice Input)
 
 ## 2. Finding Things
 

@@ -37,6 +37,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
  * - `iconClicked`: a left click on the logo at the bar's left end. It works
  *   with nothing typed, so saved conversations are always one click away.
+ * - `micClicked`: a click on the microphone at the bar's right end, shown
+ *   when `voiceEnabled`; it reads "Listening…" while `listening`.
  * - `menuRequested`: a right-click anywhere on the bar. The text field
  *   would otherwise swallow it, so Plasma's own widget menu never appears.
  * - `inputFocusedChanged`: releases the panel's keyboard focus request.
@@ -59,6 +61,9 @@ Item {
     property bool offline: false
     property string iconName: "search"
     property int widthInGridUnits: 18
+    property bool voiceEnabled: false  // show the microphone at the bar's right end
+    property bool listening: false
+    property string voiceProblem: ""  // shown in place of the placeholder for a few seconds
     // Focused means the field has focus AND its panel window is the active
     // window. A click anywhere outside deactivates the panel; focus is then
     // dropped explicitly so the next click on the
@@ -79,6 +84,7 @@ Item {
     signal dismissed()
     signal menuRequested()
     signal iconClicked()
+    signal micClicked()
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * widthInGridUnits
     Layout.preferredWidth: Layout.minimumWidth
@@ -103,9 +109,12 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         height: Math.min(parent.height, implicitHeight)
 
-        placeholderText: bar.offline ? bar.statusText : i18n("Ask or search anything…")
+        placeholderText: bar.listening ? i18n("Listening… talk, then pause")
+            : bar.voiceProblem.length > 0 ? bar.voiceProblem
+            : bar.offline ? bar.statusText : i18n("Ask or search anything…")
         leftPadding: icon.width + Kirigami.Units.smallSpacing * 2
-        rightPadding: spinner.visible ? spinner.width + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing
+        rightPadding: (spinner.visible ? spinner.width + Kirigami.Units.smallSpacing : 0)
+            + (mic.visible ? mic.width + Kirigami.Units.smallSpacing : 0) + Kirigami.Units.smallSpacing
         Accessible.name: i18n("Ask or search anything")
 
         onTextEdited: bar.textEdited(text)
@@ -133,9 +142,22 @@ Item {
             opacity: bar.offline ? 0.45 : 0.8
         }
 
+        Kirigami.Icon {
+            id: mic
+            anchors.right: parent.right
+            anchors.rightMargin: Kirigami.Units.smallSpacing
+            anchors.verticalCenter: parent.verticalCenter
+            width: Kirigami.Units.iconSizes.small
+            height: width
+            visible: bar.voiceEnabled
+            source: bar.listening ? "media-record" : "audio-input-microphone"
+            color: bar.listening ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+            opacity: bar.listening ? 1 : 0.8
+        }
+
         QQC2.BusyIndicator {
             id: spinner
-            anchors.right: parent.right
+            anchors.right: mic.visible ? mic.left : parent.right
             anchors.rightMargin: Kirigami.Units.smallSpacing
             anchors.verticalCenter: parent.verticalCenter
             width: Kirigami.Units.iconSizes.small
@@ -157,6 +179,25 @@ Item {
         acceptedButtons: Qt.RightButton
         cursorShape: Qt.IBeamCursor
         onClicked: bar.menuRequested()
+    }
+
+    // The microphone is a button of its own too, at the right end: talk instead of typing.
+    MouseArea {
+        visible: mic.visible
+        x: field.x + field.width - width
+        width: mic.width + Kirigami.Units.smallSpacing * 2
+        height: parent.height
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: bar.micClicked()
+        Accessible.role: Accessible.Button
+        Accessible.name: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
+        Accessible.onPressAction: bar.micClicked()
+
+        QQC2.ToolTip.text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
+        QQC2.ToolTip.visible: containsMouse
+        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
 
     // The logo is a button of its own, above the click-to-type areas; right

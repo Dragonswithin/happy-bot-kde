@@ -40,7 +40,8 @@ APPLET_ID = "io.github.dragonswithin.happybot"
 HELPERS = {"gio": "opening files and the trash", "qdbus6": "the clipboard and KDE settings",
            "wpctl": "sound", "nmcli": "networking", "kreadconfig6": "reading KDE settings",
            "notify-send": "notifications and reminders", "tesseract": "reading text in pictures",
-           "spectacle": "screenshots", "pactl": "sound devices", "kdeconnect-cli": "the phone"}
+           "spectacle": "screenshots", "pactl": "sound devices", "kdeconnect-cli": "the phone",
+           "pw-record": "talking to Happy Bot (the microphone)"}
 
 
 def _check(name: str, ok: bool, detail: str, fix: str = "") -> dict[str, Any]:
