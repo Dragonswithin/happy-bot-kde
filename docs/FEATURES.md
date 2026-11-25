@@ -59,6 +59,15 @@ read with OCR (``text_from_image``) for text-only models.
 
 ## 1. The Bar
 
+- ● The mascot reacts to the computer: heat, sustained CPU load, memory
+  pressure, downloads and uploads, and the microphone while it captures,
+  which takes priority (``icon_activity``, ``IconActivity.qml``). The
+  daemon samples the machine once a second (``system_sensors``: the CPU
+  sensor's own temperature limit, ``/proc/stat``, ``/proc/meminfo``, PSI
+  memory stalls, the default route's byte counters). (checked live
+  2026-11-25: a real download showed the download pose, a microphone
+  capture during it took over, and the download pose came back after)
+
 - ● Answer buttons: the AI may ask one short question with 2–4 answers as
   buttons (``ask_user``) or offer 1–3 next steps after an answer
   (``suggest_next``); a click is the user's next message, and the turn ends

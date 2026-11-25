@@ -19,6 +19,7 @@ The server object is also where the daemon's long-lived parts hang: its
 ``DaemonState`` (mirrored to ``daemon.json`` in the runtime directory so
 clients can find the base URL), the current settings, the conversations, the
 ``ApprovalBroker`` holding approval requests that await the user, the
+``IconActivity`` the mascot's cues come from (``GET /icon/activity``), the
 ``voice.Listener`` that records a spoken request, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
@@ -31,8 +32,11 @@ endpoint does lives in ``daemon_routes``; this module only authenticates,
 parses and dispatches. The one exception in shape is ``POST /ask``, which
 answers with a server-sent event stream (``text/event-stream``, one
 ``data: <json>`` block per event, connection closed at the end) produced by
-``ask_stream``. On shutdown the state file and token are removed and
-every tool server is stopped.
+``ask_stream``. ``serve`` also runs the ``system_sensors.SensorSampler``,
+which feeds ``activity.observe_sensors`` one reading a second; tests that
+build an ``AssistantServer`` themselves get no sampler. On shutdown the
+sampler stops, the state file and token are removed and every tool server
+is stopped.
 """
 
 from __future__ import annotations
@@ -53,6 +57,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from . import desktop_context, routines, user_timers, voice
+from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
 from .ask_stream import ClientGone, stream_ask
@@ -340,6 +345,9 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
     print(f"Happy Bot daemon listening on {host}:{server.state.port}", flush=True)
     if not KRunnerBridge(server).start():
         print("KRunner integration unavailable (no PyGObject or session bus)", flush=True)
+    # The mascot's live cues (heat, CPU load, memory pressure, transfers): one reading a second.
+    sensors = SensorSampler(server.activity.observe_sensors)
+    sensors.start()
 
     def stop_on_signal(signum: int, frame: Any) -> None:
         # systemd stops the unit with SIGTERM; unwind like Ctrl+C so the
@@ -352,6 +360,7 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        sensors.stop()
         try:
             server.server_close()
         finally:
