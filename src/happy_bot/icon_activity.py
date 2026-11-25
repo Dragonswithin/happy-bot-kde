@@ -1,8 +1,8 @@
 """Current mascot cues, shared by the floating app and the Plasma widget.
 
 The recorder publishes capture transitions. A sensor sampler can call
-observe_sensors once per sample with the CPU temperature and the active
-connection's receive/transmit rates. Unknown readings clear their own cue.
+observe_sensors with CPU temperature and load, available memory and pressure,
+and the active connection's receive/transmit rates. Unknown readings clear their own cue.
 Both views long-poll the latest snapshot. Nothing is stored on disk.
 """
 
@@ -41,8 +41,10 @@ class IconActivity:
     def __init__(self) -> None:
         self._changed = threading.Condition()
         self._revision = time.monotonic_ns()
-        self._state = dict(recording=False, hot=False, downloading=False, uploading=False)
+        self._state = dict(recording=False, hot=False, busy=False, low_memory=False, downloading=False, uploading=False)
         self._hot = _Sustained(10, 20)
+        self._busy = _Sustained(10, 8)
+        self._memory = _Sustained(15, 20)
         self._down = _Sustained(3, 5)
         self._up = _Sustained(3, 5)
 
@@ -58,14 +60,20 @@ class IconActivity:
 
     def observe_sensors(self, *, cpu_c: float | None, high_c: float | None,
                         receive_bytes_per_second: float | None, send_bytes_per_second: float | None,
-                        threshold_bytes_per_second: float = 256 * 1024) -> None:
+                        cpu_percent: float | None = None, available_memory_percent: float | None = None,
+                        memory_pressure: bool | None = None, threshold_bytes_per_second: float = 256 * 1024) -> None:
         """Rates are bytes/second. high_c is the sensor's or user's limit."""
         with self._changed:
             now = time.monotonic()
             if high_c is None or not math.isfinite(high_c):
                 cpu_c, high_c = None, 0
             low_rate = threshold_bytes_per_second / 4
+            used_percent = None
+            if available_memory_percent is not None and memory_pressure is not None:
+                used_percent = 100 - available_memory_percent if memory_pressure else 0
             self._update(
+                busy=self._busy.observe(cpu_percent, 85, 65, now),
+                low_memory=self._memory.observe(used_percent, 90, 85, now),
                 hot=self._hot.observe(cpu_c, high_c, high_c - 5, now),
                 downloading=self._down.observe(receive_bytes_per_second, threshold_bytes_per_second, low_rate, now),
                 uploading=self._up.observe(send_bytes_per_second, threshold_bytes_per_second, low_rate, now),

@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 APP_ID = "io.github.dragonswithin.happybot"
 IMAGES = Path(__file__).resolve().parents[1] / "plasmoid" / APP_ID / "contents/images"
 LAYERS = {
+    "busy": ("busy",),
+    "memory": ("memory",),
     "hot": ("hot-face", "sweat"),
     "download": ("download",),
     "upload": ("upload",),

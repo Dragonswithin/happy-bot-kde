@@ -14,10 +14,10 @@ class IconActivityTests(unittest.TestCase):
     def setUp(self):
         self.activity = IconActivity()
 
-    def sample(self, at, cpu=95, high=90, down=300000, up=0):
+    def sample(self, at, cpu=95, high=90, down=300000, up=0, **memory_and_load):
         with patch("happy_bot.icon_activity.time.monotonic", return_value=at):
             self.activity.observe_sensors(cpu_c=cpu, high_c=high, receive_bytes_per_second=down,
-                                          send_bytes_per_second=up)
+                                          send_bytes_per_second=up, **memory_and_load)
         return self.activity.wait("")
 
     def test_heat_dwell_and_recovery(self):
@@ -40,6 +40,20 @@ class IconActivityTests(unittest.TestCase):
         self.assertTrue(self.sample(10)["hot"])
         missing = self.sample(11, high=None, down=None)
         self.assertFalse(missing["hot"] or missing["downloading"])
+
+    def test_memory_requires_pressure_and_cpu_load_recovers_separately(self):
+        low = dict(available_memory_percent=8, memory_pressure=False, cpu_percent=90)
+        self.sample(0, **low)
+        state = self.sample(20, **low)
+        self.assertFalse(state["low_memory"])
+        self.assertTrue(state["busy"])
+        low.update(memory_pressure=True, cpu_percent=60)
+        self.sample(21, **low)
+        self.assertFalse(self.sample(29, **low)["busy"])
+        self.assertTrue(self.sample(36, **low)["low_memory"])
+        low.update(memory_pressure=False)
+        self.assertTrue(self.sample(37, **low)["low_memory"])
+        self.assertFalse(self.sample(57, **low)["low_memory"])
 
     def test_both_views_wake_on_record_and_stop(self):
         state = self.activity.wait("")

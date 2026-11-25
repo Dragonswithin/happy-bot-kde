@@ -14,6 +14,8 @@ ApplicationWindow {
 
     HappyBot.IconActivity {
         id: demo
+        lowMemory: memory.checked
+        busy: cpu.checked
         hot: heat.checked
         downloading: down.checked
         uploading: up.checked
@@ -21,6 +23,8 @@ ApplicationWindow {
     }
     HappyBot.IconActivity {
         id: tray
+        lowMemory: demo.trayPose === "memory"
+        busy: demo.trayPose === "busy"
         hot: demo.trayPose === "hot"
         downloading: demo.trayPose === "download" || demo.trayPose === "transfer"
         uploading: demo.trayPose === "upload" || demo.trayPose === "transfer"
@@ -68,6 +72,8 @@ ApplicationWindow {
             columns: 2
             CheckBox { id: mic; text: "Recording microphone"; checked: true }
             CheckBox { id: heat; text: "CPU hot" }
+            CheckBox { id: cpu; text: "CPU busy" }
+            CheckBox { id: memory; text: "Low memory" }
             CheckBox { id: down; text: "Downloading" }
             CheckBox { id: up; text: "Uploading" }
             CheckBox { id: motion; text: "Animate"; checked: true }

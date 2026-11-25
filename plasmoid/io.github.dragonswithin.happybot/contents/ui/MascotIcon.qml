@@ -12,9 +12,30 @@ Item {
     property bool mascot: true
     property bool animate: true
     readonly property bool moving: visible && animate && Kirigami.Units.longDuration > 1
-    readonly property bool hot: mascot && activity.hot && !activity.recording
+    readonly property string expression: mascot ? activity.expression : ""
+    readonly property bool hot: expression === "hot"
     readonly property string transfer: mascot && !activity.recording ? activity.transfer : ""
     readonly property real unit: Math.min(width, height) / 48
+
+    // One nod as the CPU gets busy, or one squeeze as memory gets tight.
+    // Settle into the drawn pose for as long as the condition holds.
+    transform: Scale {
+        id: headScale
+        origin.x: face.width / 2
+        origin.y: face.height * 0.84
+        SequentialAnimation on yScale {
+            running: face.moving && face.expression === "busy"
+            NumberAnimation { from: 1; to: 0.83; duration: Kirigami.Units.shortDuration }
+            NumberAnimation { to: 1; duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic }
+            onStopped: headScale.yScale = 1
+        }
+        SequentialAnimation on xScale {
+            running: face.moving && face.expression === "memory"
+            NumberAnimation { from: 1; to: 0.80; duration: Kirigami.Units.shortDuration }
+            NumberAnimation { to: 1; duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic }
+            onStopped: headScale.xScale = 1
+        }
+    }
 
     function artwork(name: string): string {
         return name ? Qt.resolvedUrl("../images/reactions/" + name + ".svg").toString() : "";
@@ -36,7 +57,7 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.artwork(face.hot ? "hot-face" : "")
+        source: face.artwork(face.hot ? "hot-face" : face.expression)
     }
     Image {
         id: drop
@@ -82,12 +103,6 @@ Item {
         }
     }
 
-    Image {
-        anchors.fill: parent
-        fillMode: Image.PreserveAspectFit
-        sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.artwork(face.mascot && face.activity.recording ? "recording" : "")
-    }
     // The microphone and red tally stay solid throughout capture. Only the
     // surrounding ring breathes, independently of what the microphone hears.
     Rectangle {
