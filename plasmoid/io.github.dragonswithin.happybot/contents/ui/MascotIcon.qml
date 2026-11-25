@@ -20,14 +20,22 @@ Item {
         return name ? Qt.resolvedUrl("../images/reactions/" + name + ".svg").toString() : "";
     }
 
+    Image {
+        anchors.fill: parent
+        fillMode: Image.PreserveAspectFit
+        sourceSize.width: Math.ceil(face.unit * 48)
+        source: face.mascot ? Look.robotIcon : ""
+    }
     Kirigami.Icon {
         anchors.fill: parent
-        source: !face.mascot && face.activity.recording ? "audio-input-microphone" : Look.assistantIcon(face.mascot)
+        visible: !face.mascot
+        source: face.activity.recording ? "audio-input-microphone" : Look.assistantIcon(false)
     }
 
     Image {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
+        sourceSize.width: Math.ceil(face.unit * 48)
         source: face.artwork(face.hot ? "hot-face" : "")
     }
     Image {
@@ -35,6 +43,7 @@ Item {
         width: parent.width
         height: parent.height
         fillMode: Image.PreserveAspectFit
+        sourceSize.width: Math.ceil(face.unit * 48)
         source: face.artwork(face.hot ? "sweat" : "")
         NumberAnimation on y {
             running: face.hot && face.moving
@@ -51,6 +60,7 @@ Item {
         width: parent.width
         height: parent.height
         fillMode: Image.PreserveAspectFit
+        sourceSize.width: Math.ceil(face.unit * 48)
         property bool outgoing: false
         readonly property string direction: face.transfer === "transfer" && face.moving
             ? (outgoing ? "upload" : "download") : face.transfer
@@ -75,6 +85,7 @@ Item {
     Image {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
+        sourceSize.width: Math.ceil(face.unit * 48)
         source: face.artwork(face.mascot && face.activity.recording ? "recording" : "")
     }
     // The microphone and red tally stay solid throughout capture. Only the

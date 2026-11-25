@@ -31,6 +31,10 @@ Item {
                 cues[entry[0]] = true;
                 compare(cues.trayPose, entry[1]);
                 tryVerify(() => !capture().equals(idle));
+                if (entry[0] === "recording") {
+                    // The visor itself must change even when the antenna is still.
+                    verify(capture().red(32, 32) !== idle.red(32, 32));
+                }
                 cues[entry[0]] = false;
                 tryVerify(() => capture().equals(idle));
             }
