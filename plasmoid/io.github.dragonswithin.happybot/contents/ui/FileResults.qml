@@ -14,8 +14,9 @@ import org.kde.plasma.components as PlasmaComponents3
 /**
  * The search results, in the popup's finders (ResultsView.qml,
  * `AssistantSession.finder`: "Find a file", and "Search the web", whose
- * pages show under "On the web" with their address and snippet) and above
- * the panel's search bar
+ * pages show under "On the web" with their address and snippet, and which
+ * has a Web | Wikipedia switch at the top once offline Wikipedia is set up)
+ * and above the panel's search bar
  * (PanelResults.qml): one row per result in `session.hits`, each kind under
  * a heading where it starts (Answer, Applications, Settings, Bookmarks, Recent websites,
  * Saved chats, Files: `Look.hitGroup`), applications first; quick results
@@ -118,6 +119,32 @@ Item {
 
                 width: filesFlick.width
                 spacing: 0
+
+                // "Search the web" can look in the user's offline Wikipedia instead, once it is set up.
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: Kirigami.Units.smallSpacing
+                    visible: (results.web || results.wiki) && results.session.wikipediaReady
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Repeater {
+                        model: [{ kind: "web", label: i18n("Web"), icon: "globe" },
+                                { kind: "wiki", label: i18n("Wikipedia"), icon: "documentation" }]
+
+                        PlasmaComponents3.ToolButton {
+                            required property var modelData
+                            text: modelData.label
+                            icon.name: modelData.icon
+                            checkable: true
+                            checked: results.session.finder === modelData.kind
+                            Accessible.name: i18n("Search in %1", modelData.label)
+                            onClicked: {
+                                checked = Qt.binding(() => results.session.finder === modelData.kind);
+                                results.session.switchFinder(modelData.kind, results.query);
+                            }
+                        }
+                    }
+                }
 
                 RecentChips {
                     Layout.fillWidth: true

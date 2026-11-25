@@ -1316,6 +1316,11 @@ Findings:
   setup found /srv/services/zim and kept updating off, the finder and
   articles worked, the self-check reported it, and turning it off kept
   the archive.
+- First built as a fourth button on the start screen, which turned its one
+  row of square buttons into a taller 2×2 grid of wide ones. The maintainer
+  wanted it under "Search the web", not as a button: the start screen is
+  back as it was, and the web finder has a Web | Wikipedia switch at the
+  top (`AssistantSession.switchFinder`), shown once Wikipedia is set up.
 
 ## Decisions
 

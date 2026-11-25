@@ -100,8 +100,9 @@ import QtQuick
  * same way as the panel bar, and "Search the web" ("web") shows matching
  * bookmarks and visited websites (`/quick`, only those kinds) and web pages
  * from the user's web search tool (`/search/web`, from `WEB_MIN_CHARS`
- * characters; hits marked `source: "web"`) instead of files. "Wikipedia"
- * ("wiki", offered when `wikipediaReady`, from `/health`) shows only
+ * characters; hits marked `source: "web"`) instead of files. Its Web |
+ * Wikipedia switch (`switchFinder`, shown when `wikipediaReady`, from
+ * `/health`) turns it into the Wikipedia finder ("wiki"), which shows only
  * articles from the user's offline Wikipedia (`/wikipedia/search`; hits
  * marked `source: "wikipedia"`, their `location` the article's path).
  * `openArticle(path)` reads one (`/wikipedia/article`) into `article`
@@ -423,12 +424,24 @@ Item {
         session.fixProblem = "";
     }
 
-    /** Opens a finder ("files" or "web"): typing now searches there, until `stopFinding`; until then,
-     *  recent items. */
+    /** Opens a finder ("files", "web" or "wiki"): typing now searches there, until `stopFinding`;
+     *  until then, recent items. */
     function startFinding(kind) {
         clearSearch();
         session.finder = kind;
         showRecent();
+    }
+
+    /** "Search the web"'s Web | Wikipedia switch: the other finder, searching what is typed (`text`) at once. */
+    function switchFinder(kind, text) {
+        session.finder = kind;
+        session.article = null;
+        if ((text || "").trim().length > 0) {
+            search(text);
+        } else {
+            clearSearch();
+            showRecent();
+        }
     }
 
     function stopFinding() {
