@@ -246,7 +246,9 @@ def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[
 
 
 def _voice_error(error: "voice.VoiceError") -> Reply:
-    status = {"busy": 409, "not_set_up": 400, "local_only": 403, "no_speech": 422}.get(error.code, 502)
+    # 503: no microphone or no sound from it (a headset switched off); 502 only when the speech service fails.
+    status = {"busy": 409, "not_set_up": 400, "local_only": 403, "no_speech": 422,
+              "no_microphone": 503}.get(error.code, 502)
     return status, {"ok": False, "error": str(error), "code": error.code}
 
 

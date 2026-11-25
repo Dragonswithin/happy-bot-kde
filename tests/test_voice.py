@@ -161,6 +161,12 @@ class ListeningTests(unittest.TestCase):
                          self.voice["base_url"])
         self.assertEqual(voice.find_service([dead]), "")
 
+    def test_a_silent_or_missing_microphone_is_unavailable_not_a_bad_gateway(self) -> None:
+        from happy_bot import daemon_routes
+        status, reply = daemon_routes._voice_error(voice.VoiceError("no_microphone", "No sound came from the microphone."))
+        self.assertEqual((status, reply["code"]), (503, "no_microphone"))
+        self.assertEqual(daemon_routes._voice_error(voice.VoiceError("service", "down"))[0], 502)
+
     def test_check_sends_silence_and_accepts_text(self) -> None:
         self.assertEqual(voice.check_service({**self.voice, "model": "whisper-v3:turbo"}), {"ok": True})
         self.assertIn(b'name="model"\r\n\r\nwhisper-v3:turbo', self.server.uploads[0][2])
