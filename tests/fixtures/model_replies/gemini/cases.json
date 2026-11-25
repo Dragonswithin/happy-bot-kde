@@ -1,0 +1,42 @@
+{
+  "provider": "openai_compatible",
+  "model": "gemini-4-hydrogen",
+  "recorded": "2026-11-24",
+  "cases": {
+    "text": {
+      "text_contains": "ready"
+    },
+    "one_call": {
+      "calls": [
+        [
+          "get_weather",
+          {
+            "city": "Paris",
+            "units": {
+              "system": "metric"
+            }
+          }
+        ]
+      ]
+    },
+    "two_calls": {
+      "calls": [
+        [
+          "get_weather",
+          {
+            "city": "Paris"
+          }
+        ],
+        [
+          "get_time",
+          {
+            "zone": "Asia/Tokyo"
+          }
+        ]
+      ]
+    },
+    "after_result": {
+      "text_contains": "4242"
+    }
+  }
+}

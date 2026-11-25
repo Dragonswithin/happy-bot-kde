@@ -1,0 +1,14 @@
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{"role":"assistant"}}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk"  }
+
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{"content":"It's 17°C in"}}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk"    }
+
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{"content":" Paris with"}}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk"            }
+
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{"content":" light rain, and the report number"}}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk" }
+
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{"content":" is 4242."}}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk"}
+
+data: {"id":"msg_011ChP7XUBZhuK1PcEpLwZ9r","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"created":1795585379,"model":"claude-opus-5-5","object":"chat.completion.chunk","usage":{"completion_tokens":26,"prompt_tokens":669,"total_tokens":695}    }
+
+data: [DONE]
+

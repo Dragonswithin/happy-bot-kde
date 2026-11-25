@@ -334,7 +334,16 @@ systemd-analyze --user verify systemd/user/happy-bot-daemon.service
 systemctl --user status happy-bot-daemon.service
 happy-bot status --pretty
 happy-bot context --kind window --pretty
+/usr/lib/qt6/bin/qmltestrunner -input tests/tst_StreamingAnswer.qml   # the Qt 6 runner
+happy-bot model check --all          # does Happy Bot work with each configured AI? (small requests)
 ```
+
+`tests/test_recorded_replies.py` replays what real AI services streamed
+back (`tests/fixtures/model_replies/<service>/`), so a change that misreads
+one service fails the tests without any network. To record a service again,
+or add one, run `scripts/record_model_replies.py LABEL=MODEL` (it only shows
+the plan; add `--record` to send four small requests and save the replies,
+which it refuses if they contain a key or personal details).
 
 ## Requirements
 

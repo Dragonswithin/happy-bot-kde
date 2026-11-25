@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-f746d8a2213d373a08d347e5","object":"chat.completion.chunk","created":1795585330,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","content":"ready"},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-f746d8a2213d373a08d347e5","object":"chat.completion.chunk","created":1795585330,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_abdfb90b8b1106b0","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"usage":null}
+
+data: {"id":"chatcmpl-f746d8a2213d373a08d347e5","object":"chat.completion.chunk","created":1795585330,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_abdfb90b8b1106b0","choices":[],"usage":{"prompt_tokens":47,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens":2,"total_tokens":49,"active_kv_tokens":52,"max_kv_token_capacity":131072,"kv_token_occupancy_rate_percentage":0.0396728515625,"load_duration":2.475e-06,"prefill_duration_ttft":2.858029568,"decoding_duration":0.218517,"prefill_speed_tps":16.44489634615285,"decoding_speed_tps":9.15260597573644,"flm_prefix_cache":{"lookup":"miss","prompt_tokens":47,"miss_reason":"no snapshot is a prefix of the prompt (longest common prefix 3 tokens)","saved":[{"slot":49,"slot_type":"end","tokens":47,"kv_from":0,"bytes":65351680}],"dropped":1,"slots_used":8,"slots_max":8,"bytes_used":3048345600,"bytes_budget":4294967296}}}
+
+data: [DONE]
+

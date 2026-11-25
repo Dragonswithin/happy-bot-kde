@@ -1,0 +1,8 @@
+data: {"choices":[{"delta":{"content":"The temperature in Paris is 17 degrees Celsius, and the","role":"assistant"},"index":0}],"created":1795585386,"id":"aXUGa5W5KJ3AodAPnf340A0","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":13,"prompt_tokens":346,"total_tokens":414}}
+
+data: {"choices":[{"delta":{"content":" report number is 4242.","role":"assistant"},"index":0}],"created":1795585386,"id":"aXUGa5W5KJ3AodAPnf340A0","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":22,"prompt_tokens":346,"total_tokens":423}}
+
+data: {"choices":[{"delta":{"extra_content":{"google":{"thought_signature":"EvwCCvkCAWkUfRMb37Mr+VzwTT8ZO5hnl5A4T68eLejNXnxK6WJMwMLlfgG7KNqrYJ5v/YCsgnl59slJftVeJ+ykYGnkXHVhg7Zd4xXyikc4OOGtpEFNn+hFUWpJ1iSWKHiNtLtLgRgm80OcAUGu3wn81vwXRIf6r2a+eGqOwZwB9STwvTtGmD0KLYOzW/Vf7N7iFrdFiGPQULkLYydAYH42D5eJdvp3X34bUUKl5OGrB1u++nI6lbUiDRVbHarfWSpl4ITZWY5LuxYUSg57H8sfXqzihNfeI8hkATBbo/q73Ou9d5dRHGeL3c0IO3QmmHmVd5SP6ilrMvuu0rY4sTQw6c3M2+pgIH3n7ystzp6PgHquRWBBW76l9UeAjQHTuIUm6zmwiVR1c5CTN0mJhUKMGKRbZ8Zov5ZOmror+dJmuEIMfuUXGh3rUnaxOP75UUaOSXrnIJQuDGT9uXdi6vGp9wi+kC9mBqr0N+1Y8MrzpRKcuAzTklokQ9Fztdg="}},"role":"assistant"},"finish_reason":"stop","index":0}],"created":1795585386,"id":"aXUGa5W5KJ3AodAPnf340A0","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":26,"prompt_tokens":346,"total_tokens":427}}
+
+data: [DONE]
+

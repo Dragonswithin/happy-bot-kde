@@ -1111,6 +1111,16 @@ Findings:
   calls; with it, all five configured AIs (NPU, GPU, Claude, Gemini, GPT)
   passed every check on 2026-11-24, the online three naming the test
   picture's colour.
+- Two follow-ups the maintainer chose: adding an AI now runs the full
+  check (`model_setup.use`; one that does not answer is not kept, a problem
+  is named in the message), and the test suite replays real services'
+  recorded replies (`tests/test_recorded_replies.py`, recorded by
+  `scripts/record_model_replies.py` for FastFlowLM, llama.cpp, Anthropic,
+  Gemini and OpenAI's Responses API on 2026-11-24). Recordings are synthetic
+  requests' replies only, scanned for keys and personal details before they
+  are saved; the maintainer chose to keep them in the repository, an
+  exception to "no command output in the repo". With the Gemini fix
+  reverted, the replay fails on Gemini's parallel calls.
 
 ## Decisions
 

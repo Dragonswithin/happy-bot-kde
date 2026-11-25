@@ -1,0 +1,18 @@
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_lcTLBggWzuDNAxmnAf3Mxjua","type":"function","function":{"name":"get_weather","arguments":"{"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"\"city\":\""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"Paris"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":",\"units\":"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"{\"system\":\"metric\"}}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_d9696de75221be76","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-407665b45b70d11f424834e1","object":"chat.completion.chunk","created":1795585334,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_d9696de75221be76","choices":[],"usage":{"prompt_tokens":400,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens":43,"total_tokens":443,"active_kv_tokens":446,"max_kv_token_capacity":131072,"kv_token_occupancy_rate_percentage":0.34027099609375,"load_duration":1.573e-06,"prefill_duration_ttft":5.608861184,"decoding_duration":2.467412,"prefill_speed_tps":71.31572468597575,"decoding_speed_tps":17.427166602091585,"flm_prefix_cache":{"lookup":"miss","prompt_tokens":400,"miss_reason":"no snapshot is a prefix of the prompt (longest common prefix 32 tokens)","saved":[{"slot":50,"slot_type":"end","tokens":400,"kv_from":0,"bytes":72581120}],"dropped":1,"slots_used":8,"slots_max":8,"bytes_used":3055575040,"bytes_budget":4294967296}}}
+
+data: [DONE]
+

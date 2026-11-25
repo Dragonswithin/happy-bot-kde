@@ -1,0 +1,6 @@
+data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"extra_content":{"google":{"thought_signature":"EuoCCucCAWkUfRONl/+321qRSIOZMo1vwDWZWC+KcYklGn8KQvzmOAhD0cYuKKJX0cnqFG09K/h0dsls1mJ8XQVtEUGl4A/Mf6GAOiyqORi9nH9yvzUOsSq/6v5DOMhQiiCLFbSpOHSLcRLOXYIszjhePBOoZvEdfFxqmr3G2LkKsN4IHjRGCj8TU5OiuZew/++Hd8iwWjz/uMKrwg8ttKZ/knKRPUG/oCh6Ae+rB1ouQoioEm90xsfEB0xXckm5XrUcni25fgtWbkU1+FRu1LDKiVGe77Rok/A28hIbIzhxfmjf7J2O4xfxq+Rz1uxCKhfvQ4rDRa4sV3yk6uGQ3YhgMzQk9yxln7ATtke3ZuCB/SMmZG71Rx1wRKxXSe2ZcQmcM2x0qNk4r3ncx1aaB0o3kK+8ZzIHTGn9TFDYFckxDan/s8Fv5W+mYoIA12QwYpvcnS8FjlphQmbxeRHOUB3JrbzIqS2wTiH7hAU="}},"function":{"arguments":"{\"city\":\"Paris\",\"units\":{\"system\":\"metric\"}}","name":"get_weather"},"id":"call_9529743695779655950","type":"function"}]},"index":0}],"created":1795585382,"id":"ZXUGa-vVEo_O6tkPsI3w8QQ","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":24,"prompt_tokens":211,"total_tokens":284}}
+
+data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":"stop","index":0}],"created":1795585382,"id":"ZXUGa-vVEo_O6tkPsI3w8QQ","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":30,"prompt_tokens":211,"total_tokens":290}}
+
+data: [DONE]
+

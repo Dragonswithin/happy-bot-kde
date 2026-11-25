@@ -1,0 +1,6 @@
+data: {"choices":[{"delta":{"content":"ready","role":"assistant"},"index":0}],"created":1795585381,"id":"Y3UGa6efPK2Mur8PjJ7W0Qk","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":1,"prompt_tokens":70,"total_tokens":108}}
+
+data: {"choices":[{"delta":{"extra_content":{"google":{"thought_signature":"EtMCCtACAWkUfRN6WZD6yzHBnUGAQXzsBbUiuriSFXqzDgXdJPjyaeeWQMHo2ow6vlyNQa1MKL2FtrWAsL17Ohe14Ke4tTNUNQqdGCM7YuMKFo7i1pGMmojPlX7U5umWUr0ntoDHtomU2QdEcJk7GPHDsdXsArGsL4d6lH89eHluTTifoXz6VZuz4v+jOkIP6uD6I1x0UXauuF3+xbbKE4VUEgBH99Bqh+zd/VwE3kO9fkLxpIG8/DjW6a/cYSD7npLTG+X8F9lUXL0q62AiIFIgFn5H2rvUyHPl/opZ0aow9nym2fo/hnG4VCCcH4D9J9ugiWV7v3C7r6LnmBSIcW+DbN3dOIWcewObagxMP4ZYQkcGz9QZBgAW7pBbOKTNcyUTXubf7DTvYcBQRNubWozLSbj/cqefszEWwvJejH3GdcPBML9pDJby+b1TX+InLkodo4Lt"}},"role":"assistant"},"finish_reason":"stop","index":0}],"created":1795585381,"id":"Y3UGa6efPK2Mur8PjJ7W0Qk","model":"gemini-4-hydrogen","object":"chat.completion.chunk","usage":{"completion_tokens":5,"prompt_tokens":70,"total_tokens":112}}
+
+data: [DONE]
+

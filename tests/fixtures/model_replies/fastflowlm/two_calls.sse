@@ -1,0 +1,28 @@
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_vJTQVd5KawD98rZ63zrDziYX","type":"function","function":{"name":"get_weather","arguments":"{"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"\"city\":\""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"Paris"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"id":"call_ZjrhBUCyeUoW3MqbygRG3vSo","type":"function","function":{"name":"get_time","arguments":"{"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"\"zone\":\""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"Asia"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"/T"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"ok"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"yo"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_b054d080b4e467e1","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-b0d48fa1f9476bf5041d723a","object":"chat.completion.chunk","created":1795585342,"model":"qwen3.6-moe:35b-a3b","system_fingerprint":"fp_b054d080b4e467e1","choices":[],"usage":{"prompt_tokens":414,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens":55,"total_tokens":469,"active_kv_tokens":472,"max_kv_token_capacity":131072,"kv_token_occupancy_rate_percentage":0.360107421875,"load_duration":2.114e-06,"prefill_duration_ttft":5.440925696,"decoding_duration":3.106858,"prefill_speed_tps":76.08999334513241,"decoding_speed_tps":17.702772382902598,"flm_prefix_cache":{"lookup":"miss","prompt_tokens":414,"miss_reason":"no snapshot is a prefix of the prompt (longest common prefix 378 tokens)","saved":[{"slot":51,"slot_type":"end","tokens":414,"kv_from":0,"bytes":72867840}],"dropped":1,"slots_used":8,"slots_max":8,"bytes_used":3055861760,"bytes_budget":4294967296}}}
+
+data: [DONE]
+

@@ -1,0 +1,3 @@
+# Recorded AI service streams (scripts/record_model_replies.py) are byte-exact test data:
+# server-sent events end with a blank line, so whitespace checks do not apply.
+tests/fixtures/model_replies/** -whitespace
