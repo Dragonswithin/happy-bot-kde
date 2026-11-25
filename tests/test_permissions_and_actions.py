@@ -13,6 +13,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -475,6 +476,17 @@ class ShellProgressAndTerminalTests(unittest.TestCase):
         self.assertIn("read -r -n 1", script)
         self.assertEqual(shell.terminal_command("/usr/bin/gnome-terminal", "ls", "/")[1], "--")
         self.assertEqual(shell.terminal_command("/usr/bin/xterm", "ls", "/")[1], "-e")
+
+    def test_terminal_command_runs_bash_even_when_the_login_shell_is_not(self) -> None:
+        # script(1) starts its command with $SHELL; a fish user's window must still run bash.
+        with tempfile.TemporaryDirectory() as tmp:
+            log, status = Path(tmp, "log"), Path(tmp, "status")
+            window = shell.terminal_command("/usr/bin/konsole", 'echo "shell=$0 pid=$$"', tmp, str(log), str(status))
+            script = window[5].replace("read -r -n 1 -s -p 'Press any key to close this window.'; ", "")
+            subprocess.run(["bash", "-c", script], env={**os.environ, "SHELL": "/bin/false-login-shell"},
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=False, timeout=20)
+            self.assertEqual(status.read_text().strip(), "0")
+            self.assertRegex(log.read_text(), r"shell=\S*bash pid=\d+")
 
 
 class ApplicationTests(unittest.TestCase):

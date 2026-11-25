@@ -36,7 +36,9 @@ is a supported one, else the first supported terminal installed.
 installs, builds, and anything that asks for a password or wants the user to
 watch. Inside the terminal the command runs under ``script``, which keeps a
 real terminal (so password prompts work) while recording what is shown to a
-log in the runtime directory; when it ends, its exit status is written to a
+log in the runtime directory. ``script`` starts the command with ``$SHELL``,
+the user's login shell (fish, zsh, ...), so it is given bash instead: the
+command is bash, as for ``run_command`` and as ``shell_risk`` reads it; when it ends, its exit status is written to a
 status file and the window stays open until the user presses a key. Meanwhile
 the tool reports "Waiting for you in the terminal window" and the latest
 output line as progress. It returns the exit status and the start and end
@@ -254,9 +256,11 @@ def terminal_command(terminal: str, command: str, directory: str, log: str = "",
 
     With ``log`` and ``status`` the command runs under ``script`` (a real
     terminal, recorded to ``log``) and its exit status is written to ``status``.
+    ``SHELL="$BASH"`` (the full path of the bash running the window's script)
+    makes ``script`` run the command under bash, not the user's login shell.
     """
     if log and status:
-        run = (f"script --quiet --flush --return --log-out {shlex.quote(log)} "
+        run = (f"SHELL=\"$BASH\" script --quiet --flush --return --log-out {shlex.quote(log)} "
                f"--command {shlex.quote(command)}; status=$?; echo $status > {shlex.quote(status)}")
     else:
         run = f"{command}\nstatus=$?"
