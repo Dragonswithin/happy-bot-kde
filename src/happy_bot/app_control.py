@@ -6,7 +6,8 @@ shows only the floating Happy Bot, and the "Happy Bot" entry in the application 
 launcher. This module is the daemon's side of it:
 
 - ``running`` looks for that process (``APP_COMMAND``) among the user's processes.
-- ``start`` runs ``happy-bot-app`` detached from the daemon, so the app outlives a daemon restart.
+- ``start`` runs ``happy-bot-app``, which starts the app as its own transient user service
+  (``systemd-run --user``), so it is not in the daemon's service and outlives a daemon restart.
 - ``autostart_enabled`` and ``set_autostart`` add or remove the app's entry in
   ``$XDG_CONFIG_HOME/autostart``, so it starts when the user logs in.
 - ``Waker`` lets a second launch (the menu entry or the hotkey while the app runs) and the panel
@@ -51,7 +52,7 @@ def menu_entry_path() -> Path:
 
 def running() -> bool:
     """Whether the Happy Bot app (the widget in ``plasmawindowed``) runs for this user."""
-    pattern = "^" + " ".join(APP_COMMAND) + "$"
+    pattern = "^([^ ]*/)?" + " ".join(APP_COMMAND) + "$"  # /usr/bin/plasmawindowed under systemd-run
     try:
         found = subprocess.run(["pgrep", "-u", str(os.getuid()), "-f", pattern], capture_output=True, timeout=5)
     except (OSError, subprocess.TimeoutExpired):
@@ -60,7 +61,7 @@ def running() -> bool:
 
 
 def start() -> None:
-    """Start the app (``happy-bot-app``) in its own session, so it is not tied to the daemon."""
+    """Start the app through ``happy-bot-app``, which gives it its own user service (not the daemon's)."""
     launcher = shutil.which("happy-bot-app") or str(Path.home() / ".local" / "bin" / "happy-bot-app")
     subprocess.Popen([launcher], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)

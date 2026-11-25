@@ -16,13 +16,21 @@
 #                            uses this)
 #   happy-bot-app --quit     stop a running app
 #
+# The app runs as its own transient user service (systemd-run --user, unit
+# app-io.github.dragonswithin.happybot@<time>.service), so whatever started
+# it does not own it: started from a terminal (the installer, for one), it
+# would otherwise live in that terminal's scope and die with its tab. Without
+# a systemd user manager it falls back to setsid. Its output goes to the
+# user journal, or nowhere with setsid.
+#
 # Exit status is that of the last command; a missing plasmawindowed is
 # reported on stderr.
 
 set -euo pipefail
 
 APPLET_ID="io.github.dragonswithin.happybot"
-PATTERN="^plasmawindowed --statusnotifier ${APPLET_ID}\$"
+# systemd-run starts it as /usr/bin/plasmawindowed, setsid as plasmawindowed: match either.
+PATTERN="^([^ ]*/)?plasmawindowed --statusnotifier ${APPLET_ID}\$"
 BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 running() {
@@ -39,6 +47,11 @@ quit_app() {
 
 start_app() {
   command -v plasmawindowed >/dev/null || { printf 'happy-bot-app: plasmawindowed (Plasma) is needed\n' >&2; exit 1; }
+  if command -v systemd-run >/dev/null \
+      && systemd-run --user --quiet --collect --unit="app-${APPLET_ID}@$(date +%s%N).service" \
+           --description="Happy Bot" plasmawindowed --statusnotifier "$APPLET_ID" >/dev/null 2>&1; then
+    return 0
+  fi
   setsid plasmawindowed --statusnotifier "$APPLET_ID" >/dev/null 2>&1 < /dev/null &
 }
 
@@ -57,5 +70,5 @@ case "${1:-}" in
       start_app
     fi
     ;;
-  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
