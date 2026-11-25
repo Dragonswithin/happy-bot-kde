@@ -113,6 +113,12 @@ Kirigami.FormLayout {
         opacity: 0.7
     }
 
+    // Radio buttons with the same parent are one exclusive set unless grouped; every row here is a
+    // child of this form, so each setting's choices get their own group, or choosing the app
+    // context would clear the approval choice and the other way round.
+    readonly property QQC2.ButtonGroup approvalChoices: QQC2.ButtonGroup {}
+    readonly property QQC2.ButtonGroup appContextChoices: QQC2.ButtonGroup {}
+
     Item {
         Kirigami.FormData.isSection: true
         Kirigami.FormData.label: i18n("Approvals")
@@ -121,18 +127,21 @@ Kirigami.FormLayout {
     QQC2.RadioButton {
         Kirigami.FormData.label: i18n("Ask before it:")
         text: i18n("Deletes something or changes the operating system")
+        QQC2.ButtonGroup.group: section.approvalChoices
         checked: section.policy === "danger"
         onToggled: if (checked) section.setPolicy("danger")
     }
 
     QQC2.RadioButton {
         text: i18n("Changes anything at all")
+        QQC2.ButtonGroup.group: section.approvalChoices
         checked: section.policy === "changes"
         onToggled: if (checked) section.setPolicy("changes")
     }
 
     QQC2.RadioButton {
         text: i18n("Does anything, including looking things up")
+        QQC2.ButtonGroup.group: section.approvalChoices
         checked: section.policy === "everything"
         onToggled: if (checked) section.setPolicy("everything")
     }
@@ -156,18 +165,21 @@ Kirigami.FormLayout {
     QQC2.RadioButton {
         Kirigami.FormData.label: i18n("The app you're in:")
         text: i18n("Only AIs on this computer may see it")
+        QQC2.ButtonGroup.group: section.appContextChoices
         checked: section.agent !== null && (section.agent.app_context || "local") === "local"
         onToggled: if (checked) section.setAgent("app_context", "local")
     }
 
     QQC2.RadioButton {
         text: i18n("Any AI may see it, including online ones")
+        QQC2.ButtonGroup.group: section.appContextChoices
         checked: section.agent !== null && section.agent.app_context === "any"
         onToggled: if (checked) section.setAgent("app_context", "any")
     }
 
     QQC2.RadioButton {
         text: i18n("Off: don't tell any AI about it")
+        QQC2.ButtonGroup.group: section.appContextChoices
         checked: section.agent !== null && section.agent.app_context === "off"
         onToggled: if (checked) section.setAgent("app_context", "off")
     }
@@ -266,14 +278,35 @@ Kirigami.FormLayout {
         Kirigami.FormData.label: i18n("Your instructions")
     }
 
-    QQC2.TextArea {
-        id: instructions
+    Hint {
+        text: i18n("Preferences the assistant follows in every new conversation, in your own words, one per line. They cannot switch off the approvals above.")
+    }
+
+    // The box keeps one height and long instructions scroll inside it. The form lays rows out by
+    // implicit height and ignores Layout heights, so a bare TextArea (or a ScrollView sized with
+    // Layout.preferredHeight) grew with the text and drew it over the character count and the
+    // buttons below; a fixed implicitHeight is what holds.
+    QQC2.ScrollView {
         Kirigami.FormData.label: i18n("Always:")
         Layout.minimumWidth: Kirigami.Units.gridUnit * 20
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 6
-        wrapMode: TextEdit.Wrap
-        placeholderText: i18n("For example: Answer in German. I use Dolphin and Kate. Prefer Flatpak when installing.")
-        text: section.agent ? section.agent.instructions : ""
+        Layout.preferredWidth: Kirigami.Units.gridUnit * 28
+        implicitHeight: Kirigami.Units.gridUnit * 9
+        clip: true
+        QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff   // the text wraps
+
+        QQC2.TextArea {
+            id: instructions
+            wrapMode: TextEdit.Wrap
+            placeholderText: i18n("For example: Answer in German. I use Dolphin and Kate. Prefer Flatpak when installing.")
+            text: section.agent ? section.agent.instructions : ""
+        }
+    }
+
+    QQC2.Label {
+        text: i18n("%1 of 4000 characters", instructions.text.length)
+        font: Kirigami.Theme.smallFont
+        color: instructions.text.length > 4000 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+        opacity: 0.7
     }
 
     RowLayout {
@@ -283,6 +316,7 @@ Kirigami.FormLayout {
             text: i18n("Save instructions")
             icon.name: "document-save"
             enabled: section.agent !== null && instructions.text.trim() !== section.agent.instructions
+                && instructions.text.length <= 4000
             onClicked: section.setAgent("instructions", instructions.text.trim())
         }
 
@@ -293,17 +327,10 @@ Kirigami.FormLayout {
                 && instructions.text !== section.page.suggestedInstructions
             onClicked: instructions.text = section.page.suggestedInstructions
         }
-
-        QQC2.Label {
-            text: i18n("%1 of 4000 characters", instructions.text.length)
-            font: Kirigami.Theme.smallFont
-            color: instructions.text.length > 4000 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
-            opacity: 0.7
-        }
     }
 
     Hint {
-        text: i18n("Your standing preferences, in your own words. Used from the next new conversation. They cannot switch off the approvals above.")
+        text: i18n("Saved instructions are used from the next new conversation. \"Restore suggested\" puts back the starting text for you to review; it is saved only when you choose Save.")
     }
 
     Item {
