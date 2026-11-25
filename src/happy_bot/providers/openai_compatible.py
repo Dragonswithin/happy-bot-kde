@@ -24,7 +24,13 @@ failing the turn.
 ``stream_options.include_usage`` is requested for token counts; a server that
 rejects the option with HTTP 400 is retried once without it. Only ``model``,
 ``messages``, ``tools``, ``stream`` and that option are sent: several services
-refuse requests that set sampling options such as ``temperature``.
+refuse requests that set sampling options such as ``temperature``. The one
+exception is ``no_thinking``, for short tasks where a reasoning model's hidden
+thinking only costs time (``text_rewrite``: about 0.3 s instead of 15 s on a
+local Qwen3.6): it adds ``chat_template_kwargs: {"enable_thinking": false}``
+(llama.cpp's and vLLM's switch) for a service on this computer only, and a
+service that rejects it with HTTP 400 is retried once without it, as for
+``stream_options``. Conversations never set it.
 
 Some services refuse a follow-up request unless the assistant's earlier
 message comes back exactly: its ``reasoning_content`` (DeepSeek, Kimi) or each
@@ -62,9 +68,12 @@ from ..conversation import (
     ToolSpec,
     TurnEnd,
 )
+from ..redaction import is_local_address
 from .base import ProviderError, image_data_url
 
 DEFAULT_TIMEOUT_SECONDS = 300.0
+# Request options a service may refuse with HTTP 400; each is dropped in turn and the request retried.
+OPTIONAL_KEYS = ("chat_template_kwargs", "stream_options")
 PROBE_TIMEOUT_SECONDS = 6.0
 CONTEXT_WINDOW_KEYS = ("context_window", "context_length", "n_ctx", "max_context_length", "max_input_tokens")
 
@@ -175,12 +184,14 @@ class OpenAICompatibleProvider:
         api_key: str = "",
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         headers: dict[str, str] | None = None,
+        no_thinking: bool = False,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
         self.headers = dict(headers or {})
+        self.no_thinking = no_thinking and is_local_address(self.base_url)
 
     def _open(self, body: dict[str, Any]) -> Any:
         request = Request(
@@ -193,8 +204,9 @@ class OpenAICompatibleProvider:
             return urlopen(request, timeout=self.timeout)
         except HTTPError as error:
             with error:
-                if error.code == 400 and "stream_options" in body:
-                    body = {key: value for key, value in body.items() if key != "stream_options"}
+                optional = next((key for key in OPTIONAL_KEYS if key in body), None)
+                if error.code == 400 and optional:
+                    body = {key: value for key, value in body.items() if key != optional}
                     return self._open(body)
                 raise ProviderError(_explain_http_error(error, self.base_url)) from error
         except (URLError, TimeoutError, OSError, http.client.HTTPException) as error:
@@ -213,6 +225,8 @@ class OpenAICompatibleProvider:
             "stream": True,
             "stream_options": {"include_usage": True},
         }
+        if self.no_thinking:
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         if tools:
             body["tools"] = [
                 {"type": "function", "function": {

@@ -62,7 +62,7 @@ read with OCR (``text_from_image``) for text-only models.
 From a brainstorm of what fits Happy Bot, the maintainer chose these for the
 backlog. Unmarked: not started; each is planned only once placed in a phase
 in ``docs/ROADMAP.md``. The search speed-ups were placed as Phase 8 and
-built the same day. Spoken answers and a wake word were left out: both
+"Fix the selected text" as Phase 9, both built the same day. Spoken answers and a wake word were left out: both
 need new local inference or always-on listening, which are the maintainer's
 call.
 
@@ -86,9 +86,13 @@ Search speed-ups (the panel bar finds and launches; no AI involved):
 
 Fix the selected text:
 
-- Select text in any application, press a key, and choose "Fix grammar",
+- ◐ Select text in any application, press a key, and choose "Fix grammar",
   "Shorter", "Translate" or "Explain" as answer buttons; a local AI rewrites
   it and "Replace" types the result back through the typing permission.
+  (Phase 9: the "Fix selected text" shortcut; the AI follows the privacy
+  setting for text read from applications; Replace pastes over the
+  selection and restores the clipboard. Rewrites checked live on the local
+  model; Replace not yet tried in a real application.)
 
 Mascot nudges and a morning card:
 

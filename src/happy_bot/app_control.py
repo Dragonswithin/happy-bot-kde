@@ -14,7 +14,9 @@ launcher. This module is the daemon's side of it:
   widget reach the running app: ``happy-bot app show`` (or ``settings``) calls ``POST /app/show``
   (``notify``) with what to show, ``open`` (the floating Happy Bot), ``settings`` (its settings,
   which hold nearly all of Happy Bot's settings) or ``talk`` (open and listen to the microphone:
-  the "Talk to Happy Bot" shortcut, ``happy-bot app talk``); the app waits on ``GET /app/wait`` (``wait``),
+  the "Talk to Happy Bot" shortcut, ``happy-bot app talk``) or ``fix`` (open with the selected
+  text and its rewrite buttons: the "Fix selected text" shortcut, ``happy-bot app fix``, for which
+  the daemon notes the selection first, ``selection_fix``); the app waits on ``GET /app/wait`` (``wait``),
   which answers as soon as the count of requests grows or after ``WAIT_SECONDS``, so the app asks
   again. The answer carries the last request's action and age, so an app that was just started
   for a request (``start``, then ``notify``) still acts on it. Only the app waits.
@@ -83,7 +85,7 @@ def set_autostart(enabled: bool) -> None:
     target.write_text(text, encoding="utf-8")
 
 
-ACTIONS = ("open", "settings", "talk")
+ACTIONS = ("open", "settings", "talk", "fix")
 
 
 class Waker:

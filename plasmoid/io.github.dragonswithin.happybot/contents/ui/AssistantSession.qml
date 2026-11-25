@@ -116,6 +116,22 @@ import QtQuick
  * finder's last file search failed (outside the finder a failed file search
  * just shows no files).
  *
+ * Fixing selected text: `startFixing` (the "Fix selected text" shortcut)
+ * fetches the text the daemon noted when the shortcut was pressed
+ * (`/selection`) into `fixing` (`{text, window, app, title, terminal}`;
+ * `{loading: true}` until it arrives), which makes the open view show
+ * SelectionFixCard.qml. `fixSelection(style, instruction)` asks for the
+ * rewrite (`/selection/rewrite`: "fix", "shorter", "translate", "explain",
+ * or the user's own instruction) into `fixResult`, with `fixReplaces`
+ * (whether it can replace the selection), `fixModel`, `fixBusy` and
+ * `fixProblem`. `replaceSelection` emits `selectionReplacing` (main.qml
+ * closes Happy Bot so the application can take the paste) and asks the
+ * daemon to paste the result over the selection (`/selection/replace`);
+ * when that fails `fixing` is kept, `fixProblem` says why and
+ * `selectionReplaceFailed` lets main.qml show it again. `stopFixing` ends
+ * it, as do a new or reopened chat; replies that arrive after that are
+ * ignored (`fixSequence`).
+ *
  * Talking: `talk` asks the daemon to listen (`POST /voice/listen`, which
  * records until the user pauses and returns the text Whisper or another
  * speech service heard); `stopListening` ends it early. `voiceEnabled`
@@ -158,6 +174,18 @@ Item {
     property var history: []
     readonly property bool hasTranscript: entries.count > 0
     property int pendingApprovals: 0
+
+    // "Fix selected text" (see the header): null when not fixing.
+    property var fixing: null
+    property string fixResult: ""
+    property bool fixReplaces: false
+    property string fixModel: ""
+    property bool fixBusy: false
+    property string fixProblem: ""
+    property bool replacing: false
+    property int fixSequence: 0
+    signal selectionReplacing()
+    signal selectionReplaceFailed()
 
     property int searchLimit: 20
     property bool findingFiles: false
@@ -298,6 +326,86 @@ Item {
         });
     }
 
+    /** Shows the text noted by the "Fix selected text" shortcut, with its rewrite buttons. */
+    function startFixing() {
+        stopFindingFiles();
+        session.fixSequence += 1;
+        const sequence = session.fixSequence;
+        session.fixing = { loading: true, text: "" };
+        session.fixResult = "";
+        session.fixProblem = "";
+        session.fixBusy = false;
+        request("GET", "/selection", null, function(data) {
+            if (sequence === session.fixSequence) {
+                session.fixing = data;
+            }
+        }, function(data) {
+            if (sequence === session.fixSequence) {
+                session.fixing = { text: "" };
+                session.fixProblem = data.error || i18n("The selected text could not be read.");
+            }
+        });
+    }
+
+    /** Asks an AI to rewrite the noted text: `style` is "fix", "shorter", "translate" or "explain", or
+     *  `instruction` is what the user typed. */
+    function fixSelection(style, instruction) {
+        if (!session.fixing || !session.fixing.text || session.fixBusy) {
+            return;
+        }
+        const sequence = session.fixSequence;
+        session.fixBusy = true;
+        session.fixProblem = "";
+        request("POST", "/selection/rewrite", { text: session.fixing.text, style: style || "",
+                                                instruction: instruction || "" }, function(data) {
+            if (sequence === session.fixSequence) {
+                session.fixBusy = false;
+                session.fixResult = data.text || "";
+                session.fixReplaces = data.replaces === true;
+                session.fixModel = data.model || "";
+            }
+        }, function(data) {
+            if (sequence === session.fixSequence) {
+                session.fixBusy = false;
+                session.fixProblem = data.error || i18n("No AI could do it.");
+            }
+        });
+    }
+
+    /** Pastes `fixResult` over the selection in its application (see the header). */
+    function replaceSelection() {
+        if (!session.fixing || !session.fixResult || session.replacing) {
+            return;
+        }
+        const sequence = session.fixSequence;
+        session.replacing = true;
+        session.fixProblem = "";
+        session.selectionReplacing();
+        request("POST", "/selection/replace", { window: session.fixing.window || "", text: session.fixResult },
+            function(data) {
+                session.replacing = false;
+                if (sequence === session.fixSequence) {
+                    stopFixing();
+                }
+            }, function(data) {
+                session.replacing = false;
+                if (sequence === session.fixSequence) {
+                    session.fixProblem = data.error || i18n("The text could not be put back.");
+                    session.selectionReplaceFailed();
+                }
+            });
+    }
+
+    function stopFixing() {
+        session.fixSequence += 1;
+        session.fixing = null;
+        session.fixResult = "";
+        session.fixReplaces = false;
+        session.fixModel = "";
+        session.fixBusy = false;
+        session.fixProblem = "";
+    }
+
     /** "Find a file": typing now shows matching files, until `stopFindingFiles`; until then, recent items. */
     function startFindingFiles() {
         clearSearch();
@@ -436,6 +544,7 @@ Item {
     }
 
     function openConversation(conversationId) {
+        stopFixing();
         if (session.busy || conversationId === session.conversationId) {
             return;
         }
@@ -497,6 +606,7 @@ Item {
     }
 
     function newChat() {
+        stopFixing();
         if (session.busy) {
             cancel();
         }

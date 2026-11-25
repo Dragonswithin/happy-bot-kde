@@ -405,6 +405,17 @@ a character found with "emoji heart", and uses an application's Start at
 login and a file's Send to phone from their right-click menus.
 Status: built, exit check not yet passed (see Phase 8 findings).
 
+**Phase 9: Fix selected text** (placed by the maintainer on 2026-11-25,
+next on the list chosen that day). Select text in any application, press
+the "Fix selected text" shortcut, choose Fix grammar, Shorter, Translate or
+Explain (or type an instruction), and Replace puts the result in place of
+the selection.
+*Exit:* in a real application (a text editor and a browser field), a person
+fixes, shortens and translates a selection and replaces it from Happy Bot,
+the application's Undo brings the old text back, and the clipboard holds
+what it held before.
+Status: built, exit check not yet passed (see Phase 9 findings).
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
 priority order the maintainer chose for after the first release, is in
@@ -1226,6 +1237,33 @@ Findings:
   selection) and checked against a throwaway daemon (commands, characters,
   application info, refusals). Not yet seen in the real panel: installing
   the widget replaces the running one, which waits for the maintainer.
+
+**Phase 9 (built 2026-11-25).**
+
+- The shortcut (`desktop/happy-bot-shortcuts.desktop`, "Fix selected text",
+  `happy-bot app fix`) reaches the app as a "fix" show request; the daemon
+  notes the selection and its window at that moment (`selection_fix`),
+  before the app opens, and the app shows them in `SelectionFixCard.qml`.
+  Checked live: a primary selection set by hand was noted with its window,
+  and a Kwi window was recognised as a terminal, where Replace is refused.
+- The rewrite (`text_rewrite.py`) asks the first AI in the user's order
+  that the `app_context` privacy setting lets see text from applications,
+  once, without tools. On the maintainer's GPU model it took 15 s, nearly
+  all hidden thinking; asking a local service to skip thinking
+  (`chat_template_kwargs`, `create_provider(no_thinking=True)`, retried
+  without on HTTP 400) made it 0.3 to 0.5 s with the same results.
+  Conversations still think.
+- Prompt findings, from live tries: under the rewriting instructions
+  Explain rewrote the text, so it has its own; asked to say when a text was
+  already in the user's language, the model called Spanish English, so
+  Translate now names the language on its first line and the code compares
+  it (English text, German, Spanish and two-line French all came out
+  right). A typed instruction ("translate into French") is used as is.
+- Replace pastes rather than types (`selection_fix.replace`): the clipboard
+  is kept, the result put on it, the window brought forward, Ctrl+V pressed
+  through the typing portal, and the old clipboard put back a second
+  later. Happy Bot closes first so the application takes the paste. Not
+  yet tried in a real application.
 
 ## Decisions
 

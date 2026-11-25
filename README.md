@@ -116,6 +116,14 @@ used.
   application to update it, uninstall it (in a terminal, where you
   confirm) or start it at login; right-click a file to send it to your
   phone (KDE Connect).
+- **Fix selected text**: give the "Fix selected text" shortcut a key
+  (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any
+  application and press it. Happy Bot shows the text with Fix grammar,
+  Shorter, Translate and Explain, or type what to do with it ("make it
+  formal", "translate into French"). Replace puts the result in place of
+  the selection (Undo in that application brings the old text back);
+  Copy copies it. It uses the first AI in your order that your privacy
+  setting lets see text from your applications.
 - **Talk to it**: switch on the microphone under AI Model → Voice ("Find on
   this computer" finds a local Whisper), then click the microphone in the
   panel bar, the popup or the floating Happy Bot, or press the "Talk to Happy

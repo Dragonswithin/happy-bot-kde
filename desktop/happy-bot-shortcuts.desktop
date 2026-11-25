@@ -2,7 +2,10 @@
 # ~/.local/share/applications/ and linked from ~/.local/share/kglobalaccel/,
 # which is where KDE's shortcut service looks for applications' shortcuts.
 # "Talk to Happy Bot" opens the Happy Bot app listening to the microphone
-# (happy-bot app talk; press again to stop and send). The others ask the
+# (happy-bot app talk; press again to stop and send). "Fix selected text"
+# opens it with the selected text and buttons to fix its grammar, shorten,
+# translate or explain it, and to put the result back (happy-bot app fix).
+# The others ask the
 # assistant in the background (happy-bot ask --notify) and show the answer
 # as a notification. No key is preset, so
 # nothing clashes; the user assigns keys in System Settings > Shortcuts >
@@ -14,7 +17,12 @@ Comment=Ask Happy Bot about the selected text or the window you are in
 Icon=tools-wizard
 Exec=happy-bot ask --notify -- "Explain the text I have selected (use selected_text)."
 NoDisplay=true
-Actions=TalkToHappyBot;ExplainSelection;AskAboutWindow;
+Actions=TalkToHappyBot;FixSelection;ExplainSelection;AskAboutWindow;
+X-KDE-Shortcuts=
+
+[Desktop Action FixSelection]
+Name=Fix selected text
+Exec=happy-bot app fix
 X-KDE-Shortcuts=
 
 [Desktop Action ExplainSelection]

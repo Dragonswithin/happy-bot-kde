@@ -64,7 +64,7 @@ def _target(arguments: dict[str, Any]) -> dict[str, Any]:
     return windows.describe_window(arguments.get("window") or "current")
 
 
-def _is_terminal(window: dict[str, Any]) -> bool:
+def is_terminal(window: dict[str, Any]) -> bool:
     return bool(_TERMINAL_APP.search(str(window.get("app", "")).lower()))
 
 
@@ -201,7 +201,7 @@ def classify_keys(arguments: dict[str, Any]) -> tuple[str, str]:
     for key in keys:
         if key.split("+")[-1] in ("delete", "del") and key != "delete" and key != "del":
             return RISK_DANGER, f"{key} usually deletes without a way back"
-        if key.split("+")[-1] in ("return", "enter") and _is_terminal(window):
+        if key.split("+")[-1] in ("return", "enter") and is_terminal(window):
             return RISK_DANGER, "Enter in a terminal runs whatever is on its command line"
     return RISK_CHANGE, ""
 
@@ -224,7 +224,7 @@ def classify_type(arguments: dict[str, Any]) -> tuple[str, str]:
         window = _target(arguments)
     except ToolFailure:
         return RISK_CHANGE, ""
-    if isinstance(text, str) and _is_terminal(window):
+    if isinstance(text, str) and is_terminal(window):
         risk, reason = classify_command(text)
         if risk == RISK_DANGER:
             return RISK_DANGER, f"types a terminal command that {reason}"

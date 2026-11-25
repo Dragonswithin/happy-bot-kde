@@ -106,6 +106,13 @@ Endpoints:
   ``uninstall`` opens a terminal running the user's package manager, where
   the user confirms; ``autostart_on``/``autostart_off`` change the login
   entry. Each is written to the action log.
+- ``GET /selection``: the selected text and its window, noted when the
+  "Fix selected text" shortcut was pressed (``POST /app/show`` with
+  ``fix``; ``selection_fix``). ``POST /selection/rewrite`` (``{"text",
+  "style", "instruction"}``) asks an AI the user's privacy setting allows
+  for the fixed, shorter, translated or explained text (``text_rewrite``);
+  ``POST /selection/replace`` (``{"window", "text"}``) pastes it over the
+  selection there and writes the action log.
 - ``GET /reminders``: reminders and timers that are set
   (``{id, when, text}``, soonest first; ``tools/reminders.py``).
 - ``POST /reminders/cancel``: ``{"id": ...}``.
@@ -137,7 +144,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import (app_actions, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
@@ -254,6 +261,8 @@ def panel_change(server: "AssistantServer", query: dict[str, list[str]], body: d
 
 def app_show(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     action = str(body.get("action") or "open")
+    if action == "fix":  # note the selection now, before the app opens and may take the focus
+        server.selection.capture()
     return 200, {"ok": True, "count": app_control.waker.notify(action), "running": app_control.running()}
 
 
@@ -687,6 +696,32 @@ def quick_app_action(server: "AssistantServer", query: dict[str, list[str]], bod
     return 200, {"ok": True, "message": message}
 
 
+def selection(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, **server.selection.current()}
+
+
+def selection_rewrite(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        return 200, {"ok": True, **text_rewrite.rewrite(server.settings, str(body.get("text") or ""),
+                                                        str(body.get("style") or ""), str(body.get("instruction") or ""))}
+    except text_rewrite.RewriteError as error:
+        return _error(400, str(error), "invalid")
+
+
+def selection_replace(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    from .permissions import append_audit
+
+    window, text = str(body.get("window") or ""), str(body.get("text") or "")
+    try:
+        message = selection_fix.replace(window, text)
+    except selection_fix.ReplaceError as error:
+        return _error(409, str(error).capitalize(), "invalid")
+    append_audit(server.runtime_dir, {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "tool": "replace_selection",
+                                      "risk": "change", "outcome": "chosen in Fix selected text",
+                                      "arguments": json.dumps({"window": window, "characters": len(text)})})
+    return 200, {"ok": True, "message": message}
+
+
 def list_reminders(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     items = reminders.upcoming()
     return 200, {"ok": True, "reminders": [
@@ -753,6 +788,9 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/quick/activate"): quick_activate,
     ("GET", "/quick/app"): quick_app,
     ("POST", "/quick/app"): quick_app_action,
+    ("GET", "/selection"): selection,
+    ("POST", "/selection/rewrite"): selection_rewrite,
+    ("POST", "/selection/replace"): selection_replace,
     ("GET", "/reminders"): list_reminders,
     ("POST", "/reminders/cancel"): cancel_reminder,
 }

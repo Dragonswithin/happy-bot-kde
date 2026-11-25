@@ -72,6 +72,12 @@ import "barInput.js" as BarInput
  * daemon). In a panel there is no floating button; the panel widget and
  * the app can run side by side.
  *
+ * The "Fix selected text" shortcut reaches the app as the "fix" show
+ * request: it opens like the hotkey and shows the selected text with its
+ * rewrite buttons (`session.startFixing`, SelectionFixCard.qml); typing
+ * there gives an instruction for the text, and Replace closes Happy Bot
+ * while the result is pasted in its place.
+ *
  * The floating Happy Bot and the hotkey (the widget's global shortcut)
  * both call `openForApplication`, which notes the application the user is
  * in (`session.captureApplication`) so questions are about it; the panel's
@@ -504,6 +510,10 @@ PlasmoidItem {
                                                  : data.age >= 0 && data.age < 30;
             if (fresh && data.action === "settings") {
                 root.openSettings();
+            } else if (fresh && data.action === "fix") {
+                // The "Fix selected text" shortcut: the daemon noted the selection; show it with its buttons.
+                root.openForApplication();
+                session.startFixing();
             } else if (fresh && data.action === "talk") {
                 // The "Talk to Happy Bot" shortcut: open here, listening (pressed again: stop and send).
                 if (!session.listening) {
@@ -595,6 +605,9 @@ PlasmoidItem {
 
     function closePopup() {
         session.stopFindingFiles();
+        if (!session.replacing) {
+            session.stopFixing();  // kept while pasting, so a failure can be shown again
+        }
         if (root.floating) {
             root.floating.close();
         }
@@ -850,6 +863,14 @@ PlasmoidItem {
     }
 
     function handleAccepted(text) {
+        // Fixing selected text: what is typed is an instruction for that text, not a request.
+        if (session.fixing !== null) {
+            if (text.length > 0) {
+                session.fixSelection("", text);
+                root.clearInput();
+            }
+            return;
+        }
         // Enter before the results for this text are in: act once they are (onSearchingChanged).
         if (text.length > 0 && root.searchable(text)
                 && (searchDelay.running || session.searching || session.searchedText !== text)) {
@@ -904,8 +925,20 @@ PlasmoidItem {
 
     // An action that needs approval brings the conversation forward if the
     // popup is open, and the icon's ring asks for attention if it is not.
+    // Fixing selected text: Happy Bot closes so the application can take the
+    // paste, and comes back to show why if the paste failed.
     Connections {
         target: session
+        function onSelectionReplacing() {
+            root.closePopup();
+        }
+        function onSelectionReplaceFailed() {
+            if (root.floating) {
+                root.floating.open();
+            } else {
+                root.openPopup();
+            }
+        }
         function onPendingApprovalsChanged() {
             if (session.pendingApprovals > 0 && (popup.visible || root.floatingOpen)) {
                 searchDelay.stop();

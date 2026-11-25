@@ -23,6 +23,10 @@ import org.kde.plasma.extras as PlasmaExtras
  *   matches, scrolling, with an "Ask Happy Bot to find" row pinned below
  *   them). The panel bar's own results show above the bar instead
  *   (PanelResults.qml), never here.
+ * - FIX while `session.fixing` is set (the "Fix selected text" shortcut):
+ *   SelectionFixCard.qml, the selected text with its rewrite buttons and
+ *   the result. The field then takes an instruction for the text (main.qml),
+ *   and Back or Escape ends it.
  * - ASSISTANT otherwise: the welcome screen or the conversation,
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
@@ -79,14 +83,17 @@ Rectangle {
 
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
-    readonly property bool filesVisible: hasHits || hasSearchError || session.findingFiles
-        || session.searchedText.length > 0
-    readonly property bool conversationVisible: !filesVisible
+    readonly property bool fixVisible: session.fixing !== null
+    readonly property bool filesVisible: !fixVisible && (hasHits || hasSearchError || session.findingFiles
+        || session.searchedText.length > 0)
+    readonly property bool conversationVisible: !filesVisible && !fixVisible
     readonly property bool sidebarVisible: session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
-    readonly property real contentHeight: filesVisible
+    readonly property real contentHeight: fixVisible
+        ? fixCard.naturalHeight + inset * 2
+        : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
             ? welcome.implicitHeight + inset * 2
@@ -218,12 +225,12 @@ Rectangle {
                 onClicked: view.session.newChat()
             }
 
-            // Leaves the file finder for the welcome screen or the chat.
+            // Leaves the file finder, or fixing selected text, for the welcome screen or the chat.
             PlasmaComponents3.ToolButton {
                 icon.name: "go-previous"
                 text: i18n("Back")
-                visible: view.session.findingFiles
-                onClicked: view.session.stopFindingFiles()
+                visible: view.session.findingFiles || view.fixVisible
+                onClicked: view.fixVisible ? view.session.stopFixing() : view.session.stopFindingFiles()
             }
 
             PlasmaComponents3.ToolButton {
@@ -345,6 +352,7 @@ Rectangle {
                 }
                 placeholderText: view.session.listening ? i18n("Listening… talk, then pause")
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
+                    : view.fixVisible ? i18n("Or say what to do with the text…")
                     : view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
@@ -363,6 +371,9 @@ Rectangle {
                 Keys.onEscapePressed: {
                     if (text.length > 0) {
                         text = "";
+                    } else if (view.fixVisible) {
+                        view.session.stopFixing();
+                        view.closeRequested();
                     } else if (view.session.findingFiles) {
                         view.session.stopFindingFiles();
                     } else {
@@ -551,6 +562,28 @@ Rectangle {
                 onResultActivated: hit => view.resultActivated(hit)
                 onFileActionRequested: (hit, action) => view.fileActionRequested(hit, action)
                 onAskRequested: text => view.askRequested(text)
+            }
+
+            PlasmaComponents3.ScrollView {
+                anchors.fill: parent
+                visible: view.fixVisible
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                Flickable {
+                    contentWidth: width
+                    contentHeight: fixCard.naturalHeight + view.inset * 2
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    SelectionFixCard {
+                        id: fixCard
+                        x: view.inset
+                        y: view.inset
+                        width: parent.width - view.inset * 2
+                        session: view.session
+                    }
+                }
             }
 
             PlasmaComponents3.ScrollView {

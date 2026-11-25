@@ -182,7 +182,7 @@ class FolderAndTerminalTests(unittest.TestCase):
             from happy_bot.tools import gui
             for app, terminal in (("org.kde.kwi", True), ("kwin_wayland", False), ("org.kde.kwin.killer", False),
                                   ("gnome-terminal-server", True)):
-                self.assertIs(gui._is_terminal({"app": app}), terminal, app)
+                self.assertIs(gui.is_terminal({"app": app}), terminal, app)
 
 
 

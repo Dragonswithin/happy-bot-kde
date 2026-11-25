@@ -20,7 +20,9 @@ The server object is also where the daemon's long-lived parts hang: its
 clients can find the base URL), the current settings, the conversations, the
 ``ApprovalBroker`` holding approval requests that await the user, the
 ``IconActivity`` the mascot's cues come from (``GET /icon/activity``), the
-``voice.Listener`` that records a spoken request, and the
+``voice.Listener`` that records a spoken request, the
+``selection_fix.SelectionNote`` holding the text noted by the "Fix selected
+text" shortcut, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
 manager and brings the routines' systemd units in step (``routines.sync``),
@@ -56,7 +58,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import desktop_context, routines, user_timers, voice
+from . import desktop_context, routines, selection_fix, user_timers, voice
 from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
@@ -188,6 +190,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.activity = IconActivity()
         self.approvals = ApprovalBroker()
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
+        self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:

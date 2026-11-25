@@ -20,15 +20,18 @@ PROVIDER_KINDS = ("openai_compatible", "openai_responses")
 __all__ = ["ModelProvider", "ProviderError", "PROVIDER_KINDS", "create_provider"]
 
 
-def create_provider(model: dict[str, Any]) -> ModelProvider:
-    """Build the provider for one entry of the ``models`` settings."""
+def create_provider(model: dict[str, Any], no_thinking: bool = False) -> ModelProvider:
+    """Build the provider for one entry of the ``models`` settings.
+
+    ``no_thinking`` asks a reasoning model on this computer to answer without hidden thinking, for
+    short tasks (``OpenAICompatibleProvider``); the Responses provider ignores it.
+    """
     kind = model.get("provider")
+    if kind == "openai_compatible":
+        return OpenAICompatibleProvider(base_url=model["base_url"], model=model["model"],
+                                        api_key=model.get("api_key", ""), headers=model.get("headers") or {},
+                                        no_thinking=no_thinking)
     if kind in PROVIDER_KINDS:
-        provider = OpenAICompatibleProvider if kind == "openai_compatible" else OpenAIResponsesProvider
-        return provider(
-            base_url=model["base_url"],
-            model=model["model"],
-            api_key=model.get("api_key", ""),
-            headers=model.get("headers") or {},
-        )
+        return OpenAIResponsesProvider(base_url=model["base_url"], model=model["model"],
+                                       api_key=model.get("api_key", ""), headers=model.get("headers") or {})
     raise ProviderError(f"unknown model provider '{kind}'")
