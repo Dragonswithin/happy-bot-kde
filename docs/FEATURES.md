@@ -59,6 +59,13 @@ read with OCR (``text_from_image``) for text-only models.
 
 ## 1. The Bar
 
+- ● Answer buttons: the AI may ask one short question with 2–4 answers as
+  buttons (``ask_user``) or offer 1–3 next steps after an answer
+  (``suggest_next``); a click is the user's next message, and the turn ends
+  there so the AI waits. Offered only to Happy Bot's own window, not KRunner,
+  routines or the CLI. (asked for by the maintainer 2026-11-25; thinking was
+  left as it is: the GPU model's template only switches it on or off)
+
 - ● The panel's search bar searches as you type, like the launcher:
   applications, settings pages, answers, saved chats and files (up
   to 20) show in a scrolling list right above the bar, which never takes

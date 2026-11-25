@@ -27,6 +27,9 @@ import org.kde.plasma.components as PlasmaComponents3
  *   output line it reported appears underneath in fixed-width text, so a
  *   long command visibly makes progress. A step whose result came with a
  *   card (`card`, the weather) shows it underneath, drawn by WeatherCard.qml.
+ *   Answer buttons the assistant offered (`ask_user`, `suggest_next`: a card
+ *   of kind "choices") replace the step line, drawn by ChoicesCard.qml; a
+ *   click emits `choiceChosen(text)`, enabled only while `choicesEnabled`.
  * - "notice": a quiet step-like line ("Stopped.").
  * - "assistant": the answer in a tinted card, drawn by AnswerBody.qml
  *   (Markdown, code blocks each with their own Copy button, lists of files
@@ -57,6 +60,8 @@ Item {
     required property real started
     required property string progress
     required property string card
+    // Answer buttons are clickable only while the assistant is not working (set by ResultsView.qml).
+    property bool choicesEnabled: true
     readonly property var cardData: {
         try {
             return card ? JSON.parse(card) : null;
@@ -64,6 +69,7 @@ Item {
             return null;
         }
     }
+    readonly property bool hasChoices: kind === "tool" && cardData !== null && cardData.kind === "choices"
     property bool useRobotMascot: false
     readonly property bool running: kind === "tool" && stage === "running"
     property real now: Date.now()
@@ -86,6 +92,7 @@ Item {
     }
 
     signal linkActivated(string link)
+    signal choiceChosen(string text)
     signal approvalAnswered(string approvalId, string decision, bool remember)
     signal settingsRequested()
 
@@ -167,7 +174,8 @@ Item {
                             switch (entry.kind) {
                             case "user": return "im-user";
                             case "assistant": return entry.useRobotMascot ? Look.robotIcon : "";
-                            case "tool": return entry.stage === "failed" ? "dialog-warning"
+                            case "tool": return entry.hasChoices ? (entry.cardData.follow_up ? "go-next" : "dialog-question")
+                                : entry.stage === "failed" ? "dialog-warning"
                                 : entry.stage === "ok" ? "checkmark" : "chronometer";
                             case "notice": return "media-playback-stop-symbolic";
                             case "approval": return "dialog-warning";
@@ -193,10 +201,10 @@ Item {
                         font.weight: Font.DemiBold
                     }
 
-                    // a step, or a notice
+                    // a step, or a notice (not for answer buttons: the card says it all)
                     PlasmaComponents3.Label {
                         Layout.fillWidth: true
-                        visible: entry.kind === "tool" || entry.kind === "notice"
+                        visible: (entry.kind === "tool" || entry.kind === "notice") && !entry.hasChoices
                         text: entry.kind === "tool" && entry.stage === "failed" ? i18n("%1 — failed", entry.text)
                             : entry.running ? i18n("%1 · %2", entry.text, entry.elapsed())
                             : entry.text
@@ -225,6 +233,18 @@ Item {
                         visible: active
                         sourceComponent: WeatherCard {
                             weather: entry.cardData
+                        }
+                    }
+
+                    // answer buttons the assistant offered (ChoicesCard.qml); a click is the user's next message
+                    Loader {
+                        Layout.fillWidth: true
+                        active: entry.hasChoices
+                        visible: active
+                        sourceComponent: ChoicesCard {
+                            choices: entry.cardData
+                            enabled: entry.choicesEnabled
+                            onChosen: text => entry.choiceChosen(text)
                         }
                     }
 

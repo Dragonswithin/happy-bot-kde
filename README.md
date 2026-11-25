@@ -110,6 +110,10 @@ used.
   Bot" shortcut you set in System Settings. Talk and pause: what you said
   goes to the AI. Only recordings with speech are sent, and each is deleted
   right after.
+- **Click instead of typing**: when a request is unclear, the AI can ask one
+  short question with answer buttons, and after an answer it can offer up to
+  three next steps as buttons ("Open it", "Install it"). A click sends that
+  text as your reply; you can always type something else.
 - In the popup and the floating Happy Bot, what you type is a request for
   the assistant, which searches files or the web when it needs to. "Find a
   file" on the welcome screen searches as you type there, the same way as

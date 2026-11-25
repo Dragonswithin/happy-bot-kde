@@ -19,7 +19,9 @@ Progress is reported through ``emit`` as JSON-serialisable events, in order:
 - ``{"type": "tool_result", "id", "name", "ok", "text"}``, plus ``"card"`` when
   the tool draws its successful result as a card (``Tool.card``)
 - then exactly one of ``{"type": "done", "stop": "answered"|"cancelled"|"step_limit",
-  "actions": [...]}`` or ``{"type": "error", "message": ...}``
+  "actions": [...]}`` or ``{"type": "error", "message": ...}``. A tool marked
+  ``ends_turn`` that ran (``ask_user``, ``suggest_next``: buttons for the user)
+  ends the turn as "answered" once the calls of that model reply are done.
 
 ``usage`` adds up the tokens the service reported over the turn's model
 requests (``{"input_tokens", "output_tokens", "requests"}``), for the
@@ -270,6 +272,7 @@ def run_turn(
             finish("answered")
             return
 
+        handed_back = False
         for call in calls:
             if cancel.is_set():
                 history.append(Message("tool", "Not run: the user cancelled.", tool_call_id=call.id))
@@ -309,5 +312,9 @@ def run_turn(
             if card:
                 event["card"] = card
             emit(event)
+            handed_back = handed_back or bool(ok and tool and tool.ends_turn)
+        if handed_back:
+            finish("answered")
+            return
 
     finish("step_limit")

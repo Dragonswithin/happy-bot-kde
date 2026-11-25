@@ -94,6 +94,9 @@ class Tool:
     # Reads inside the user's applications (their controls, text, selection): its results are kept
     # from online AIs unless the user's app_context setting allows them (app_context.for_model).
     private: bool = False
+    # Hands the turn back to the user once it has run (tools/choices.py: buttons the user answers),
+    # so the agent loop stops instead of asking the model again.
+    ends_turn: bool = False
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.parameters)
@@ -121,6 +124,10 @@ class ToolRegistry:
             if tool.name in self._tools:
                 raise ValueError(f"duplicate tool name: {tool.name}")
             self._tools[tool.name] = tool
+
+    def with_tools(self, extra: list[Tool]) -> "ToolRegistry":
+        """This registry plus ``extra`` tools (a name already here wins)."""
+        return ToolRegistry([*self._tools.values(), *(tool for tool in extra if tool.name not in self._tools)])
 
     def specs(self) -> list[ToolSpec]:
         return [tool.spec() for tool in self._tools.values()]

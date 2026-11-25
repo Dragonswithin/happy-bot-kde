@@ -31,7 +31,10 @@ registry includes the routine tools, which change settings through
 ``server.replace_settings`` exactly as the settings page does. A body with
 ``"dry_run": true`` offers only tools that cannot change anything
 (``ToolRegistry.reads_only``) and asks the model to list the steps it would
-take; ``happy-bot ask --dry-run`` uses it to try a routine safely.
+take; ``happy-bot ask --dry-run`` uses it to try a routine safely. A body
+with ``"buttons": true`` (Happy Bot's own window, which draws them) also
+offers ``ask_user`` and ``suggest_next`` (``tools/choices.py``): a question
+with answer buttons, or next steps to click.
 
 Event stream, in addition to the agent loop's events (see ``agent_loop``):
 
@@ -105,6 +108,7 @@ from .redaction import is_local_address
 from .tools import app_visibility
 from .providers import ProviderError, create_provider
 from .tools.catalog import GROUP_DESCRIPTIONS, build_registry
+from .tools.choices import choice_tools
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
@@ -158,6 +162,8 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
 
         registry, warnings = build_registry(server.mcp, settings, lambda: server.settings, update_settings)
         dry_run = body.get("dry_run") is True
+        if body.get("buttons") is True and not dry_run:
+            registry = registry.with_tools(choice_tools())  # Happy Bot's window can draw answer buttons
         if dry_run:
             registry = registry.reads_only()
             message = (DRY_RUN_PREFIX + message)[:MAX_MESSAGE_CHARS]

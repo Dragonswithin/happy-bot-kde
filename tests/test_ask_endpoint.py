@@ -119,6 +119,15 @@ class AskEndpointTests(unittest.TestCase):
         response = self.request("POST", "/ask", {"message": "hi", "model": "ghost"})
         self.assertIn("no model named ghost", response.read().decode())
 
+    def test_answer_buttons_are_offered_only_to_a_window_that_draws_them(self) -> None:
+        self.configure()
+        for buttons in (True, False):
+            self.model.replies.append(chunks_for("ok"))
+            response = self.request("POST", "/ask", {"message": "minecraft", "buttons": buttons, "ephemeral": True})
+            events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
+            offered = set(events[0]["tools"])
+            self.assertEqual({"ask_user", "suggest_next"} <= offered, buttons, offered & {"ask_user", "suggest_next"})
+
     def test_every_tool_is_offered_and_bridged_risk_follows_what_the_user_declared(self) -> None:
         self.configure(read_only=False)
         self.model.replies.append(chunks_for("ok"))

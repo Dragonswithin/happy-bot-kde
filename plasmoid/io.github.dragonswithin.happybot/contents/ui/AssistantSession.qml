@@ -507,7 +507,8 @@ Item {
                 session.finishStream();
             }
         };
-        const body = { message: text, conversation_id: session.conversationId, model: session.chatModel };
+        // buttons: this window draws answer buttons, so the assistant may offer them (tools/choices.py).
+        const body = { message: text, conversation_id: session.conversationId, model: session.chatModel, buttons: true };
         if (session.helpWith) {
             body.about_window = session.helpWith;
             body.full_context = session.helpChat;

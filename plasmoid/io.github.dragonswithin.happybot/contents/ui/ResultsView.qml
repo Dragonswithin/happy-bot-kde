@@ -39,7 +39,8 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * - `queryEdited(text)`: the text changed. `accepted(text)`: Enter, trimmed.
  *   `askRequested(text)`: the Ask row under the results was clicked, which
- *   always asks the assistant whatever result is selected.
+ *   always asks the assistant whatever result is selected, or one of the
+ *   answer buttons the assistant offered in the conversation.
  *   `talkRequested()`: the microphone in the field (shown when
  *   `session.voiceEnabled`), to start or stop listening. `selectionMove(delta)`: Down (+1) or Up (-1).
  *   `completeRequested()`: Tab, to complete the text from the top result. Escape
@@ -577,6 +578,8 @@ Rectangle {
                                 useRobotMascot: view.useRobotMascot
                                 width: transcriptColumn.width
                                 onLinkActivated: link => view.hitActivated(link)
+                                choicesEnabled: !view.session.busy
+                                onChoiceChosen: text => view.askRequested(text)
                                 onApprovalAnswered: (approvalId, decision, remember) =>
                                     view.session.answerApproval(approvalId, decision, remember)
                                 onSettingsRequested: view.settingsRequested()
