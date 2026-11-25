@@ -13,16 +13,8 @@ import org.kde.plasma.core as PlasmaCore
  * and holds ResultsView.qml, including the field the user types into. This
  * file owns only window behaviour; what is shown is in ResultsView.qml.
  *
- * Two behaviours, chosen by `takesFocus`:
- *
- * - true (the icon form): the window takes keyboard focus when shown, puts
- *   the cursor in its field, and hides itself when it loses focus (a click
- *   anywhere else). Typing here keeps the panel from ever holding focus,
- *   which is what draws Plasma's blue panel focus indicator.
- * - false (the search-bar form, PanelBar.qml): the field is hidden, the
- *   window is a tooltip-type window that never accepts focus, so the panel
- *   field keeps focus and its keys while the popup's buttons still take
- *   clicks. main.qml shows and hides it; `barText` is the panel's text.
+ * The panel icon, shortcut and inline search bar all open the same focused
+ * composer. The dialog stays anchored to its panel and closes on focus loss.
  *
  * `location` is the panel's edge; the field goes on the side facing the
  * panel. `hiddenAt` records when the window last hid, so main.qml can tell
@@ -34,15 +26,12 @@ PlasmaCore.Dialog {
 
     required property AssistantSession session
     property alias useRobotMascot: resultsView.useRobotMascot
-    property bool showConversation: false
-    property bool takesFocus: true
-    property string barText: ""
+    readonly property alias inputText: resultsView.inputText
     property int selectedIndex: -1
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
     property real hiddenAt: 0
 
-    signal panelPromptChosen(string prompt)
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
@@ -55,17 +44,16 @@ PlasmaCore.Dialog {
     signal settingsRequested()
     signal dismissed()
 
-    type: takesFocus ? PlasmaCore.Dialog.AppletPopup : PlasmaCore.Dialog.Tooltip
-    flags: takesFocus ? Qt.Dialog : Qt.WindowDoesNotAcceptFocus
-    hideOnWindowDeactivate: takesFocus
-    backgroundHints: PlasmaCore.Dialog.StandardBackground
+    type: PlasmaCore.Dialog.AppletPopup
+    flags: Qt.Dialog
+    hideOnWindowDeactivate: true
+    backgroundHints: PlasmaCore.Dialog.NoBackground
+
 
     onVisibleChanged: {
         if (visible) {
-            if (takesFocus) {
-                requestActivate();
-                resultsView.focusInput();
-            }
+            requestActivate();
+            resultsView.focusInput();
         } else {
             popup.hiddenAt = Date.now();
             popup.dismissed();
@@ -85,14 +73,10 @@ PlasmaCore.Dialog {
 
         session: popup.session
         fieldAtBottom: popup.location === PlasmaCore.Types.BottomEdge
-        showField: popup.takesFocus
-        barText: popup.barText
-        showConversation: popup.showConversation
         selectedIndex: popup.selectedIndex
         widthInGridUnits: popup.widthInGridUnits
         heightInGridUnits: popup.heightInGridUnits
 
-        onPanelPromptChosen: prompt => popup.panelPromptChosen(prompt)
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)
         onSelectionMove: delta => popup.selectionMove(delta)

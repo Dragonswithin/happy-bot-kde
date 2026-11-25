@@ -50,7 +50,6 @@ Window {
     property string iconSource: "tools-wizard"
     property bool busy: false
     property bool useRobotMascot: false
-    property bool showConversation: false
     property int selectedIndex: -1
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
@@ -159,14 +158,10 @@ Window {
     onActiveChanged: if (!active && expanded) close()
 
     // --- open: Happy Bot itself ------------------------------------------------
-    Rectangle {
+    Item {
         anchors.fill: parent
         visible: floating.reveal > 0
         opacity: floating.reveal
-        radius: Kirigami.Units.cornerRadius * 3
-        color: Kirigami.Theme.backgroundColor
-        border.width: 1
-        border.color: Qt.alpha(Kirigami.Theme.textColor, 0.2)
         clip: true
 
         ResultsView {
@@ -178,10 +173,8 @@ Window {
             session: floating.session
             width: Math.min(implicitWidth, floating.screenWidth)
             height: Math.min(implicitHeight, floating.screenHeight)
-            alwaysShowHeader: true
             useRobotMascot: floating.useRobotMascot
             fieldAtBottom: floating.growUp
-            showConversation: floating.showConversation
             selectedIndex: floating.selectedIndex
             widthInGridUnits: floating.widthInGridUnits
             heightInGridUnits: floating.heightInGridUnits

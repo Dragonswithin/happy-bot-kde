@@ -13,23 +13,15 @@ import org.kde.plasma.components as PlasmaComponents3
 import org.kde.plasma.extras as PlasmaExtras
 
 /**
- * Everything inside the assistant's popup, laid out like Plasma's own
- * launcher: a header band (title, status, Stop, New, Close), a body, and the
- * input field in a footer band on the side facing the panel, with the
- * chat's AI picker (ModelPicker.qml) beside it when two or more AIs are set
- * up (`alwaysShowHeader`, set by the floating Happy Bot, keeps the header and
- * its close button even when only the field shows); the picker goes in the
- * header instead when the field is hidden. With nothing
- * to show the view is just the field. When the user types in the panel's
- * search bar instead (PanelBar.qml), `showField` is false, the field is
- * hidden, and `barText` is the text typed there.
+ * The panel popup and floating assistant share this frame, header and composer.
+ * The field sits on the side nearest the launcher with the chat's AI picker.
  *
  * The body shows one thing at a time:
  *
  * - FILES in the file finder, or while there are file matches or a search
  *   problem: FileResults.qml (the matches, scrolling, with an "Ask Happy Bot
  *   to find" row pinned below them).
- * - ASSISTANT otherwise, when `showConversation` is set: the conversation,
+ * - ASSISTANT otherwise: the welcome screen or the conversation,
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
  *
@@ -60,8 +52,13 @@ import org.kde.plasma.extras as PlasmaExtras
  * The view sets its own width and height: Plasma's popup window follows its
  * content's actual size, not its implicit size.
  */
-Item {
+Rectangle {
     id: view
+
+    radius: Kirigami.Units.cornerRadius * 3
+    color: Kirigami.Theme.backgroundColor
+    border.color: Qt.alpha(Kirigami.Theme.textColor, 0.2)
+    clip: true
 
     required property var session
     property bool useRobotMascot: false
@@ -69,13 +66,7 @@ Item {
     readonly property int inset: Kirigami.Units.largeSpacing * 1.5
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
     property bool fieldAtBottom: false
-    property bool showField: true
-    // The header (title, Stop, New, Settings, Close) even when nothing else shows: the floating
-    // Happy Bot is a window of its own, so its close button must always be there.
-    property bool alwaysShowHeader: false
-    readonly property bool headerVisible: bodyHasContent || alwaysShowHeader
-    property string barText: ""
-    property bool showConversation: false
+    readonly property alias inputText: field.text
     property int selectedIndex: -1
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
@@ -83,11 +74,10 @@ Item {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool filesVisible: hasHits || hasSearchError || session.findingFiles
-    readonly property bool conversationVisible: showConversation && !filesVisible
-    readonly property bool bodyHasContent: filesVisible || conversationVisible
-    readonly property bool sidebarVisible: bodyHasContent && session.history.length > 0
+    readonly property bool conversationVisible: !filesVisible
+    readonly property bool sidebarVisible: session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
-    readonly property string query: (showField ? inputBar.text : barText).trim()
+    readonly property string query: inputText.trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
     readonly property real contentHeight: filesVisible
         ? fileResults.naturalHeight
@@ -98,7 +88,6 @@ Item {
         ? Math.max(contentHeight, Math.min(historyHeader.height + historyColumn.implicitHeight, Kirigami.Units.gridUnit * 16))
         : contentHeight
 
-    signal panelPromptChosen(string prompt)
     signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
@@ -129,7 +118,7 @@ Item {
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
     implicitHeight: Math.round(Math.min(maximumHeight, inputBar.height
-        + (headerVisible ? titleBar.implicitHeight : 0) + (bodyHasContent ? bodyHeight : 0)))
+        + titleBar.implicitHeight + bodyHeight))
 
     function focusInput() {
         inputBar.forceFieldFocus();
@@ -156,9 +145,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: view.fieldAtBottom ? parent.top : inputBar.bottom
-        visible: view.headerVisible
         implicitHeight: headerRow.implicitHeight + Kirigami.Units.smallSpacing * 2
-        height: visible ? implicitHeight : 0
+        height: implicitHeight
 
         Rectangle {
             anchors.bottom: parent.bottom
@@ -198,13 +186,6 @@ Item {
                 elide: Text.ElideRight
                 font: Kirigami.Theme.smallFont
                 opacity: 0.7
-            }
-
-            // When the user types in the panel's search bar this view has no field,
-            // so the chat's AI picker sits here instead.
-            ModelPicker {
-                session: view.session
-                visible: !view.showField && view.conversationVisible && view.session.models.length > 1
             }
 
             // The actions keep their space in Files mode so the band's height
@@ -270,8 +251,7 @@ Item {
         anchors.right: parent.right
         anchors.top: view.fieldAtBottom ? undefined : parent.top
         anchors.bottom: view.fieldAtBottom ? parent.bottom : undefined
-        height: view.showField ? implicitHeight : 0
-        visible: view.showField
+        height: implicitHeight
         implicitHeight: composer.implicitHeight + Kirigami.Units.largeSpacing * 2
 
         Rectangle {
@@ -347,7 +327,6 @@ Item {
         anchors.right: parent.right
         anchors.top: titleBar.bottom
         anchors.bottom: view.fieldAtBottom ? inputBar.top : parent.bottom
-        visible: view.bodyHasContent
         clip: true
 
         // --- sidebar: saved conversations ---------------------------------
@@ -606,24 +585,16 @@ Item {
                         helpWithIcon: view.session.helpWithIcon
                         onFindFilesChosen: {
                             view.session.startFindingFiles();
-                            if (view.showField) {
-                                view.setInput("");
-                                view.focusInput();
-                            } else {
-                                view.panelPromptChosen("");
-                            }
+                            view.setInput("");
+                            view.focusInput();
                         }
                         onHelpChosen: prompt => {
                             view.session.helpChat = true;
                             welcome.promptChosen(prompt);
                         }
                         onPromptChosen: prompt => {
-                            if (view.showField) {
-                                view.setInput(prompt);
-                                view.focusInput();
-                            } else {
-                                view.panelPromptChosen(prompt);
-                            }
+                            view.setInput(prompt);
+                            view.focusInput();
                         }
                     }
                 }

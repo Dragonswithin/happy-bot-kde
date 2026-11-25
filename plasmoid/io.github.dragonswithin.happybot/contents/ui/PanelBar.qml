@@ -15,7 +15,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * The applet's search-bar panel form: a text field in the panel beside the
  * launcher, used when the user picks "Search bar" under "Show in panel"
  * (the `inputInPanel` setting) on a horizontal panel. In this form the user
- * types here, and ResultsPopup.qml only shows results without taking focus.
+ * can type a request here. Enter, the logo, or the widget shortcut opens
+ * ResultsPopup.qml, which takes focus for searching files and continuing the chat.
  *
  * While the field has focus, Plasma draws its blue panel focus indicator
  * along the panel. A widget cannot switch that off; users who choose this
@@ -26,17 +27,14 @@ import org.kde.plasma.components as PlasmaComponents3
  *
  * - `focusRequested`: the user clicked the unfocused field. The panel
  *   window must be granted keyboard focus before the field can take it.
- * - `queryEdited(text)`: the text changed, by typing or by `setText`.
  * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
  * - `selectionMove(delta)`: Down (+1) or Up (-1).
- * - `completeRequested`: Tab, to complete the text from the top result.
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
  * - `iconClicked`: a left click on the logo at the bar's left end. It works
  *   with nothing typed, so saved conversations are always one click away.
  * - `menuRequested`: a right-click anywhere on the bar. The text field
  *   would otherwise swallow it, so Plasma's own widget menu never appears.
- * - `inputFocusedChanged`: so the popup can close when focus leaves,
- *   including when the user clicks anywhere outside the panel.
+ * - `inputFocusedChanged`: releases the panel's keyboard focus request.
  *
  * Its width is fixed at `widthInGridUnits` (the applet's `barWidth`
  * setting): minimum, preferred and maximum are the same so the panel
@@ -56,11 +54,9 @@ Item {
     property bool offline: false
     property string iconName: "search"
     property int widthInGridUnits: 18
-    // The file finder is open ("Find a file"): the field asks for part of a file name.
-    property bool findingFiles: false
     // Focused means the field has focus AND its panel window is the active
     // window. A click anywhere outside deactivates the panel; focus is then
-    // dropped explicitly so the popup closes and the next click on the
+    // dropped explicitly so the next click on the
     // field goes through `focusRequested` again.
     readonly property bool windowActive: Window.active
     readonly property bool inputFocused: field.activeFocus && windowActive
@@ -72,10 +68,8 @@ Item {
     readonly property alias text: field.text
 
     signal focusRequested()
-    signal queryEdited(string text)
     signal accepted(string text)
     signal selectionMove(int delta)
-    signal completeRequested()
     signal dismissed()
     signal menuRequested()
     signal iconClicked()
@@ -103,18 +97,15 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         height: Math.min(parent.height, implicitHeight)
 
-        placeholderText: bar.offline ? bar.statusText
-            : bar.findingFiles ? i18n("Type part of a file name…") : i18n("Ask or search anything…")
+        placeholderText: bar.offline ? bar.statusText : i18n("Ask or search anything…")
         leftPadding: icon.width + Kirigami.Units.smallSpacing * 2
         rightPadding: spinner.visible ? spinner.width + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing
         Accessible.name: i18n("Ask or search anything")
 
-        onTextChanged: bar.queryEdited(text)
         Keys.onReturnPressed: bar.accepted(text.trim())
         Keys.onEnterPressed: bar.accepted(text.trim())
         Keys.onDownPressed: bar.selectionMove(1)
         Keys.onUpPressed: bar.selectionMove(-1)
-        Keys.onTabPressed: bar.completeRequested()
         Keys.onEscapePressed: {
             if (field.text.length > 0) {
                 field.text = "";
@@ -171,10 +162,10 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: bar.iconClicked()
         Accessible.role: Accessible.Button
-        Accessible.name: i18n("Show conversations")
+        Accessible.name: i18n("Open Happy Bot")
         Accessible.onPressAction: bar.iconClicked()
 
-        QQC2.ToolTip.text: i18n("Show conversations")
+        QQC2.ToolTip.text: i18n("Open Happy Bot")
         QQC2.ToolTip.visible: containsMouse
         QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     }

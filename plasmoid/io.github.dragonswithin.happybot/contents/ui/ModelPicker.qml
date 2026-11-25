@@ -12,8 +12,7 @@ import org.kde.kirigami as Kirigami
 
 /**
  * The popup's per-chat AI picker, a small drop-down shown in ResultsView.qml
- * beside the typing field (or in the header when the user types in the
- * panel's search bar). It is shown only when two or more AIs are set up.
+ * beside the typing field in both assistant windows. It is shown only when two or more AIs are set up.
  *
  * "Automatic" leaves the chat on the user's order of AIs (the AI Model
  * page); choosing one AI sends every request of this chat to that AI alone.

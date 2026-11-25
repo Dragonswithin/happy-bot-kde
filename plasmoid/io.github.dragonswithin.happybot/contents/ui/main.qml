@@ -25,30 +25,11 @@ import "barInput.js" as BarInput
  *   the cursor in its field; the same again, Escape on an empty field, the
  *   close button or a click anywhere else closes it. The panel itself never
  *   takes keyboard focus, so Plasma's panel focus indicator never appears.
- * - Search-bar form: typing happens in the panel, and the popup only shows
- *   results without taking focus (`updateBarPopup`). A panel accepts key
- *   input only while an applet reports AcceptingInputStatus, so
- *   `wantsInput` drives `Plasmoid.status`: it is set before the bar is
- *   focused (a click on it or the activation shortcut, `focusBar`) and
- *   cleared when the bar loses focus. While the bar has focus Plasma draws
- *   its blue panel focus indicator; the user accepted that by choosing this
- *   form. The popup is visible while the bar has focus and there is
- *   something to show (matches, a search problem, or a conversation opened
- *   by submitting a request or pressing Enter in the empty bar, or by
- *   clicking the logo at the bar's left end, which shows the current and
- *   saved conversations with nothing typed and closes them on a second
- *   click). Focusing the bar alone opens nothing, unless an action waits
- *   for approval.
- *   Leaving the bar hides the popup, closes the conversation view and keeps
- *   the typed text; Escape on an empty bar, or the close button, closes the
- *   conversation too.
- * - What the popup shows. Files and the conversation take turns (see
- *   ResultsView.qml): the file finder while the user is finding a file,
- *   otherwise the conversation when `conversationOpen`. Opening the popup
- *   returns to the current conversation, or shows the saved conversations
- *   if there are any, else shows only the field. Submitting a request clears the matches and shows
- *   the conversation; Enter in an empty field shows the previous one; an
- *   approval request clears the matches so its card is in front of the user.
+ * - Search-bar form: the panel field accepts an initial request. Enter opens
+ *   the same focused assistant as the panel logo or widget shortcut. A draft
+ *   moves into the popup's composer and returns to the bar on click-away.
+ *   Focusing the empty panel field alone lets the user type inline.
+ * - The open assistant shows the file finder, current chat or welcome screen.
  * - Typing. Nothing is searched while the user types a request or a reply;
  *   Enter sends it to the assistant, which searches when the request needs
  *   it. Only the file finder ("Find a file" on the welcome screen,
@@ -107,7 +88,6 @@ PlasmoidItem {
     readonly property bool barMode: Plasmoid.configuration.inputInPanel
         && Plasmoid.formFactor !== PlasmaCore.Types.Vertical
     property bool wantsInput: false
-    property bool conversationOpen: false
     property string pendingQuery: ""
     // Requests sent from the bar in this session, oldest first, for Up/Down
     // recall; `recallIndex` is the one shown (equal to the length: none).
@@ -135,7 +115,6 @@ PlasmoidItem {
         root.wantsInput = false;
         root.closePopup();
     }
-    onConversationOpenChanged: root.updateBarPopup()
 
     // Run as the Happy Bot app (happy-bot-app: plasmawindowed, which gives the "application" form
     // factor) rather than in a panel or on the desktop: then this is the floating Happy Bot only.
@@ -160,9 +139,7 @@ PlasmoidItem {
             if (root.floating) {
                 root.floating.selectedIndex = -1;
             }
-            root.updateBarPopup();
         }
-        onSearchErrorChanged: root.updateBarPopup()
     }
 
     Timer {
@@ -175,9 +152,6 @@ PlasmoidItem {
         id: popup
         useRobotMascot: session.ui.robot_mascot
         session: session
-        showConversation: root.conversationOpen
-        takesFocus: !root.barMode
-        barText: root.barMode && root.fullRepresentationItem ? root.fullRepresentationItem.text : ""
         widthInGridUnits: session.ui.popup_width
         heightInGridUnits: session.ui.popup_height
         visualParent: root
@@ -189,21 +163,16 @@ PlasmoidItem {
         onHitActivated: location => root.openLocation(location)
         onResultActivated: hit => root.openHit(hit)
         onFileActionRequested: (hit, action) => root.fileAction(hit, action)
-        onPanelPromptChosen: prompt => {
-            root.setInput(prompt);
-            root.focusBar();
-        }
         onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
         onCloseRequested: root.closePopup()
         onSettingsRequested: root.openSettings()
-        // In the search-bar form the popup also hides while the user is still
-        // typing (nothing to show yet), so only the icon form resets here.
         onDismissed: {
-            if (!root.barMode) {
-                searchDelay.stop();
-                session.stopFindingFiles();
-                popup.clearInput();
+            searchDelay.stop();
+            session.stopFindingFiles();
+            if (root.barMode && root.fullRepresentationItem) {
+                root.fullRepresentationItem.setText(popup.inputText);
             }
+            popup.clearInput();
         }
     }
 
@@ -233,7 +202,6 @@ PlasmoidItem {
             iconSource: Plasmoid.icon
             busy: session.busy
             useRobotMascot: session.ui.robot_mascot
-            showConversation: root.conversationOpen
             widthInGridUnits: session.ui.popup_width
             heightInGridUnits: session.ui.popup_height
             onClicked: root.openForApplication()
@@ -267,38 +235,37 @@ PlasmoidItem {
             : session.statusText
         offline: session.status === "offline" || session.pendingApprovals > 0 || session.needsSetup
         iconName: Plasmoid.icon
-        findingFiles: session.findingFiles
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: {
-            session.forgetApplication();  // clicked in the panel, not opened from an application
-            root.focusBar();
+            session.forgetApplication();
+            if (session.pendingApprovals > 0) {
+                root.openPopup();
+            } else {
+                root.focusBar();
+            }
         }
-        onQueryEdited: text => root.handleEdited(text)
-        onAccepted: text => root.handleAccepted(text)
-        onSelectionMove: delta => root.moveSelection(delta)
-        onCompleteRequested: root.completeFromTop()
+        onAccepted: text => {
+            if (!text && session.needsSetup) {
+                root.openSettings();
+                return;
+            }
+            root.openPopup();
+            if (text) {
+                root.handleAccepted(text);
+            }
+        }
+        onSelectionMove: delta => root.recall(delta)
         onDismissed: root.closePopup()
         onMenuRequested: contextMenu.openRelative()
-        onIconClicked: root.toggleConversationsFromBar()
+        onIconClicked: {
+            session.forgetApplication();
+            root.togglePopup();
+        }
         onInputFocusedChanged: {
             if (!inputFocused) {
                 root.wantsInput = false;
-                searchDelay.stop();
-                session.stopFindingFiles();
-                // Clicking away also closes the conversation view, so focusing the
-                // bar again to type does not bring it back (the logo does).
-                root.conversationOpen = false;
-            } else {
-                if (session.pendingApprovals > 0) {
-                    root.conversationOpen = true;
-                }
-                // Text kept from before the bar lost focus gets its matches back.
-                if (text.length > 0) {
-                    root.handleEdited(text);
-                }
             }
-            root.updateBarPopup();
         }
     }
 
@@ -457,9 +424,14 @@ PlasmoidItem {
     }
 
     function openPopup() {
-        // Reopening returns to the conversation in progress, if there is one.
-        root.conversationOpen = session.hasTranscript || session.busy || session.pendingApprovals > 0
-            || session.history.length > 0;
+        if (popup.visible) {
+            return;
+        }
+        if (root.barMode && root.fullRepresentationItem) {
+            const draft = root.fullRepresentationItem.text;
+            root.fullRepresentationItem.setText("");
+            popup.setInput(draft);
+        }
         session.refreshHistory();
         session.refreshStatus();  // picks up AIs added in the settings since the last check
         popup.visible = true;
@@ -470,39 +442,8 @@ PlasmoidItem {
         if (root.floating) {
             root.floating.close();
         }
-        if (root.barMode) {
-            root.conversationOpen = false;
-            root.clearInput();
-        }
+        root.clearInput();
         popup.visible = false;
-    }
-
-    /** Search-bar form: the popup shows while the bar has focus and has something to show. */
-    function updateBarPopup() {
-        if (!root.barMode) {
-            return;
-        }
-        // Read the bar directly: this runs from the bar's own focus handler,
-        // before any binding on its focus would have re-evaluated.
-        const focused = root.fullRepresentationItem ? root.fullRepresentationItem.inputFocused : false;
-        const somethingToShow = root.conversationOpen || session.findingFiles || session.hits.length > 0
-            || session.searchError.length > 0;
-        popup.visible = focused && somethingToShow;
-    }
-
-    /** Search-bar form, the logo: show the conversation and saved ones with nothing typed, or close them. */
-    function toggleConversationsFromBar() {
-        if (popup.visible && root.conversationOpen) {
-            root.closePopup();
-            return;
-        }
-        root.conversationOpen = true;
-        session.refreshHistory();
-        session.refreshStatus();
-        // The popup shows only while the bar has focus, so take it; focusing
-        // runs updateBarPopup, which now has the conversation to show.
-        root.focusBar();
-        root.updateBarPopup();
     }
 
     function focusBar() {
@@ -520,7 +461,7 @@ PlasmoidItem {
     function setInput(text) {
         if (root.floatingOpen) {
             root.floating.setInput(text);
-        } else if (root.barMode && root.fullRepresentationItem) {
+        } else if (!popup.visible && root.barMode && root.fullRepresentationItem) {
             root.fullRepresentationItem.setText(text);
         } else {
             popup.setInput(text);
@@ -537,12 +478,9 @@ PlasmoidItem {
         session.captureApplication();
         if (root.floating) {
             popup.visible = false;
-            root.conversationOpen = true;
             session.refreshHistory();
             session.refreshStatus();
             root.floating.open();
-        } else if (root.barMode) {
-            root.focusBar();
         } else if (!popup.visible) {
             root.openPopup();
         }
@@ -630,12 +568,9 @@ PlasmoidItem {
             root.openSettings();
             return;
         }
-        if (text.length === 0) {
-            root.conversationOpen = session.hasTranscript;
-        } else if (session.ask(BarInput.request(BarInput.parse(text)))) {
+        if (text.length > 0 && session.ask(BarInput.request(BarInput.parse(text)))) {
             root.sentRequests = root.sentRequests.concat([text]).slice(-50);
             root.recallIndex = root.sentRequests.length;
-            root.conversationOpen = true;
             searchDelay.stop();
             session.stopFindingFiles();
             root.clearInput();
@@ -646,8 +581,7 @@ PlasmoidItem {
         target: Plasmoid
         // The hotkey (the widget's global shortcut): Happy Bot for the application in use.
         function onActivated() {
-            if (root.floatingOpen || (!root.floating && !root.barMode
-                                      && (popup.visible || Date.now() - popup.hiddenAt < 300))) {
+            if (root.floatingOpen || (!root.floating && (popup.visible || Date.now() - popup.hiddenAt < 300))) {
                 root.closePopup();
             } else {
                 root.openForApplication();
@@ -662,8 +596,7 @@ PlasmoidItem {
         function onPendingApprovalsChanged() {
             if (session.pendingApprovals > 0 && (popup.visible || root.floatingOpen)) {
                 searchDelay.stop();
-                session.clearSearch();
-                root.conversationOpen = true;
+                session.stopFindingFiles();
             }
         }
     }

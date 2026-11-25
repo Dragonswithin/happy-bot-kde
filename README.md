@@ -8,11 +8,10 @@ architecture and phase order are in `docs/ROADMAP.md`.
 
 ## What Works Today
 
-- The assistant's icon in the Plasma panel, which opens one popup where you
-  type (Meta+Space or a click). Or, under **Show in panel: Search bar**, a
-  text field in the panel itself with results in a popup above it; while
-  you type there, Plasma outlines the panel in its focus colour. Vertical
-  panels always show the icon.
+- The panel icon or widget shortcut opens the full assistant next to the
+  panel. Under **Show in panel → Search bar**, you can also type a request
+  inline and press Enter, or click the bar's logo to open the assistant
+  with your draft. Vertical panels always show the icon.
 - **Happy Bot the app**: "Happy Bot" in the application menu starts the
   floating Happy Bot, a button over other windows that you drag anywhere and
   that fades while not in use. Clicking it opens Happy Bot right there,

@@ -18,8 +18,7 @@ import org.kde.plasma.components as PlasmaComponents3
  * ResultsView.qml turns into the file finder (`AssistantSession.findingFiles`:
  * matching files show as the user types). The others emit `promptChosen`
  * with the start of a request ("Search the web for "), which ResultsView.qml
- * puts in the field the user types in (the popup's own, or the panel bar's
- * through `panelPromptChosen`) for them to finish; nothing is sent until
+ * puts in the assistant's composer for them to finish. Nothing is sent until
  * they press Enter. The help shortcut names the application the user was in
  * (`helpWith`, `AssistantSession.helpWith`: "Help with Kate", with its
  * icon), so it is plain that Happy Bot knows which one; with none (opened
