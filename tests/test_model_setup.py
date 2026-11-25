@@ -19,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from happy_bot import model_presets, model_setup  # noqa: E402
-from happy_bot.providers import ProviderError  # noqa: E402
 from happy_bot.settings import validate_settings  # noqa: E402
 
 NPU = "http://127.0.0.1:52625/v1"
@@ -39,12 +38,10 @@ class FakeDaemon:
 
 class UseModelTests(unittest.TestCase):
     def use(self, daemon: FakeDaemon, body: dict[str, Any], check: Any = None) -> dict[str, Any]:
-        def fake_check(model):
-            if isinstance(check, Exception):
-                raise check
-            return check or {"answers": True, "tools": True, "reply": ""}
+        passing = [{"check": "answers", "status": "pass", "detail": "ready"},
+                   {"check": "tool_call", "status": "pass", "detail": "get_weather"}]
         with mock.patch.object(model_setup, "list_models", return_value=[{"id": body.get("model"), "context_window": 65536}]), \
-                mock.patch.object(model_setup, "check_model", side_effect=fake_check):
+                mock.patch.object(model_setup.model_check, "run", return_value=check or passing):
             return model_setup.use(daemon, body)
 
     def test_npu_first_and_gpu_if_it_fails(self) -> None:
@@ -74,9 +71,20 @@ class UseModelTests(unittest.TestCase):
 
     def test_a_model_that_does_not_answer_is_not_kept(self) -> None:
         daemon = FakeDaemon()
-        result = self.use(daemon, {"base_url": NPU, "model": "x", "job": "main"}, check=ProviderError("refused"))
+        result = self.use(daemon, {"base_url": NPU, "model": "x", "job": "main"},
+                          check=[{"check": "answers", "status": "fail", "detail": "refused"}])
         self.assertFalse(result["ok"])
+        self.assertIn("refused", result["error"])
         self.assertEqual((daemon.settings["models"], daemon.settings["model_order"]), ({}, []))
+
+    def test_a_problem_found_by_the_check_is_named_when_adding(self) -> None:
+        daemon = FakeDaemon()
+        result = self.use(daemon, {"base_url": NPU, "model": "x", "job": "main"}, check=[
+            {"check": "answers", "status": "pass", "detail": "ready"},
+            {"check": "parallel_calls", "status": "fail", "detail": "calls arrived broken"}])
+        self.assertTrue(result["ok"])  # kept: it answers
+        self.assertFalse(result["passed"])
+        self.assertIn("using two tools at once: calls arrived broken", result["message"])
 
     def test_asking_the_second_first_reorders_without_duplicates(self) -> None:
         daemon = FakeDaemon()

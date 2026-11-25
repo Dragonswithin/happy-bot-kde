@@ -24,7 +24,8 @@ limitation worth knowing), ``fail`` (a request failed or Happy Bot misread the r
 Nothing on the computer is touched: the tools are made up and never run. Each request blocks until
 the model answers (a local model may take a while); the whole check is a handful of small requests,
 so for an online AI it costs a fraction of a cent. ``POST /models/check`` and ``happy-bot model
-check`` run it; adding a model keeps the quicker single-request ``model_setup.check_model``.
+check`` run it, and so does adding a model (``model_setup.use``); ``summary`` words the outcome
+the same way for all of them.
 """
 
 from __future__ import annotations
@@ -68,6 +69,24 @@ class _Reply:
     def as_message(self) -> Message:
         """The reply as the agent loop stores it, so it can be sent back."""
         return Message("assistant", self.text, tuple(self.calls), echo=self.echo)
+
+
+LABELS = {"answers": "answering", "tool_call": "using a tool", "parallel_calls": "using two tools at once",
+          "tool_result": "reading a tool's result", "handover": "continuing another AI's chat",
+          "picture": "seeing a picture"}
+
+
+def summary(name: str, results: list[dict[str, str]]) -> tuple[bool, str]:
+    """``(passed, message)`` for the user: passed unless a check failed; the message names what failed or warns."""
+    def describe(items: list[dict[str, str]]) -> str:
+        return "; ".join(f"{LABELS.get(item['check'], item['check'])}: {item['detail']}" for item in items)
+    failed = [item for item in results if item["status"] == "fail"]
+    warned = [item for item in results if item["status"] == "warn"]
+    if failed:
+        return False, f"{name} has a problem with {describe(failed)}"
+    if warned:
+        return True, f"{name} works. Worth knowing, {describe(warned)}"
+    return True, f"{name} passed every check. It is ready."
 
 
 def _result(check: str, status: str, detail: str) -> dict[str, str]:

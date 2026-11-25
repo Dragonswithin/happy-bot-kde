@@ -64,7 +64,7 @@ Endpoints:
 - ``POST /models/check``: the full compatibility check of a configured model
   (``model_check``: answering, one and two tool calls, its tool results,
   continuing another AI's conversation, pictures), ``{"name", "results",
-  "passed"}``; ``passed`` is false when any check failed.
+  "passed", "message"}``; ``passed`` is false when any check failed.
 - ``POST /models/test``: check that a configured model answers and can call
   tools (``model_setup.check_model``). This sends one small request to the model.
 - ``GET /models/presets``: the online AI services setup offers, with where to
@@ -456,8 +456,8 @@ def check_model_route(server: "AssistantServer", query: dict[str, list[str]], bo
     if model is None:
         return _error(404, f"no model named '{name}' is set up", "invalid")
     results = model_check.run(model)
-    return 200, {"ok": True, "name": name, "results": results,
-                 "passed": not any(result["status"] == "fail" for result in results)}
+    passed, message = model_check.summary(name, results)
+    return 200, {"ok": True, "name": name, "results": results, "passed": passed, "message": message}
 
 
 def model_presets_route(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:

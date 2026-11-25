@@ -116,7 +116,7 @@ Kirigami.FormLayout {
         section.page.client.request("POST", "/models/use", Object.assign({ job: job }, body), function(data) {
             section.usingKey = "";
             section.page.settings = data.settings;
-            section.showResult(data.tools, data.message);
+            section.showResult(data.passed !== false, data.message);
             section.page.reload();
         }, function(data) {
             section.usingKey = "";
@@ -131,18 +131,7 @@ Kirigami.FormLayout {
         // The full compatibility check (src/happy_bot/model_check.py): a few small requests.
         section.page.client.request("POST", "/models/check", { name: name }, function(data) {
             section.testing = false;
-            const labels = {
-                answers: i18n("answering"), tool_call: i18n("using a tool"), parallel_calls: i18n("using two tools at once"),
-                tool_result: i18n("reading a tool's result"), handover: i18n("continuing another AI's chat"),
-                picture: i18n("seeing a picture")
-            };
-            const describe = items => items.map(item => i18n("%1: %2", labels[item.check] || item.check, item.detail)).join("; ");
-            const failed = (data.results || []).filter(item => item.status === "fail");
-            const warned = (data.results || []).filter(item => item.status === "warn");
-            section.showResult(failed.length === 0, failed.length > 0
-                ? i18n("%1 has a problem with %2", name, describe(failed))
-                : warned.length > 0 ? i18n("%1 works. Worth knowing, %2", name, describe(warned))
-                : i18n("%1 passed every check. It is ready.", name));
+            section.showResult(data.passed === true, data.message);
         }, function(data) {
             section.testing = false;
             section.showResult(false, data.error || i18n("The test failed"));

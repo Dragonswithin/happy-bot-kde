@@ -11,13 +11,15 @@ typed by hand. ``use`` then:
 3. places it in ``model_order`` by its ``job``: ``main`` first (it answers), ``backup`` right after
    the first (it answers when the first does not), ``none`` at the end (an existing model keeps
    its place);
-4. saves through ``AssistantServer.replace_settings`` and checks the model (``check_model``): it
-   must answer, and is asked to call a tool. A model that does not answer is removed again and the
-   previous settings put back; one that answers without using the tool is kept, with a warning
-   that it cannot search or act.
+4. saves through ``AssistantServer.replace_settings`` and runs the full compatibility check
+   (``model_check.run``: answering, one and two tool calls, its tool results, continuing another
+   AI's chat, pictures). A model that does not answer is removed again and the previous settings
+   put back; one with a problem or a limitation is kept, and the message says what it is
+   (``model_check.summary``), so a service Happy Bot misreads is noticed when it is added.
 
-``check_model`` is also what ``POST /models/test`` runs. It sends one small request to the model
-and blocks until it finishes; a hosted model is asked only when the user pressed a button.
+``check_model``, one small request asking for a tool call, is what ``POST /models/test`` runs.
+Both block until the model has answered; a hosted model is asked only when the user pressed a
+button.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ import re
 import threading
 from typing import TYPE_CHECKING, Any
 
-from . import model_presets
+from . import model_check, model_presets
 from . import settings as settings_store
 from .conversation import Message, TextDelta, ToolCallReady, ToolSpec
 from .providers import ProviderError, create_provider
@@ -122,12 +124,14 @@ def use(server: "AssistantServer", body: dict[str, Any]) -> dict[str, Any]:
                "model_order": order, "active_model": order[0]}
     try:
         stored = server.replace_settings(updated)
-        result = check_model(stored["models"][name])
     except settings_store.SettingsError as error:
         return {"ok": False, "error": str(error)}
-    except ProviderError as error:
+    results = model_check.run(stored["models"][name])
+    answered = next((item for item in results if item["check"] == "answers"), None)
+    if answered is None or answered["status"] == "fail":
         server.replace_settings(previous)
-        return {"ok": False, "error": f"It did not answer, so it was not added: {error}"}
-    message = (f"{name} answers and can use tools. It is ready." if result["tools"] else
-               f"{name} answers but did not use a tool, so Happy Bot cannot search or act with it.")
-    return {"ok": True, "name": name, "tools": result["tools"], "message": message}
+        reason = answered["detail"] if answered else "no answer"
+        return {"ok": False, "error": f"It did not answer, so it was not added: {reason}"}
+    passed, message = model_check.summary(name, results)
+    tools = any(item["check"] == "tool_call" and item["status"] == "pass" for item in results)
+    return {"ok": True, "name": name, "tools": tools, "passed": passed, "results": results, "message": message}
