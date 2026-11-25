@@ -38,8 +38,11 @@ import "barInput.js" as BarInput
  *   Enter starts the launcher rather than asking. The assistant is asked
  *   only from the Ask row (clicked, or selected with Enter, as it is when
  *   nothing matched): the popup opens with the request (`askFromBar`).
- *   Enter on an empty bar, the logo or the widget shortcut opens the popup;
- *   a draft returns to the bar on click-away.
+ *   Enter on an empty bar, the logo or the widget shortcut opens the popup
+ *   (text already typed moves into its field). The bar is cleared once a
+ *   result is opened or the request asked, and when the user clicks away
+ *   from the bar or from the popup it opened (`barBlur`, `onDismissed`), so
+ *   it is empty for the next search.
  * - The open assistant (popup or floating) shows the file finder, current
  *   chat or welcome screen, and typing there is a request: nothing is
  *   searched as the user types and Enter sends it to the assistant, which
@@ -252,10 +255,7 @@ PlasmoidItem {
             searchDelay.stop();
             session.stopFindingFiles();
             root.cancelTalking();
-            if (root.barMode && root.fullRepresentationItem) {
-                root.fullRepresentationItem.setText(popup.inputText);
-            }
-            popup.clearInput();
+            popup.clearInput();  // the bar stays empty too: what was typed is not kept after clicking away
         }
     }
 
@@ -361,7 +361,16 @@ PlasmoidItem {
     Timer {
         id: barBlur
         interval: 300  // ms: a click on a result arrives after the bar has let go of the keyboard
-        onTriggered: root.barFocused = false
+        onTriggered: {
+            root.barFocused = false;
+            // Clicked away from the bar: the search is over, so the bar starts empty next time.
+            if (!popup.visible && root.barMode && root.fullRepresentationItem && !session.listening) {
+                root.fullRepresentationItem.setText("");
+                searchDelay.stop();
+                root.acceptAfterSearch = "";
+                session.clearSearch();
+            }
+        }
     }
 
     // What matches the panel bar's text, right above the bar while the user types there.
