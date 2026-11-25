@@ -96,7 +96,8 @@ Fix the selected text:
 
 Offline Wikipedia (requested 2026-11-25, Phase 10):
 
-- ◐ A Wikipedia finder under "Search the web", articles read cleanly inside
+- ◐ "Search the web" also searches it, listing its articles under their own
+  heading before the web's pages; articles read cleanly inside
   Happy Bot with their links, the AI able to look things up offline, setup
   that finds archives already on the computer or downloads one of Kiwix's
   three sizes, and an optional monthly update. (Checked live on the

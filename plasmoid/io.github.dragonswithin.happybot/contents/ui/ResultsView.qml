@@ -24,7 +24,7 @@ import org.kde.plasma.extras as PlasmaExtras
  *   them). The panel bar's own results show above the bar instead
  *   (PanelResults.qml), never here.
  * - ARTICLE while `session.article` is set (an offline Wikipedia article
- *   opened from "Search the web" switched to Wikipedia): ArticleView.qml. Back returns to the
+ *   opened from "Search the web"'s Wikipedia results): ArticleView.qml. Back returns to the
  *   matches; "Ask about this" starts a request about the article.
  * - FIX while `session.fixing` is set (the "Fix selected text" shortcut):
  *   SelectionFixCard.qml, the selected text with its rewrite buttons and
@@ -361,7 +361,6 @@ Rectangle {
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
                     : view.fixVisible ? i18n("Or say what to do with the text…")
                     : view.session.finder === "web" ? i18n("Search the web…")
-                    : view.session.finder === "wiki" ? i18n("Look something up in Wikipedia…")
                     : view.session.finding ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())

@@ -100,11 +100,11 @@ import QtQuick
  * same way as the panel bar, and "Search the web" ("web") shows matching
  * bookmarks and visited websites (`/quick`, only those kinds) and web pages
  * from the user's web search tool (`/search/web`, from `WEB_MIN_CHARS`
- * characters; hits marked `source: "web"`) instead of files. Its Web |
- * Wikipedia switch (`switchFinder`, shown when `wikipediaReady`, from
- * `/health`) turns it into the Wikipedia finder ("wiki"), which shows only
- * articles from the user's offline Wikipedia (`/wikipedia/search`; hits
- * marked `source: "wikipedia"`, their `location` the article's path).
+ * characters; hits marked `source: "web"`) instead of files. When the
+ * user's offline Wikipedia is set up (`wikipediaReady`, from `/health`), the
+ * web finder also searches it (`/wikipedia/search`, `wikiHits`; hits marked
+ * `source: "wikipedia"`, their `location` the article's path), and its
+ * articles are listed under their own heading before the web's pages.
  * `openArticle(path)` reads one (`/wikipedia/article`) into `article`
  * (`{title, path, text, cut}` with `loading` and `error`), which the view
  * shows instead of the matches until `closeArticle`; leaving the finder
@@ -200,16 +200,17 @@ Item {
     signal selectionReplaceFailed()
 
     property int searchLimit: 20
-    property string finder: ""  // the open finder: "files", "web", "wiki", or "" for none
+    property string finder: ""  // the open finder: "files", "web", or "" for none
     property bool wikipediaReady: false  // offline Wikipedia is set up (from /health)
     property var article: null  // the Wikipedia article shown (see the header), or null
     readonly property bool finding: finder.length > 0
     readonly property int webMinChars: 3  // WEB_MIN_CHARS: shorter text is not sent to the web search
     property var quickHits: []
     property var fileHits: []
+    property var wikiHits: []  // the web finder's offline Wikipedia articles
     property var recentHits: []
     property bool showingRecent: false
-    readonly property var hits: Look.groupHits(showingRecent ? recentHits : quickHits.concat(fileHits))
+    readonly property var hits: Look.groupHits(showingRecent ? recentHits : quickHits.concat(wikiHits, fileHits))
     property bool searching: false
     property string searchedText: ""
     property string searchError: ""
@@ -309,6 +310,7 @@ Item {
 
     function clearSearch() {
         session.searchSequence += 1;
+        session.wikiHits = [];
         session.showingRecent = false;
         session.recentHits = [];
         session.quickHits = [];
@@ -325,8 +327,7 @@ Item {
         const sequence = session.searchSequence;
         request("GET", "/quick/recent", null, function(data) {
             if (sequence === session.searchSequence) {
-                session.recentHits = session.finder === "wiki" ? []
-                    : (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
+                session.recentHits = (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
                 session.showingRecent = session.recentHits.length > 0;
             }
         }, function(data) {});
@@ -424,24 +425,12 @@ Item {
         session.fixProblem = "";
     }
 
-    /** Opens a finder ("files", "web" or "wiki"): typing now searches there, until `stopFinding`;
-     *  until then, recent items. */
+    /** Opens a finder ("files" or "web"): typing now searches there, until `stopFinding`; until then,
+     *  recent items. */
     function startFinding(kind) {
         clearSearch();
         session.finder = kind;
         showRecent();
-    }
-
-    /** "Search the web"'s Web | Wikipedia switch: the other finder, searching what is typed (`text`) at once. */
-    function switchFinder(kind, text) {
-        session.finder = kind;
-        session.article = null;
-        if ((text || "").trim().length > 0) {
-            search(text);
-        } else {
-            clearSearch();
-            showRecent();
-        }
     }
 
     function stopFinding() {
@@ -490,19 +479,19 @@ Item {
         const sequence = session.searchSequence;
         const inFinder = session.finding;
         const web = session.finder === "web";
-        const wiki = session.finder === "wiki";
-        let pending = wiki ? 1 : 2;
+        // The web finder also looks in the offline Wikipedia, whose articles are listed before the web's pages.
+        const wiki = web && session.wikipediaReady && query.length >= session.webMinChars;
+        let pending = wiki ? 3 : 2;
         session.searchedText = query;
         session.searching = true;
+        session.wikiHits = [];
         function finished() {
             pending -= 1;
             if (pending === 0 && sequence === session.searchSequence) {
                 session.searching = false;
             }
         }
-        if (wiki) {
-            session.quickHits = [];  // the Wikipedia finder shows articles only
-        } else request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
+        request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.quickHits = (data.results || []).filter(hit => !web || session.webHit(hit));
             }
@@ -513,13 +502,23 @@ Item {
             }
             finished();
         });
+        if (wiki) {
+            // A Wikipedia problem shows nothing here; the web's results (or problem) still show.
+            request("GET", "/wikipedia/search?q=" + encodeURIComponent(query), null, function(data) {
+                if (sequence === session.searchSequence) {
+                    session.wikiHits = data.hits || [];
+                }
+                finished();
+            }, function(data) {
+                finished();
+            });
+        }
         if (web && query.length < session.webMinChars) {
             session.fileHits = [];
             finished();
             return;
         }
-        const path = wiki ? "/wikipedia/search?q=" : web ? "/search/web?q="
-            : "/search?limit=" + session.searchLimit + "&q=";
+        const path = web ? "/search/web?q=" : "/search?limit=" + session.searchLimit + "&q=";
         request("GET", path + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.searchError = "";

@@ -14,8 +14,8 @@ import org.kde.plasma.components as PlasmaComponents3
 /**
  * The search results, in the popup's finders (ResultsView.qml,
  * `AssistantSession.finder`: "Find a file", and "Search the web", whose
- * pages show under "On the web" with their address and snippet, and which
- * has a Web | Wikipedia switch at the top once offline Wikipedia is set up)
+ * pages show under "On the web" with their address and snippet, after the
+ * offline Wikipedia's articles under "Wikipedia" once it is set up)
  * and above the panel's search bar
  * (PanelResults.qml): one row per result in `session.hits`, each kind under
  * a heading where it starts (Answer, Applications, Settings, Bookmarks, Recent websites,
@@ -59,7 +59,6 @@ Item {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool chips: session.showingRecent
     readonly property bool web: session.finder === "web"
-    readonly property bool wiki: session.finder === "wiki"
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property real naturalHeight: filesColumn.implicitHeight + (askRow.visible ? askRow.implicitHeight : 0)
 
@@ -119,32 +118,6 @@ Item {
 
                 width: filesFlick.width
                 spacing: 0
-
-                // "Search the web" can look in the user's offline Wikipedia instead, once it is set up.
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.margins: Kirigami.Units.smallSpacing
-                    visible: (results.web || results.wiki) && results.session.wikipediaReady
-                    spacing: Kirigami.Units.smallSpacing
-
-                    Repeater {
-                        model: [{ kind: "web", label: i18n("Web"), icon: "globe" },
-                                { kind: "wiki", label: i18n("Wikipedia"), icon: "documentation" }]
-
-                        PlasmaComponents3.ToolButton {
-                            required property var modelData
-                            text: modelData.label
-                            icon.name: modelData.icon
-                            checkable: true
-                            checked: results.session.finder === modelData.kind
-                            Accessible.name: i18n("Search in %1", modelData.label)
-                            onClicked: {
-                                checked = Qt.binding(() => results.session.finder === modelData.kind);
-                                results.session.switchFinder(modelData.kind, results.query);
-                            }
-                        }
-                    }
-                }
 
                 RecentChips {
                     Layout.fillWidth: true
@@ -362,8 +335,6 @@ Item {
                         opacity: 0.7
                         text: results.session.searching ? i18n("Searching…")
                             : results.web && results.session.searchedText.length > 0 ? i18n("Nothing found on the web. Ask Happy Bot below.")
-                            : results.wiki && results.session.searchedText.length > 0 ? i18n("No article matches. Ask Happy Bot below.")
-                            : results.wiki ? i18n("Type what to look up; articles from your offline Wikipedia show here. Enter opens the top one.")
                             : results.session.searchedText.length > 0 ? i18n("Nothing on this computer matches. Ask Happy Bot below.")
                             : results.web ? i18n("Type what to look up; pages from the web show here. Enter opens the top one.")
                             : i18n("Type the name of an application, a setting or a file; what matches shows here. Enter opens the top one.")
@@ -384,9 +355,7 @@ Item {
                         PlasmaComponents3.Label {
                             Layout.fillWidth: true
                             text: results.session.searchErrorCode === "not_configured"
-                                ? (results.wiki ? i18n("Offline Wikipedia is not set up yet.")
-                                   : results.web ? i18n("Web search is not set up yet.") : i18n("File search is not set up yet."))
-                                : results.wiki ? i18n("Offline Wikipedia is not responding. Try again in a moment.")
+                                ? (results.web ? i18n("Web search is not set up yet.") : i18n("File search is not set up yet."))
                                 : results.web ? i18n("Web search is not responding. Try again in a moment.")
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
@@ -428,7 +397,6 @@ Item {
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
                     text: results.web ? i18n("Ask Happy Bot to search the web for “%1”", results.query)
-                        : results.wiki ? i18n("Ask Happy Bot to look up “%1” in Wikipedia", results.query)
                         : results.session.finding ? i18n("Ask Happy Bot to find “%1”", results.query)
                         : i18n("Ask Happy Bot about “%1”", results.query)
                     elide: Text.ElideRight

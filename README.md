@@ -123,8 +123,8 @@ used.
   Wikipedia uses a Wikipedia archive already on your computer or downloads
   one from Kiwix (introductions only, every article without pictures, or
   everything), and can keep it up to date monthly. Then "Search the web"
-  has a Web | Wikipedia switch at the top: Wikipedia finds articles as you
-  type and shows them inside Happy Bot, with links to other articles; the AI can look things up in it
+  also searches it: its articles are listed under "Wikipedia", before the
+  pages from the web, and open inside Happy Bot with links to other articles; the AI can look things up in it
   too, without the internet.
 - **Fix selected text**: give the "Fix selected text" shortcut a key
   (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any

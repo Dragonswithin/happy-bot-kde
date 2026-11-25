@@ -39,6 +39,14 @@ TestCase {
         compare(Look.hitWhere(hits[1]), "U+20AC · Enter copies it");
     }
 
+    function test_offlineWikipediaComesBeforeTheWeb() {
+        const hits = [{ kind: "link", title: "Eiffel Tower - Paris", location: "https://example.org", snippet: "", source: "web" },
+                      { kind: "article", title: "Eiffel Tower", location: "Eiffel_Tower", snippet: "A tower", source: "wikipedia" },
+                      quick("Paris trip", "bookmark", "Bookmark · example.org · Firefox")];
+        compare(Look.groupHits(hits).map(hit => Look.hitGroup(hit)), ["bookmarks", "wikipedia", "web"]);
+        compare(Look.hitWhere(hits[1]), "A tower");
+    }
+
     function test_detailWithoutTheKind() {
         compare(Look.hitWhere(quick("Prism Launcher", "launch", "Application · Minecraft launcher")), "Minecraft launcher");
         compare(Look.hitWhere(quick("minecraft", "conversation", "Earlier conversation")), "");

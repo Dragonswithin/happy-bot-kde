@@ -419,7 +419,8 @@ Status: built, exit check not yet passed (see Phase 9 findings).
 **Phase 10: Offline Wikipedia** (requested by the maintainer on
 2026-11-25: "a clearly supported thing in Happy Bot that the setup should
 help you set up and keep updated if users turn it on"). A Wikipedia finder
-under "Search the web", articles shown inside Happy Bot, the AI able to
+in "Search the web" (its own heading, before the web's pages), articles
+shown inside Happy Bot, the AI able to
 look things up offline, setup that finds archives already on the computer
 or downloads one of Kiwix's sizes, and an optional monthly update.
 *Exit:* on the maintainer's account, Set up finds the existing archive and
@@ -1319,8 +1320,12 @@ Findings:
 - First built as a fourth button on the start screen, which turned its one
   row of square buttons into a taller 2×2 grid of wide ones. The maintainer
   wanted it under "Search the web", not as a button: the start screen is
-  back as it was, and the web finder has a Web | Wikipedia switch at the
-  top (`AssistantSession.switchFinder`), shown once Wikipedia is set up.
+  back as it was. A Web | Wikipedia switch in the web finder came next; the
+  maintainer preferred no switch, so the web finder now searches the
+  offline Wikipedia too and lists its articles under their own heading
+  before the web's pages, as file search groups its results
+  (`AssistantSession.wikiHits`, `Look.hitGroups`). A Wikipedia problem
+  hides only its own heading.
 
 ## Decisions
 

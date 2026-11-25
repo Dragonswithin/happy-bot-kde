@@ -56,9 +56,10 @@ import "barInput.js" as BarInput
  *   on the welcome screen, `session.finding`, `searchable`) shows the
  *   same recent chips as the empty panel bar until something is typed, and
  *   searches as the user types. "Search the web" is the same finder for
- *   bookmarks, visited websites and web pages, after a longer pause (the
- *   web search is slower), and its Ask row asks the assistant to search the
- *   web. "Find a file" is the same search as the panel bar (applications,
+ *   bookmarks, visited websites, the offline Wikipedia's articles (once it
+ *   is set up) and web pages, after a longer pause (the web search is
+ *   slower); a Wikipedia article opens inside Happy Bot, and the Ask row asks
+ *   the assistant to search the web. "Find a file" is the same search as the panel bar (applications,
  *   settings, answers, saved chats, files); there Down/Up move a
  *   selection, Tab completes the top result's name, Enter opens the
  *   selected result, and the Ask row below asks the assistant to find it. Leaving (Back,
@@ -243,8 +244,8 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        // ms of no typing before searching: the web and Wikipedia search take a second, so they wait longer
-        interval: session.finder === "web" ? 600 : session.finder === "wiki" ? 400 : 200
+        // ms of no typing before searching: the web finder's searches take a second, so it waits longer
+        interval: session.finder === "web" ? 600 : 200
         onTriggered: session.search(root.pendingQuery)
     }
 
@@ -908,8 +909,7 @@ PlasmoidItem {
             const finder = session.finder;
             searchDelay.stop();
             session.stopFinding();
-            text = (finder === "web" ? "Search the web for: " : finder === "wiki" ? "Look this up in Wikipedia: "
-                    : "Find the file: ") + text;
+            text = (finder === "web" ? "Search the web for: " : "Find the file: ") + text;
         }
         if (text.length === 0 && session.needsSetup) {
             root.openSettings();

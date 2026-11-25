@@ -67,7 +67,7 @@ QtObject {
 
     // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
     readonly property var hitGroups: ["command", "answer", "characters", "applications", "settings", "bookmarks",
-                                      "websites", "web", "wikipedia", "chats", "files"]
+                                      "websites", "wikipedia", "web", "chats", "files"]
 
     /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
     function hitGroup(hit) {
