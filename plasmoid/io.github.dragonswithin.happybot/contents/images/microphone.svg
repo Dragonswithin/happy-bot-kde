@@ -1,11 +1,9 @@
 <!-- SPDX-License-Identifier: MIT -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <g fill="none" stroke="#183840" stroke-width="5">
-      <path d="M6 15a10 10 0 0 0 20 0M16 25v4m-5 0h10"/>
-    </g>
-    <path d="M6 15a10 10 0 0 0 20 0M16 25v4m-5 0h10" fill="none" stroke="#5bb6b3" stroke-width="2.8"/>
-    <rect x="9.5" y="2" width="13" height="19" rx="6.5" fill="#a6ece1" stroke="#183840" stroke-width="2.5"/>
-    <path d="M13 8h6m-6 4h6" stroke="#194852" stroke-width="2"/>
+  <g transform="translate(3 3) scale(0.8125)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 14a11 11 0 0 0 22 0M16 25v4m-6 0h12" fill="none" stroke="#183840" stroke-width="6"/>
+    <path d="M5 14a11 11 0 0 0 22 0M16 25v4m-6 0h12" fill="none" stroke="#68d9be" stroke-width="3.4"/>
+    <rect x="8.5" y="1.5" width="15" height="20" rx="7.5" fill="#49dabe" stroke="#183840" stroke-width="2.5"/>
+    <path d="M12.5 8h7m-7 5h7" stroke="#194852" stroke-width="2.5"/>
   </g>
 </svg>

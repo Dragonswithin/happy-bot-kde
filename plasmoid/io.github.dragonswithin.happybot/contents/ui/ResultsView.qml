@@ -285,29 +285,64 @@ Rectangle {
                 Layout.minimumWidth: 0
                 Layout.preferredHeight: Math.max(implicitHeight, Kirigami.Units.gridUnit * 2)
                 background: Rectangle {
-                    readonly property var margins: ({ left: Kirigami.Units.smallSpacing, right: Kirigami.Units.smallSpacing, top: 0, bottom: 0 })
+                    readonly property bool buttonsOnLeft: field.effectiveHorizontalAlignment === TextInput.AlignRight
+                    readonly property var margins: ({
+                        left: Kirigami.Units.smallSpacing + (buttonsOnLeft ? fieldButtons.width : 0),
+                        right: Kirigami.Units.smallSpacing + (buttonsOnLeft ? 0 : fieldButtons.width),
+                        top: 0, bottom: 0
+                    })
                     color: Kirigami.Theme.backgroundColor
                     radius: Kirigami.Units.cornerRadius * 2
                     border.color: field.activeFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.25)
                 }
-                rightActions: [
-                    // Talk instead of typing: shown when voice is on in the settings; click again to stop.
-                    Kirigami.Action {
-                        text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
-                        icon.name: view.session.listening ? "media-record" : view.useRobotMascot ? "" : "audio-input-microphone"
-                        icon.source: view.useRobotMascot && !view.session.listening ? Look.microphoneIcon : ""
-                        visible: view.session.voiceEnabled
-                        checkable: true
-                        checked: view.session.listening
-                        onTriggered: view.talkRequested()
-                    },
-                    Kirigami.Action {
-                        text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
-                        icon.name: "go-next"
-                        enabled: field.text.trim().length > 0
-                        onTriggered: view.accepted(field.text.trim())
+                rightActions: []
+                // Draw the microphone as full-colour artwork in the field. Plasma's
+                // action delegate can render a themed, monochrome microphone.
+                Row {
+                    id: fieldButtons
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 1
+                    spacing: Kirigami.Units.smallSpacing
+                    LayoutMirroring.enabled: field.effectiveHorizontalAlignment === TextInput.AlignRight
+
+                    component FieldButton: PlasmaComponents3.ToolButton {
+                        height: fieldButtons.height
+                        width: implicitHeight
+                        focusPolicy: Qt.TabFocus
+                        PlasmaComponents3.ToolTip.text: text
+                        PlasmaComponents3.ToolTip.visible: hovered || activeFocus
+                        PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
                     }
-                ]
+                    FieldButton {
+                        display: QQC2.AbstractButton.IconOnly
+                        icon.name: "go-next"
+                        icon.width: Kirigami.Units.iconSizes.sizeForLabels
+                        icon.height: icon.width
+                        text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
+                        enabled: field.text.trim().length > 0
+                        onClicked: view.accepted(field.text.trim())
+                    }
+                    FieldButton {
+                        visible: view.session.voiceEnabled
+                        text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
+                        Accessible.name: text
+                        Accessible.checkable: true
+                        Accessible.checked: view.session.listening
+                        onClicked: view.talkRequested()
+                        contentItem: Item {
+                            implicitWidth: Kirigami.Units.iconSizes.sizeForLabels
+                            implicitHeight: implicitWidth
+                            Image {
+                                anchors.centerIn: parent
+                                width: parent.implicitWidth
+                                height: width
+                                source: view.session.listening ? Look.activeMicrophoneIcon : Look.microphoneIcon
+                            }
+                        }
+                    }
+                }
                 placeholderText: view.session.listening ? i18n("Listening… talk, then pause")
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
                     : view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")

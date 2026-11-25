@@ -45,12 +45,12 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.mascot ? Look.robotIcon : ""
+        source: face.mascot ? Look.robotIcon : face.activity.recording ? Look.activeMicrophoneIcon : ""
     }
     Kirigami.Icon {
         anchors.fill: parent
-        visible: !face.mascot
-        source: face.activity.recording ? "audio-input-microphone" : Look.assistantIcon(false)
+        visible: !face.mascot && !face.activity.recording
+        source: Look.assistantIcon(false)
     }
 
     Image {

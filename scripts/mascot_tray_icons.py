@@ -11,6 +11,7 @@ IMAGES = Path(__file__).resolve().parents[1] / "plasmoid" / APP_ID / "contents/i
 LAYERS = {
     "busy": ("busy",),
     "memory": ("memory",),
+    "microphone-active": (),
     "hot": ("hot-face", "sweat"),
     "download": ("download",),
     "upload": ("upload",),
@@ -31,7 +32,8 @@ def main() -> None:
             target.unlink(missing_ok=True)
             continue
         args.directory.mkdir(parents=True, exist_ok=True)
-        icon = ET.parse(IMAGES / "happy-bot.svg")
+        base = "happy-bot.svg" if layers else f"{pose}.svg"
+        icon = ET.parse(IMAGES / base)
         for layer in layers:
             icon.getroot().extend(ET.parse(IMAGES / "reactions" / f"{layer}.svg").getroot())
         icon.write(target, encoding="utf-8", xml_declaration=True)

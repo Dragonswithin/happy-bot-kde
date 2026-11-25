@@ -2,10 +2,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
   <circle cx="32" cy="6" r="4" fill="#ff696b" stroke="#183840" stroke-width="2.5"/>
   <rect x="10" y="18" width="28" height="17" rx="7" fill="#194852"/>
-  <g fill="#a6ece1">
-    <rect x="21.5" y="19.5" width="5" height="8.5" rx="2.5"/>
+  <g fill="#49dabe">
+    <rect x="21" y="19.5" width="6" height="8.5" rx="2.5"/>
     <rect x="13" y="23" width="3" height="4.5" rx="1.5"/>
     <rect x="32" y="23" width="3" height="4.5" rx="1.5"/>
   </g>
-  <path d="M19 26a5 5 0 0 0 10 0m-5 5v1.5m-2.5 0h5" fill="none" stroke="#5bb6b3" stroke-width="2" stroke-linecap="round"/>
+  <path d="M19 26a5 5 0 0 0 10 0m-5 5v1.5m-2.5 0h5" fill="none" stroke="#68d9be" stroke-width="2" stroke-linecap="round"/>
 </svg>

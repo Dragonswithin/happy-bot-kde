@@ -60,7 +60,6 @@ Item {
     property string statusText: ""
     property bool offline: false
     property string iconName: "search"
-    property bool useRobotMascot: false
     property int widthInGridUnits: 18
     property bool voiceEnabled: false  // show the microphone at the bar's right end
     property bool listening: false
@@ -143,7 +142,7 @@ Item {
             opacity: bar.offline ? 0.45 : 0.8
         }
 
-        Kirigami.Icon {
+        Image {
             id: mic
             anchors.right: parent.right
             anchors.rightMargin: Kirigami.Units.smallSpacing
@@ -151,9 +150,8 @@ Item {
             width: Kirigami.Units.iconSizes.small
             height: width
             visible: bar.voiceEnabled
-            source: bar.listening ? "media-record" : bar.useRobotMascot ? Look.microphoneIcon : "audio-input-microphone"
-            color: bar.listening ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
-            opacity: bar.listening || bar.useRobotMascot ? 1 : 0.8
+            source: bar.listening ? Look.activeMicrophoneIcon : Look.microphoneIcon
+            fillMode: Image.PreserveAspectFit
         }
 
         QQC2.BusyIndicator {
