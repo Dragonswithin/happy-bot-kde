@@ -12,12 +12,12 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
 
 /**
- * The search results in Happy Bot's popup (ResultsView.qml shows it in place
- * of the welcome screen while typed text is searched, and in the file
- * finder, `AssistantSession.findingFiles`): one row per result in
- * `session.hits`, quick results first (applications, windows, settings
- * pages, answers, saved conversations: their icon and kind) then files
- * (file-type icon, name, folder); "Searching…", a "nothing matches" line or
+ * The search results, in the popup's file finder (ResultsView.qml,
+ * `AssistantSession.findingFiles`) and above the panel's search bar
+ * (PanelResults.qml): one row per result in `session.hits`, each kind under
+ * a heading where it starts (Answer, Applications, Settings,
+ * Saved chats, Files: `Look.hitGroup`), applications first; quick results
+ * show their icon and kind, files their file-type icon, name and folder; "Searching…", a "nothing matches" line or
  * the finder's hint while there are none; a problem line when the finder's
  * search failed (`session.searchError`); and below them an "Ask Happy Bot
  * about …" row (in the finder, "Ask Happy Bot to find …") for the typed
@@ -109,103 +109,126 @@ Item {
                     id: hitRows
                     model: results.session.hits
 
-                        PlasmaComponents3.ItemDelegate {
-                            id: row
+                        // One result, under a heading where a new kind of result starts (Applications, Files...).
+                        ColumnLayout {
+                            id: entry
 
                             required property int index
                             required property var modelData
-
-                            Connections {
-                                target: results
-                                function onSelectedMenuRequested() {
-                                    if (row.index === results.selectedIndex && row.modelData.kind !== "quick") {
-                                        fileMenu.popup(row, 0, row.height);
-                                    }
-                                }
-                            }
+                            readonly property string group: Look.hitGroup(modelData)
+                            readonly property bool startsGroup: index === 0
+                                || Look.hitGroup(results.session.hits[index - 1]) !== group
 
                             Layout.fillWidth: true
-                            highlighted: index === results.selectedIndex
-                            Accessible.name: Look.hitWhere(modelData).length > 0
-                                ? i18n("%1, in %2", modelData.title, Look.hitWhere(modelData)) : modelData.title
-                            onClicked: results.resultActivated(modelData)
+                            spacing: 0
 
-                            // A file match can be dragged into another application.
-                            Drag.dragType: Drag.Automatic
-                            Drag.supportedActions: Qt.CopyAction
-                            Drag.mimeData: row.modelData.kind === "quick" ? ({})
-                                : ({ "text/uri-list": row.modelData.location.indexOf("://") > 0 ? row.modelData.location
-                                                      : "file://" + encodeURI(row.modelData.location),
-                                     "text/plain": row.modelData.location })
-                            Drag.active: rowDrag.active
-                            DragHandler {
-                                id: rowDrag
-                                enabled: row.modelData.kind !== "quick"
-                                target: null
+                            Kirigami.Heading {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Kirigami.Units.largeSpacing
+                                Layout.topMargin: entry.index === 0 ? Kirigami.Units.smallSpacing : Kirigami.Units.largeSpacing
+                                Layout.bottomMargin: Kirigami.Units.smallSpacing
+                                visible: entry.startsGroup
+                                level: 5
+                                text: Look.hitGroupTitle(entry.group)
+                                opacity: 0.7
+                                Accessible.role: Accessible.Heading
                             }
 
-                            // A file match's own actions, on right-click.
-                            TapHandler {
-                                acceptedButtons: Qt.RightButton
-                                enabled: row.modelData.kind !== "quick"
-                                onTapped: fileMenu.popup()
-                            }
+                            PlasmaComponents3.ItemDelegate {
+                                id: row
 
-                            QQC2.Menu {
-                                id: fileMenu
-
-                                QQC2.MenuItem {
-                                    text: i18n("Open")
-                                    icon.name: "document-open"
-                                    onTriggered: results.resultActivated(row.modelData)
-                                }
-                                QQC2.MenuItem {
-                                    text: i18n("Show in folder")
-                                    icon.name: "document-open-folder"
-                                    enabled: row.modelData.kind !== "link"
-                                    onTriggered: results.fileActionRequested(row.modelData, "reveal")
-                                }
-                                QQC2.MenuItem {
-                                    text: row.modelData.kind === "link" ? i18n("Copy link") : i18n("Copy path")
-                                    icon.name: "edit-copy"
-                                    onTriggered: results.fileActionRequested(row.modelData, "copy")
-                                }
-                                QQC2.MenuItem {
-                                    text: i18n("Ask about this")
-                                    icon.name: results.useRobotMascot ? "" : results.assistantIcon
-                                    icon.source: results.useRobotMascot ? Look.robotIcon : ""
-                                    icon.color: "transparent"
-                                    onTriggered: results.fileActionRequested(row.modelData, "ask")
-                                }
-                            }
-
-                            contentItem: RowLayout {
-                                spacing: Kirigami.Units.largeSpacing
-
-                                Kirigami.Icon {
-                                    source: Look.hitIcon(row.modelData)
-                                    Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                                    Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+                                Connections {
+                                    target: results
+                                    function onSelectedMenuRequested() {
+                                        if (entry.index === results.selectedIndex && entry.modelData.kind !== "quick") {
+                                            fileMenu.popup(row, 0, row.height);
+                                        }
+                                    }
                                 }
 
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 0
+                                Layout.fillWidth: true
+                                highlighted: entry.index === results.selectedIndex
+                                Accessible.name: Look.hitWhere(entry.modelData).length > 0
+                                    ? i18n("%1, in %2", entry.modelData.title, Look.hitWhere(entry.modelData)) : entry.modelData.title
+                                onClicked: results.resultActivated(entry.modelData)
 
-                                    PlasmaComponents3.Label {
-                                        Layout.fillWidth: true
-                                        text: row.modelData.title
-                                        elide: Text.ElideRight
-                                        textFormat: Text.PlainText
+                                // A file match can be dragged into another application.
+                                Drag.dragType: Drag.Automatic
+                                Drag.supportedActions: Qt.CopyAction
+                                Drag.mimeData: entry.modelData.kind === "quick" ? ({})
+                                    : ({ "text/uri-list": entry.modelData.location.indexOf("://") > 0 ? entry.modelData.location
+                                                          : "file://" + encodeURI(entry.modelData.location),
+                                         "text/plain": entry.modelData.location })
+                                Drag.active: rowDrag.active
+                                DragHandler {
+                                    id: rowDrag
+                                    enabled: entry.modelData.kind !== "quick"
+                                    target: null
+                                }
+
+                                // A file match's own actions, on right-click.
+                                TapHandler {
+                                    acceptedButtons: Qt.RightButton
+                                    enabled: entry.modelData.kind !== "quick"
+                                    onTapped: fileMenu.popup()
+                                }
+
+                                QQC2.Menu {
+                                    id: fileMenu
+
+                                    QQC2.MenuItem {
+                                        text: i18n("Open")
+                                        icon.name: "document-open"
+                                        onTriggered: results.resultActivated(entry.modelData)
+                                    }
+                                    QQC2.MenuItem {
+                                        text: i18n("Show in folder")
+                                        icon.name: "document-open-folder"
+                                        enabled: entry.modelData.kind !== "link"
+                                        onTriggered: results.fileActionRequested(entry.modelData, "reveal")
+                                    }
+                                    QQC2.MenuItem {
+                                        text: entry.modelData.kind === "link" ? i18n("Copy link") : i18n("Copy path")
+                                        icon.name: "edit-copy"
+                                        onTriggered: results.fileActionRequested(entry.modelData, "copy")
+                                    }
+                                    QQC2.MenuItem {
+                                        text: i18n("Ask about this")
+                                        icon.name: results.useRobotMascot ? "" : results.assistantIcon
+                                        icon.source: results.useRobotMascot ? Look.robotIcon : ""
+                                        icon.color: "transparent"
+                                        onTriggered: results.fileActionRequested(entry.modelData, "ask")
+                                    }
+                                }
+
+                                contentItem: RowLayout {
+                                    spacing: Kirigami.Units.largeSpacing
+
+                                    Kirigami.Icon {
+                                        source: Look.hitIcon(entry.modelData)
+                                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                     }
 
-                                    PlasmaComponents3.Label {
+                                    ColumnLayout {
                                         Layout.fillWidth: true
-                                        text: Look.hitWhere(row.modelData)
-                                        elide: Text.ElideMiddle
-                                        textFormat: Text.PlainText
-                                        font: Kirigami.Theme.smallFont
-                                        opacity: 0.65
+                                        spacing: 0
+
+                                        PlasmaComponents3.Label {
+                                            Layout.fillWidth: true
+                                            text: entry.modelData.title
+                                            elide: Text.ElideRight
+                                            textFormat: Text.PlainText
+                                        }
+
+                                        PlasmaComponents3.Label {
+                                            Layout.fillWidth: true
+                                            text: Look.hitWhere(entry.modelData)
+                                            elide: Text.ElideMiddle
+                                            textFormat: Text.PlainText
+                                            font: Kirigami.Theme.smallFont
+                                            opacity: 0.65
+                                        }
                                     }
                                 }
                             }
@@ -221,7 +244,7 @@ Item {
                         opacity: 0.7
                         text: results.session.searching ? i18n("Searching…")
                             : results.session.searchedText.length > 0 ? i18n("Nothing on this computer matches. Ask Happy Bot below.")
-                            : i18n("Type part of a file's name and matching files show here; click one to open it. Enter asks Happy Bot to look for it.")
+                            : i18n("Type the name of an application, a setting or a file; what matches shows here. Enter opens the top one.")
                     }
 
                     RowLayout {

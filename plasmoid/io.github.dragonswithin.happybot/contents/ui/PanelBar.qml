@@ -15,9 +15,10 @@ import org.kde.plasma.components as PlasmaComponents3
  * The applet's search-bar panel form: a text field in the panel beside the
  * launcher, used when the user picks "Search bar" under "Show in panel"
  * (the `inputInPanel` setting) on a horizontal panel. In this form the user
- * start typing here: the text moves on into ResultsPopup.qml, which opens
- * under it with what matches on this computer. Enter, the logo, or the
- * widget shortcut opens the popup too.
+ * types here to search: main.qml shows what matches right above the bar
+ * (PanelResults.qml) while the keyboard stays here, and Enter opens the
+ * selected result. Enter on an empty bar, the logo, or the widget shortcut
+ * opens ResultsPopup.qml, the assistant.
  *
  * While the field has focus, Plasma draws its blue panel focus indicator
  * along the panel. A widget cannot switch that off; users who choose this
@@ -29,9 +30,10 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `focusRequested`: the user clicked the unfocused field. The panel
  *   window must be granted keyboard focus before the field can take it.
  * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
- * - `textEdited(text)`: the user typed or deleted (not `setText`); main.qml
- *   opens the popup with the results for it.
- * - `selectionMove(delta)`: Down (+1) or Up (-1).
+ * - `textEdited(text)`: the user typed, deleted or cleared the text with
+ *   Escape (not `setText`); main.qml searches it.
+ * - `selectionMove(delta)`: Down (+1) or Up (-1), through those results
+ *   (or earlier requests when there are none).
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
  * - `iconClicked`: a left click on the logo at the bar's left end. It works
  *   with nothing typed, so saved conversations are always one click away.
@@ -114,6 +116,7 @@ Item {
         Keys.onEscapePressed: {
             if (field.text.length > 0) {
                 field.text = "";
+                bar.textEdited("");
             } else {
                 bar.dismissed();
             }

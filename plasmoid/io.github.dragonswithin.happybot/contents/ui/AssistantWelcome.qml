@@ -16,7 +16,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * a line on what it can do, and a few starting points (find a file, search
  * the web, desktop help). "Find a file" emits `findFilesChosen`, which
  * ResultsView.qml turns into the file finder (`AssistantSession.findingFiles`:
- * matching files show as the user types). The others emit `promptChosen`
+ * matching applications, settings and files show as the user types, as in
+ * the panel's search bar). The others emit `promptChosen`
  * with the start of a request ("Search the web for "), which ResultsView.qml
  * puts in the assistant's composer for them to finish. Nothing is sent until
  * they press Enter. The help shortcut names the application the user was in

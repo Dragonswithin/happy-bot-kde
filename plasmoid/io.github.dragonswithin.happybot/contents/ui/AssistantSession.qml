@@ -88,13 +88,15 @@ import QtQuick
  * the request, which makes the daemon stop the turn.
  *
  * Searching: `search(text)` looks up what is on this computer, with no
- * model. main.qml decides when (typing with no chat open, or in the file
- * finder). It asks the daemon for quick results (`/quick`: answers, open
- * windows, installed applications, settings pages, saved conversations;
+ * model. main.qml decides when (typing in the panel's search bar, or in
+ * the popup's file finder). It asks the daemon for quick results (`/quick`: answers,
+ * installed applications, settings pages, saved conversations;
  * `quickHits`) and for at most `searchLimit` file matches (`/search`;
- * `fileHits`) at once; `hits` is both, quick first. In the file finder
- * ("Find a file": `startFindingFiles` sets `findingFiles` until
- * `stopFindingFiles`) only files are asked for. `searching` is true until
+ * `fileHits`) at once; `hits` is both, each kind together in the order
+ * they are listed under their headings, applications first
+ * (`Look.groupHits`). The popup's "Find a
+ * file" (`startFindingFiles` sets `findingFiles` until `stopFindingFiles`)
+ * searches the same way as the panel bar. `searching` is true until
  * both replies are in and `searchedText` is the text they are for, so Enter
  * typed before the results can wait for them. A quick hit has `kind`
  * "quick" and an `action`; `activateQuick` carries it out, and also a file
@@ -104,9 +106,7 @@ import QtQuick
  * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
  * the daemon's message and code ("not_configured", "tool_failed") when the
  * finder's last file search failed (outside the finder a failed file search
- * just shows no files). `composing` is set while the field holds a request
- * started from the welcome screen ("Search the web for …", "Help with …"),
- * which is not searched; main.qml clears it when the field is emptied.
+ * just shows no files).
  *
  * Nothing here blocks: all requests are asynchronous on the GUI thread. A
  * failed or unreachable daemon sets `status` to "offline" and adds an error
@@ -142,10 +142,9 @@ Item {
 
     property int searchLimit: 20
     property bool findingFiles: false
-    property bool composing: false
     property var quickHits: []
     property var fileHits: []
-    readonly property var hits: quickHits.concat(fileHits)
+    readonly property var hits: Look.groupHits(quickHits.concat(fileHits))
     property bool searching: false
     property string searchedText: ""
     property string searchError: ""
@@ -271,8 +270,8 @@ Item {
         }
         session.searchSequence += 1;
         const sequence = session.searchSequence;
-        const filesOnly = session.findingFiles;
-        let pending = filesOnly ? 1 : 2;
+        const inFinder = session.findingFiles;
+        let pending = 2;
         session.searchedText = query;
         session.searching = true;
         function finished() {
@@ -281,21 +280,17 @@ Item {
                 session.searching = false;
             }
         }
-        if (filesOnly) {
-            session.quickHits = [];
-        } else {
-            request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
-                if (sequence === session.searchSequence) {
-                    session.quickHits = data.results || [];
-                }
-                finished();
-            }, function(data) {
-                if (sequence === session.searchSequence) {
-                    session.quickHits = [];
-                }
-                finished();
-            });
-        }
+        request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
+            if (sequence === session.searchSequence) {
+                session.quickHits = data.results || [];
+            }
+            finished();
+        }, function(data) {
+            if (sequence === session.searchSequence) {
+                session.quickHits = [];
+            }
+            finished();
+        });
         request("GET", "/search?limit=" + session.searchLimit + "&q=" + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.searchError = "";
@@ -306,8 +301,8 @@ Item {
         }, function(data) {
             if (sequence === session.searchSequence) {
                 session.fileHits = [];
-                session.searchError = filesOnly ? data.error || i18n("Search failed") : "";
-                session.searchErrorCode = filesOnly ? data.code || "tool_failed" : "";
+                session.searchError = inFinder ? data.error || i18n("Search failed") : "";
+                session.searchErrorCode = inFinder ? data.code || "tool_failed" : "";
             }
             finished();
         });

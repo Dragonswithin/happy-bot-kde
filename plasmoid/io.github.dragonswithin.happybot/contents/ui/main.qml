@@ -25,32 +25,33 @@ import "barInput.js" as BarInput
  *   the cursor in its field; the same again, Escape on an empty field, the
  *   close button or a click anywhere else closes it. The panel itself never
  *   takes keyboard focus, so Plasma's panel focus indicator never appears.
- * - Search-bar form: typing in the panel field opens the popup under it
- *   with the text moved into its field, where the search below shows
- *   results (with a chat open, Enter does that instead). A draft returns to
- *   the bar on click-away. Focusing the empty panel field alone does not
- *   open anything.
- * - The open assistant shows the file finder, current chat or welcome screen.
- * - Typing searches first, like the application launcher (`searchable`):
- *   with no chat open, what the user types is looked up on this computer
- *   after a short pause (`searchDelay`, `session.search`): open windows,
- *   installed applications, settings pages, quick answers, saved
- *   conversations, then files, in a list that scrolls, with an "Ask Happy
- *   Bot about …" row below it. The top result is selected; Down and Up move
- *   the selection, Down past the last result reaches the Ask row, and Tab
- *   completes the top result's name. Enter opens the selected result; the
- *   assistant is asked only from the Ask row (clicked, or selected with
- *   Enter), which is selected when nothing matched. Enter typed before the
- *   results arrive waits for them (`acceptAfterSearch`), so a quick Enter
- *   still opens the top result rather than asking. Not searched: a reply in
- *   an open chat, a request begun from the welcome screen ("Search the web
- *   for …", "Help with …": `session.composing`) and text with a prefix
- *   (barInput.js: `?` web, `>` a shell command); Enter sends those to the
- *   assistant. "Find a file" on the welcome screen is the file finder
- *   (`session.findingFiles`): files only, and Enter with the Ask row
- *   selected asks the assistant to find the file. Leaving (Back, Escape on
- *   an empty field, closing, sending) ends it. With no results, Up and Down
- *   recall earlier requests from this session.
+ * - Search-bar form: the panel field is a search, like the application
+ *   launcher's. As the user types, after a short pause (`searchDelay`,
+ *   `session.search`), what matches on this computer shows right above the
+ *   bar (PanelResults.qml, which never takes the keyboard, so typing stays
+ *   in the bar): installed applications, settings pages,
+ *   quick answers, saved chats, then files, with an "Ask Happy Bot about …"
+ *   row below. The top result is selected (`barSelectedIndex`); Down and Up
+ *   move the selection, Down past the last result reaches the Ask row.
+ *   Enter opens the selected result, and Enter typed before the results
+ *   arrive waits for them (`acceptAfterSearch`), so a quick "minecraft" +
+ *   Enter starts the launcher rather than asking. The assistant is asked
+ *   only from the Ask row (clicked, or selected with Enter, as it is when
+ *   nothing matched): the popup opens with the request (`askFromBar`).
+ *   Enter on an empty bar, the logo or the widget shortcut opens the popup;
+ *   a draft returns to the bar on click-away.
+ * - The open assistant (popup or floating) shows the file finder, current
+ *   chat or welcome screen, and typing there is a request: nothing is
+ *   searched as the user types and Enter sends it to the assistant, which
+ *   searches when the request needs it. Only the file finder ("Find a file"
+ *   on the welcome screen, `session.findingFiles`, `searchable`) searches as
+ *   the user types, the same search as the panel bar (applications,
+ *   settings, answers, saved chats, files); there Down/Up move a
+ *   selection, Tab completes the top result's name, Enter opens the
+ *   selected result, and the Ask row below asks the assistant to find it. Leaving (Back,
+ *   Escape on an empty field, closing, sending) ends it. Optional prefixes
+ *   (barInput.js) say what Enter asks (`?` web, `>` a shell command). With
+ *   no results, Up and Down recall earlier requests from this session.
  *
  * Happy Bot also runs as an app of its own (`standalone`): `happy-bot-app`
  * starts this widget in Plasma's plasmawindowed, and the "Happy Bot" entry
@@ -107,6 +108,13 @@ PlasmoidItem {
     property string pendingQuery: ""
     // Enter pressed while the search for this text was still running: acted on when it finishes.
     property string acceptAfterSearch: ""
+    property bool acceptFromBar: false  // that Enter came from the panel bar (`barAccepted`)
+    // The panel bar's results (PanelResults.qml): the selected one, and whether the bar has the
+    // keyboard (kept a moment after it loses it, so a click on a result still lands).
+    property int barSelectedIndex: -1
+    property bool barFocused: false
+    readonly property string barText: root.barMode && root.fullRepresentationItem
+        ? String(root.fullRepresentationItem.text || "").trim() : ""
     // Requests sent from the bar in this session, oldest first, for Up/Down
     // recall; `recallIndex` is the one shown (equal to the length: none).
     property var sentRequests: []
@@ -157,6 +165,7 @@ PlasmoidItem {
         // The top result starts selected, so Enter opens it; with none, the Ask row is selected (-1).
         onHitsChanged: {
             popup.selectedIndex = session.hits.length > 0 ? 0 : -1;
+            root.barSelectedIndex = popup.selectedIndex;
             if (root.floating) {
                 root.floating.selectedIndex = popup.selectedIndex;
             }
@@ -164,8 +173,14 @@ PlasmoidItem {
         onSearchingChanged: {
             if (!session.searching && root.acceptAfterSearch.length > 0) {
                 const text = root.acceptAfterSearch;
+                const fromBar = root.acceptFromBar;
                 root.acceptAfterSearch = "";
-                root.handleAccepted(text);
+                root.acceptFromBar = false;
+                if (fromBar) {
+                    root.barAccepted(text);
+                } else {
+                    root.handleAccepted(text);
+                }
             }
         }
         // A "Help with …" screenshot briefly made the application active; take the keyboard back.
@@ -283,23 +298,9 @@ PlasmoidItem {
                 root.focusBar();
             }
         }
-        onAccepted: text => {
-            if (!text && session.needsSetup) {
-                root.openSettings();
-                return;
-            }
-            root.openPopup();
-            if (text) {
-                root.handleAccepted(text);
-            }
-        }
-        // Typing in the bar searches first: the popup opens under it with the text in its field.
-        onTextEdited: text => {
-            if (text.trim().length > 0 && root.searchable(text.trim()) && !popup.visible) {
-                root.openPopup();
-            }
-        }
-        onSelectionMove: delta => root.recall(delta)
+        onAccepted: text => root.barAccepted(text)
+        onTextEdited: text => root.barEdited(text)
+        onSelectionMove: delta => root.moveBarSelection(delta)
         onDismissed: root.closePopup()
         onMenuRequested: contextMenu.openRelative()
         onIconClicked: {
@@ -307,10 +308,41 @@ PlasmoidItem {
             root.togglePopup();
         }
         onInputFocusedChanged: {
-            if (!inputFocused) {
+            if (inputFocused) {
+                barBlur.stop();
+                root.barFocused = true;
+            } else {
                 root.wantsInput = false;
+                barBlur.restart();
             }
         }
+    }
+
+    Timer {
+        id: barBlur
+        interval: 300  // ms: a click on a result arrives after the bar has let go of the keyboard
+        onTriggered: root.barFocused = false
+    }
+
+    // What matches the panel bar's text, right above the bar while the user types there.
+    PanelResults {
+        session: session
+        visualParent: root.fullRepresentationItem
+        location: Plasmoid.location
+        visible: root.barMode && root.barFocused && root.barText.length > 0 && !popup.visible
+            && (session.searching || session.searchedText.length > 0)
+        query: root.barText
+        selectedIndex: root.barSelectedIndex
+        assistantIcon: Look.assistantIcon(session.ui.robot_mascot)
+        useRobotMascot: session.ui.robot_mascot
+        onResultActivated: hit => root.openBarHit(hit)
+        onFileActionRequested: (hit, action) => {
+            if (action === "ask") {
+                session.clearSearch();
+            }
+            root.fileAction(hit, action);
+        }
+        onAskRequested: text => root.askFromBar(text)
     }
 
     // The applet's own right-click menu, with the entries a user needs from
@@ -554,20 +586,87 @@ PlasmoidItem {
         }
     }
 
-    /** Whether typing `text` searches this computer (see "Typing searches first" above). */
+    /** Whether typing `text` in the popup or the floating Happy Bot searches: only in the file finder. */
     function searchable(text) {
-        if (session.findingFiles) {
-            return true;
+        return session.findingFiles;
+    }
+
+    /** The panel bar's text changed: search it after a pause, or clear the results. */
+    function barEdited(text) {
+        root.pendingQuery = String(text || "").trim();
+        root.acceptAfterSearch = "";
+        if (root.pendingQuery.length > 0) {
+            searchDelay.restart();
+        } else {
+            searchDelay.stop();
+            session.clearSearch();
         }
-        return !session.hasTranscript && !session.composing && BarInput.parse(text).mode === "all";
+    }
+
+    /** Enter in the panel bar: open the selected result, or ask from the Ask row (see the header). */
+    function barAccepted(text) {
+        if (text.length === 0) {
+            if (session.needsSetup) {
+                root.openSettings();
+            } else {
+                root.openPopup();
+            }
+            return;
+        }
+        if (searchDelay.running || session.searching || session.searchedText !== text) {
+            searchDelay.stop();
+            if (!session.searching || session.searchedText !== text) {
+                session.search(text);
+            }
+            root.acceptAfterSearch = text;
+            root.acceptFromBar = true;
+            return;
+        }
+        if (root.barSelectedIndex >= 0 && root.barSelectedIndex < session.hits.length) {
+            root.openBarHit(session.hits[root.barSelectedIndex]);
+        } else {
+            root.askFromBar(text);
+        }
+    }
+
+    /** Down and Up in the panel bar: through its results and the Ask row; with none, earlier requests. */
+    function moveBarSelection(delta) {
+        const count = session.hits.length;
+        if (count === 0 || root.barText.length === 0) {
+            root.recall(delta);
+            return;
+        }
+        const position = root.barSelectedIndex < 0 ? count : root.barSelectedIndex;
+        const next = Math.max(0, Math.min(count, position + delta));
+        root.barSelectedIndex = next === count ? -1 : next;
+    }
+
+    /** A result chosen from the panel bar's list. A saved chat opens in the popup; anything else just opens. */
+    function openBarHit(hit) {
+        if (hit.kind === "quick" && hit.action.type === "conversation") {
+            session.activateQuick(hit);
+            session.clearSearch();
+            root.fullRepresentationItem.setText("");
+            root.openPopup();
+            return;
+        }
+        root.openHit(hit);
+    }
+
+    /** The panel bar's Ask row: the popup opens and the assistant gets the text as a request. */
+    function askFromBar(text) {
+        searchDelay.stop();
+        session.clearSearch();
+        if (root.fullRepresentationItem) {
+            root.fullRepresentationItem.setText("");
+        }
+        root.openPopup();
+        root.askAssistant(text);
     }
 
     function handleEdited(text) {
         root.pendingQuery = String(text || "").trim();
         root.acceptAfterSearch = "";
-        if (root.pendingQuery.length === 0) {
-            session.composing = false;
-        }
         if (root.pendingQuery.length > 0 && root.searchable(root.pendingQuery)) {
             searchDelay.restart();
         } else {

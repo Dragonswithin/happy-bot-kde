@@ -11,7 +11,9 @@ import QtQuick
  * Shared presentation helpers for the applet: which icon stands for the
  * assistant (`assistantIcon`: the wand, or the robot mascot `robotIcon`
  * when the `useRobotMascot` setting is on), which icon stands for a search
- * hit, how to show a path compactly, and the tint used for cards. Pure
+ * hit, which kind of result it is and its heading (`hitGroup`,
+ * `hitGroupTitle`, `groupHits`), how to show a path compactly, and the tint
+ * used for cards. Pure
  * functions and constants only; no state and no requests. Registered as a
  * singleton in qmldir so every view formats things the same way.
  */
@@ -57,10 +59,51 @@ QtObject {
         return extensionIcons[extension] || "text-x-generic";
     }
 
-    /** The folder a hit is in, with the home folder shown as ~. Links show their host; quick results their kind. */
+    // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
+    readonly property var hitGroups: ["answer", "applications", "settings", "chats", "files"]
+
+    /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
+    function hitGroup(hit) {
+        if (!hit) {
+            return "";
+        }
+        if (hit.kind !== "quick") {
+            return "files";
+        }
+        const groups = { copy: "answer", launch: "applications", settings: "settings", conversation: "chats" };
+        return groups[hit.action ? hit.action.type : ""] || "applications";
+    }
+
+    /** The heading over a kind of result. */
+    function hitGroupTitle(group) {
+        switch (group) {
+        case "answer": return i18n("Answer");
+        case "applications": return i18n("Applications");
+        case "settings": return i18n("Settings");
+        case "chats": return i18n("Saved chats");
+        default: return i18n("Files");
+        }
+    }
+
+    /** `hits` with each kind together, in `hitGroups` order (applications first); the order within a kind is kept. */
+    function groupHits(hits) {
+        const order = hitGroups;
+        return hits.map((hit, position) => ({ hit: hit, position: position }))
+            .sort((a, b) => (order.indexOf(hitGroup(a.hit)) - order.indexOf(hitGroup(b.hit))) || (a.position - b.position))
+            .map(item => item.hit);
+    }
+
+    /** The folder a hit is in, with the home folder shown as ~. Links show their host. Quick results show
+     *  their detail without the kind ("Application · Minecraft launcher" shows "Minecraft launcher"), which
+     *  their heading already says; an answer keeps its whole line. */
     function hitWhere(hit) {
         if (hit.kind === "quick") {
-            return hit.subtitle || "";
+            const subtitle = hit.subtitle || "";
+            if (hitGroup(hit) === "answer") {
+                return subtitle;
+            }
+            const parts = subtitle.split(" · ");
+            return parts.length > 1 ? parts.slice(1).join(" · ") : "";
         }
         if (hit.kind === "link") {
             const match = hit.location.match(/^https?:\/\/([^\/]+)/);

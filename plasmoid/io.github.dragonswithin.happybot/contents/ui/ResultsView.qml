@@ -18,10 +18,11 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * The body shows one thing at a time:
  *
- * - RESULTS while typed text is searched (`session.searchedText`), in the
- *   file finder, or while there are results or a search problem:
- *   FileResults.qml (applications, windows, settings, answers and files,
- *   scrolling, with an "Ask Happy Bot about …" row pinned below them).
+ * - FILES in the file finder, or while there are results, a search under
+ *   way (`session.searchedText`) or a search problem: FileResults.qml (the
+ *   matches, scrolling, with an "Ask Happy Bot to find" row pinned below
+ *   them). The panel bar's own results show above the bar instead
+ *   (PanelResults.qml), never here.
  * - ASSISTANT otherwise: the welcome screen or the conversation,
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
@@ -293,7 +294,7 @@ Rectangle {
                         onTriggered: view.accepted(field.text.trim())
                     }
                 ]
-                placeholderText: view.session.findingFiles ? i18n("Type part of a file name…") : i18n("Ask or search anything…")
+                placeholderText: view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
                 Keys.onEnterPressed: view.accepted(text.trim())
@@ -601,7 +602,6 @@ Rectangle {
                             welcome.promptChosen(prompt);
                         }
                         onPromptChosen: prompt => {
-                            view.session.composing = true;  // a request to finish, not something to search for
                             view.setInput(prompt);
                             view.focusInput();
                         }
