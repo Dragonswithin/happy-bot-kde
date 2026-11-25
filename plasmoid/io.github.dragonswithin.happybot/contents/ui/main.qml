@@ -317,6 +317,7 @@ PlasmoidItem {
     // applet never expands into it as a popup (`activationTogglesExpanded`
     // is false), so in the icon form it is unused.
     fullRepresentation: PanelBar {
+        useRobotMascot: session.ui.robot_mascot
         busy: session.busy
         statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here")
             : session.needsSetup && session.status !== "offline" ? i18n("Type here, or press Enter to set up")

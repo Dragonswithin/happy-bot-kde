@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: MIT -->
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <circle cx="32" cy="6" r="4.5" fill="#ff696b" stroke="#442634" stroke-width="2.2"/>
-  <rect x="7" y="15" width="34" height="23" rx="8" fill="#352d40"/>
-  <g fill="#fff3e8">
-    <rect x="16" y="17" width="6.5" height="11" rx="3.25"/>
-    <path d="M13 25a6.25 6.25 0 0 0 12.5 0m-6.25 6.5v3m-3 0h6" fill="none" stroke="#fff3e8" stroke-width="2.3" stroke-linecap="round"/>
+  <circle cx="32" cy="6" r="4" fill="#ff696b" stroke="#183840" stroke-width="2.5"/>
+  <rect x="10" y="18" width="28" height="17" rx="7" fill="#194852"/>
+  <g fill="#a6ece1">
+    <rect x="21.5" y="19.5" width="5" height="8.5" rx="2.5"/>
+    <rect x="13" y="23" width="3" height="4.5" rx="1.5"/>
+    <rect x="32" y="23" width="3" height="4.5" rx="1.5"/>
   </g>
-  <path d="M30 25v3m4-6v8m4-6v4" fill="none" stroke="#ff9b96" stroke-width="2" stroke-linecap="round"/>
+  <path d="M19 26a5 5 0 0 0 10 0m-5 5v1.5m-2.5 0h5" fill="none" stroke="#5bb6b3" stroke-width="2" stroke-linecap="round"/>
 </svg>

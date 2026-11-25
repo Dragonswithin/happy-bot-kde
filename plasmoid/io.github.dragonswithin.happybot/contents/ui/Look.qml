@@ -23,6 +23,8 @@ QtObject {
 
     readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
 
+    readonly property url microphoneIcon: Qt.resolvedUrl("../images/microphone.svg")
+
     function assistantIcon(useRobotMascot: bool): string {
         return useRobotMascot ? robotIcon.toString() : "tools-wizard";
     }

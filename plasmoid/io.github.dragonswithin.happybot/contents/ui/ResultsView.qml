@@ -294,7 +294,8 @@ Rectangle {
                     // Talk instead of typing: shown when voice is on in the settings; click again to stop.
                     Kirigami.Action {
                         text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
-                        icon.name: view.session.listening ? "media-record" : "audio-input-microphone"
+                        icon.name: view.session.listening ? "media-record" : view.useRobotMascot ? "" : "audio-input-microphone"
+                        icon.source: view.useRobotMascot && !view.session.listening ? Look.microphoneIcon : ""
                         visible: view.session.voiceEnabled
                         checkable: true
                         checked: view.session.listening
