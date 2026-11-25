@@ -64,12 +64,15 @@ QtObject {
 
     // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
     readonly property var hitGroups: ["command", "answer", "characters", "applications", "settings", "bookmarks",
-                                      "websites", "chats", "files"]
+                                      "websites", "web", "chats", "files"]
 
     /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
     function hitGroup(hit) {
         if (!hit) {
             return "";
+        }
+        if (hit.source === "web") {
+            return "web";
         }
         if (hit.kind !== "quick") {
             return "files";
@@ -94,6 +97,7 @@ QtObject {
         case "command": return i18n("Do it now");
         case "answer": return i18n("Answer");
         case "characters": return i18n("Characters");
+        case "web": return i18n("On the web");
         case "applications": return i18n("Applications");
         case "settings": return i18n("Settings");
         case "bookmarks": return i18n("Bookmarks");
@@ -125,7 +129,8 @@ QtObject {
         }
         if (hit.kind === "link") {
             const match = hit.location.match(/^https?:\/\/([^\/]+)/);
-            return match ? match[1] : hit.location;
+            const host = match ? match[1] : hit.location;
+            return hit.source === "web" && hit.snippet ? host + " · " + hit.snippet : host;
         }
         const folder = hit.location.substring(0, hit.location.lastIndexOf("/")) || "/";
         return shortPath(folder);

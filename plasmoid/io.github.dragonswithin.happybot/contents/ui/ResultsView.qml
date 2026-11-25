@@ -84,7 +84,7 @@ Rectangle {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool fixVisible: session.fixing !== null
-    readonly property bool filesVisible: !fixVisible && (hasHits || hasSearchError || session.findingFiles
+    readonly property bool filesVisible: !fixVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
     readonly property bool conversationVisible: !filesVisible && !fixVisible
     readonly property bool sidebarVisible: session.history.length > 0
@@ -229,8 +229,8 @@ Rectangle {
             PlasmaComponents3.ToolButton {
                 icon.name: "go-previous"
                 text: i18n("Back")
-                visible: view.session.findingFiles || view.fixVisible
-                onClicked: view.fixVisible ? view.session.stopFixing() : view.session.stopFindingFiles()
+                visible: view.session.finding || view.fixVisible
+                onClicked: view.fixVisible ? view.session.stopFixing() : view.session.stopFinding()
             }
 
             PlasmaComponents3.ToolButton {
@@ -353,7 +353,8 @@ Rectangle {
                 placeholderText: view.session.listening ? i18n("Listening… talk, then pause")
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
                     : view.fixVisible ? i18n("Or say what to do with the text…")
-                    : view.session.findingFiles ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
+                    : view.session.finder === "web" ? i18n("Search the web…")
+                    : view.session.finding ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
                 Keys.onEnterPressed: view.accepted(text.trim())
@@ -374,8 +375,8 @@ Rectangle {
                     } else if (view.fixVisible) {
                         view.session.stopFixing();
                         view.closeRequested();
-                    } else if (view.session.findingFiles) {
-                        view.session.stopFindingFiles();
+                    } else if (view.session.finding) {
+                        view.session.stopFinding();
                     } else {
                         view.closeRequested();
                     }
@@ -678,7 +679,12 @@ Rectangle {
                         helpWith: view.session.helpWith
                         helpWithIcon: view.session.helpWithIcon
                         onFindFilesChosen: {
-                            view.session.startFindingFiles();
+                            view.session.startFinding("files");
+                            view.setInput("");
+                            view.focusInput();
+                        }
+                        onWebSearchChosen: {
+                            view.session.startFinding("web");
                             view.setInput("");
                             view.focusInput();
                         }

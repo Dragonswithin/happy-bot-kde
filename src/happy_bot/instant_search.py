@@ -1,15 +1,20 @@
-"""The search bar's no-model path: query the user's file-search tool, return hits.
+"""The search bar's no-model path: query the user's file-search or web-search tool, return hits.
 
 While the user types, the applet asks the daemon for matches and shows them
 without involving a model. This module runs the tool assigned to the
-``file_search`` role and converts whatever it returns into a uniform list of
-hits the applet can display and open.
+``file_search`` role (``search_files``), or in the popup's web finder the
+one assigned to ``web_search`` (``search_web``, whose hits are web pages
+marked ``"source": "web"``), and converts whatever it returns into a uniform
+list of hits the applet can display and open.
 
 Search tools do not share an output format, so ``extract_hits`` is
 deliberately tolerant: it takes the tool's structured content if present,
 else parses its text as JSON, and walks the result for objects that carry a
-location under a commonly used key (``path``, ``url``, ...). If nothing
-parses, absolute paths and URLs are pulled from the raw text. A tool whose
+location under a commonly used key (``path``, ``url``, ...). Text that is
+not JSON may still be records of ``Key: value`` lines separated by blank
+lines (SearXNG's MCP server answers "Title: …", "Description: …", "URL: …"),
+which are read the same way (``_records``). If nothing parses, absolute
+paths and URLs are pulled from the raw text. A tool whose
 output yields no locations simply produces no hits.
 
 A hit is ``{"title", "location", "snippet", "kind"}`` where ``kind`` is
@@ -89,6 +94,23 @@ def _walk(value: Any, found: list[dict[str, str]]) -> None:
             _walk(child, found)
 
 
+_FIELD = re.compile(r"^([A-Za-z][A-Za-z _-]{0,30}):\s*(.*)$")
+
+
+def _records(text: str) -> list[dict[str, str]]:
+    """Blank-line-separated blocks of ``Key: value`` lines as dicts (keys lower case, spaces as ``_``)."""
+    records = []
+    for block in re.split(r"\n\s*\n", text):
+        record: dict[str, str] = {}
+        for line in block.splitlines():
+            field = _FIELD.match(line.strip())
+            if field:
+                record.setdefault(field.group(1).strip().lower().replace(" ", "_").replace("-", "_"), field.group(2).strip())
+        if record:
+            records.append(record)
+    return records
+
+
 def extract_hits(result: ToolResult, limit: int = MAX_HITS) -> list[dict[str, str]]:
     """Convert a search tool's result into at most ``limit`` unique hits, in order."""
     found: list[dict[str, str]] = []
@@ -100,6 +122,8 @@ def extract_hits(result: ToolResult, limit: int = MAX_HITS) -> list[dict[str, st
             data = None
     if data is not None:
         _walk(data, found)
+    if not found and data is None:
+        _walk(_records(result.text), found)
     if not found:
         for match in _TEXT_LOCATION.findall(result.text):
             located = _normalise_location(match.rstrip(".,;"))
@@ -116,6 +140,20 @@ def extract_hits(result: ToolResult, limit: int = MAX_HITS) -> list[dict[str, st
         if len(unique) >= limit:
             break
     return unique
+
+
+def search_web(
+    manager: McpManager,
+    settings: dict[str, Any],
+    query: str,
+    limit: int = MAX_HITS,
+    timeout: float = SEARCH_TIMEOUT_SECONDS,
+) -> list[dict[str, str]]:
+    """Run the ``web_search`` role; web pages only. Raises ``RoleNotConfigured`` or ``McpError``."""
+    result = call_role(manager, settings, "web_search", query, timeout)
+    if result.is_error:
+        raise McpError(f"the web search tool reported an error: {result.text[:300]}")
+    return [{**hit, "source": "web"} for hit in extract_hits(result, limit) if hit["kind"] == "link"]
 
 
 def search_files(

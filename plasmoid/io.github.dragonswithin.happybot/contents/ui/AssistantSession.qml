@@ -94,9 +94,13 @@ import QtQuick
  * `quickHits`) and for at most `searchLimit` file matches (`/search`;
  * `fileHits`) at once; `hits` is both, each kind together in the order
  * they are listed under their headings, applications first
- * (`Look.groupHits`). The popup's "Find a
- * file" (`startFindingFiles` sets `findingFiles` until `stopFindingFiles`)
- * searches the same way as the panel bar. `searching` is true until
+ * (`Look.groupHits`). The popup has two finders, opened from its welcome
+ * screen by `startFinding(kind)` until `stopFinding` (`finder` says which,
+ * `finding` whether one is open): "Find a file" ("files") searches the
+ * same way as the panel bar, and "Search the web" ("web") shows matching
+ * bookmarks and visited websites (`/quick`, only those kinds) and web pages
+ * from the user's web search tool (`/search/web`, from `WEB_MIN_CHARS`
+ * characters; hits marked `source: "web"`) instead of files. `searching` is true until
  * both replies are in and `searchedText` is the text they are for, so Enter
  * typed before the results can wait for them. A quick hit has `kind`
  * "quick" and an `action`; `activateQuick` carries it out (an instant
@@ -104,9 +108,9 @@ import QtQuick
  * file manager, copy the path, send it to the phone). `appInfo` and
  * `appAction` serve an application result's menu (`/quick/app`: update,
  * uninstall, start at login; src/happy_bot/app_actions.py).
- * Before anything is typed in the panel bar or the file finder, `showRecent`
+ * Before anything is typed in the panel bar or a finder, `showRecent`
  * asks for the suggestions (`/quick/recent`: recent applications, files, settings, chats,
- * and websites when switched on); while they are shown `showingRecent` is
+ * and websites when switched on; the web finder keeps only the websites); while they are shown `showingRecent` is
  * true and `hits` holds them instead of matches. Searching or `clearSearch`
  * ends that. Replies can
  * arrive out of order, so each request carries a sequence number and a
@@ -188,7 +192,9 @@ Item {
     signal selectionReplaceFailed()
 
     property int searchLimit: 20
-    property bool findingFiles: false
+    property string finder: ""  // the open finder: "files", "web", or "" for none
+    readonly property bool finding: finder.length > 0
+    readonly property int webMinChars: 3  // WEB_MIN_CHARS: shorter text is not sent to the web search
     property var quickHits: []
     property var fileHits: []
     property var recentHits: []
@@ -308,7 +314,7 @@ Item {
         const sequence = session.searchSequence;
         request("GET", "/quick/recent", null, function(data) {
             if (sequence === session.searchSequence) {
-                session.recentHits = data.results || [];
+                session.recentHits = (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
                 session.showingRecent = true;
             }
         }, function(data) {});
@@ -328,7 +334,7 @@ Item {
 
     /** Shows the text noted by the "Fix selected text" shortcut, with its rewrite buttons. */
     function startFixing() {
-        stopFindingFiles();
+        stopFinding();
         session.fixSequence += 1;
         const sequence = session.fixSequence;
         session.fixing = { loading: true, text: "" };
@@ -406,19 +412,26 @@ Item {
         session.fixProblem = "";
     }
 
-    /** "Find a file": typing now shows matching files, until `stopFindingFiles`; until then, recent items. */
-    function startFindingFiles() {
+    /** Opens a finder ("files" or "web"): typing now searches there, until `stopFinding`; until then,
+     *  recent items. */
+    function startFinding(kind) {
         clearSearch();
-        session.findingFiles = true;
+        session.finder = kind;
         showRecent();
     }
 
-    function stopFindingFiles() {
-        session.findingFiles = false;
+    function stopFinding() {
+        session.finder = "";
         clearSearch();
     }
 
-    /** Looks up `text` on this computer: quick results and files, or only files in the finder. */
+    /** Whether a hit belongs in the web finder: a bookmark, a visited website or a web page. */
+    function webHit(hit) {
+        return hit.source === "web" || (hit.kind === "quick" && ["bookmark", "visited"].indexOf(hit.action.type) >= 0);
+    }
+
+    /** Looks up `text`: quick results and files (the panel bar, "Find a file"), or in the web finder
+     *  bookmarks, visited websites and web pages. */
     function search(text) {
         const query = (text || "").trim();
         if (query.length === 0) {
@@ -428,7 +441,8 @@ Item {
         session.searchSequence += 1;
         session.showingRecent = false;
         const sequence = session.searchSequence;
-        const inFinder = session.findingFiles;
+        const inFinder = session.finding;
+        const web = session.finder === "web";
         let pending = 2;
         session.searchedText = query;
         session.searching = true;
@@ -440,7 +454,7 @@ Item {
         }
         request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
-                session.quickHits = data.results || [];
+                session.quickHits = (data.results || []).filter(hit => !web || session.webHit(hit));
             }
             finished();
         }, function(data) {
@@ -449,7 +463,13 @@ Item {
             }
             finished();
         });
-        request("GET", "/search?limit=" + session.searchLimit + "&q=" + encodeURIComponent(query), null, function(data) {
+        if (web && query.length < session.webMinChars) {
+            session.fileHits = [];
+            finished();
+            return;
+        }
+        const path = web ? "/search/web?q=" : "/search?limit=" + session.searchLimit + "&q=";
+        request("GET", path + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.searchError = "";
                 session.searchErrorCode = "";

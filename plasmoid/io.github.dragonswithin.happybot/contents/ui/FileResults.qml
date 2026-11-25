@@ -12,8 +12,10 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
 
 /**
- * The search results, in the popup's file finder (ResultsView.qml,
- * `AssistantSession.findingFiles`) and above the panel's search bar
+ * The search results, in the popup's finders (ResultsView.qml,
+ * `AssistantSession.finder`: "Find a file", and "Search the web", whose
+ * pages show under "On the web" with their address and snippet) and above
+ * the panel's search bar
  * (PanelResults.qml): one row per result in `session.hits`, each kind under
  * a heading where it starts (Answer, Applications, Settings, Bookmarks, Recent websites,
  * Saved chats, Files: `Look.hitGroup`), applications first; quick results
@@ -55,6 +57,7 @@ Item {
 
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool chips: session.showingRecent
+    readonly property bool web: session.finder === "web"
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property real naturalHeight: filesColumn.implicitHeight + (askRow.visible ? askRow.implicitHeight : 0)
 
@@ -263,7 +266,7 @@ Item {
                                     QQC2.MenuItem {
                                         text: i18n("Send to phone")
                                         icon.name: "kdeconnect"
-                                        enabled: entry.modelData.kind === "file"
+                                        enabled: entry.modelData.kind === "file" || entry.modelData.kind === "link"
                                         onTriggered: results.fileActionRequested(entry.modelData, "phone")
                                     }
                                     QQC2.MenuItem {
@@ -311,7 +314,7 @@ Item {
                                         PlasmaComponents3.Label {
                                             Layout.fillWidth: true
                                             text: Look.hitWhere(entry.modelData)
-                                            elide: Text.ElideMiddle
+                                            elide: entry.group === "web" ? Text.ElideRight : Text.ElideMiddle
                                             textFormat: Text.PlainText
                                             font: Kirigami.Theme.smallFont
                                             opacity: 0.65
@@ -326,11 +329,13 @@ Item {
                         Layout.fillWidth: true
                         Layout.margins: Kirigami.Units.largeSpacing
                         visible: !results.hasHits && !results.hasSearchError
-                            && (results.session.findingFiles || results.session.searchedText.length > 0)
+                            && (results.session.finding || results.session.searchedText.length > 0)
                         wrapMode: Text.Wrap
                         opacity: 0.7
                         text: results.session.searching ? i18n("Searching…")
+                            : results.web && results.session.searchedText.length > 0 ? i18n("Nothing found on the web. Ask Happy Bot below.")
                             : results.session.searchedText.length > 0 ? i18n("Nothing on this computer matches. Ask Happy Bot below.")
+                            : results.web ? i18n("Type what to look up; pages from the web show here. Enter opens the top one.")
                             : i18n("Type the name of an application, a setting or a file; what matches shows here. Enter opens the top one.")
                     }
 
@@ -349,7 +354,8 @@ Item {
                         PlasmaComponents3.Label {
                             Layout.fillWidth: true
                             text: results.session.searchErrorCode === "not_configured"
-                                ? i18n("File search is not set up yet.")
+                                ? (results.web ? i18n("Web search is not set up yet.") : i18n("File search is not set up yet."))
+                                : results.web ? i18n("Web search is not responding. Try again in a moment.")
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
                             PlasmaComponents3.ToolTip.text: results.session.searchError
@@ -389,7 +395,8 @@ Item {
 
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
-                    text: results.session.findingFiles ? i18n("Ask Happy Bot to find “%1”", results.query)
+                    text: results.web ? i18n("Ask Happy Bot to search the web for “%1”", results.query)
+                        : results.session.finding ? i18n("Ask Happy Bot to find “%1”", results.query)
                         : i18n("Ask Happy Bot about “%1”", results.query)
                     elide: Text.ElideRight
                     textFormat: Text.PlainText

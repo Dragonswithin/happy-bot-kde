@@ -53,9 +53,12 @@ import "barInput.js" as BarInput
  *   chat or welcome screen, and typing there is a request: nothing is
  *   searched as the user types and Enter sends it to the assistant, which
  *   searches when the request needs it. Only the file finder ("Find a file"
- *   on the welcome screen, `session.findingFiles`, `searchable`) shows the
+ *   on the welcome screen, `session.finding`, `searchable`) shows the
  *   same recent chips as the empty panel bar until something is typed, and
- *   searches as the user types, the same search as the panel bar (applications,
+ *   searches as the user types. "Search the web" is the same finder for
+ *   bookmarks, visited websites and web pages, after a longer pause (the
+ *   web search is slower), and its Ask row asks the assistant to search the
+ *   web. "Find a file" is the same search as the panel bar (applications,
  *   settings, answers, saved chats, files); there Down/Up move a
  *   selection, Tab completes the top result's name, Enter opens the
  *   selected result, and the Ask row below asks the assistant to find it. Leaving (Back,
@@ -240,7 +243,7 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        interval: 200  // ms of no typing before searching
+        interval: session.finder === "web" ? 600 : 200  // ms of no typing before searching (the web: a longer pause)
         onTriggered: session.search(root.pendingQuery)
     }
 
@@ -267,7 +270,7 @@ PlasmoidItem {
         onSettingsRequested: root.openSettings()
         onDismissed: {
             searchDelay.stop();
-            session.stopFindingFiles();
+            session.stopFinding();
             root.cancelTalking();
             popup.clearInput();  // the bar stays empty too: what was typed is not kept after clicking away
         }
@@ -320,7 +323,7 @@ PlasmoidItem {
             onSettingsRequested: root.openSettings()
             onDismissed: {
                 searchDelay.stop();
-                session.stopFindingFiles();
+                session.stopFinding();
                 root.cancelTalking();
                 clearInput();
             }
@@ -604,7 +607,7 @@ PlasmoidItem {
     }
 
     function closePopup() {
-        session.stopFindingFiles();
+        session.stopFinding();
         if (!session.replacing) {
             session.stopFixing();  // kept while pasting, so a failure can be shown again
         }
@@ -667,7 +670,7 @@ PlasmoidItem {
 
     /** Whether typing `text` in the popup or the floating Happy Bot searches: only in the file finder. */
     function searchable(text) {
-        return session.findingFiles;
+        return session.finding;
     }
 
     /** The panel bar's text changed: search it after a pause, or clear the results. */
@@ -789,7 +792,7 @@ PlasmoidItem {
         } else {
             searchDelay.stop();
             session.clearSearch();
-            if (session.findingFiles) {
+            if (session.finding) {
                 session.showRecent();  // the finder's field emptied: back to the recent items
             }
         }
@@ -892,11 +895,12 @@ PlasmoidItem {
     /** Sends `text` to the assistant (Enter with the Ask row selected or no results, or the Ask row clicked). */
     function askAssistant(text) {
         root.acceptAfterSearch = "";
-        if (session.findingFiles && text.length > 0) {
-            // No match chosen: the assistant searches harder (other words, the whole index).
+        if (session.finding && text.length > 0) {
+            // No match chosen: the assistant searches harder (other words, the whole index, the web's pages).
+            const web = session.finder === "web";
             searchDelay.stop();
-            session.stopFindingFiles();
-            text = "Find the file: " + text;
+            session.stopFinding();
+            text = (web ? "Search the web for: " : "Find the file: ") + text;
         }
         if (text.length === 0 && session.needsSetup) {
             root.openSettings();
@@ -906,7 +910,7 @@ PlasmoidItem {
             root.sentRequests = root.sentRequests.concat([text]).slice(-50);
             root.recallIndex = root.sentRequests.length;
             searchDelay.stop();
-            session.stopFindingFiles();
+            session.stopFinding();
             root.clearInput();
         }
     }
@@ -942,7 +946,7 @@ PlasmoidItem {
         function onPendingApprovalsChanged() {
             if (session.pendingApprovals > 0 && (popup.visible || root.floatingOpen)) {
                 searchDelay.stop();
-                session.stopFindingFiles();
+                session.stopFinding();
             }
         }
     }

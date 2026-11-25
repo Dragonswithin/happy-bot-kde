@@ -115,7 +115,10 @@ used.
   "euro sign" lists characters and Enter copies one. Right-click an
   application to update it, uninstall it (in a terminal, where you
   confirm) or start it at login; right-click a file to send it to your
-  phone (KDE Connect).
+  phone (KDE Connect). In Happy Bot itself, "Find a file" and "Search the
+  web" work the same way: recent items first, then matches as you type;
+  "Search the web" lists your bookmarks, visited websites and pages from
+  your web search tool, and Enter opens one.
 - **Fix selected text**: give the "Fix selected text" shortcut a key
   (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any
   application and press it. Happy Bot shows the text with Fix grammar,

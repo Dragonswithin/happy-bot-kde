@@ -1233,6 +1233,16 @@ Findings:
   `sudo pacman -Syu`, because Arch does not support updating one package
   alone. Start at login writes the autostart entry, or `Hidden=true` over a
   system one. Each is written to the action log.
+- After using it, the maintainer asked for the same chips in the popup's
+  "Find a file", then for "Search the web" to work like it: a web finder
+  (`AssistantSession.finder` "web") shows recent websites as chips, then
+  matching bookmarks and visited websites and, after a 600 ms pause and
+  from three characters, pages from the user's web search tool
+  (`GET /search/web`, `instant_search.search_web`, under "On the web" with
+  address and snippet); Enter opens one, the Ask row asks the AI to search.
+  The maintainer's SearXNG answers in "Title:/Description:/URL:" blocks,
+  which gave bare addresses until `extract_hits` learned to read such
+  `Key: value` records; checked live, 0.7 to 1.5 s per search.
 - Rendered offscreen with the KDE theme (rows with glyphs, chips with a
   selection) and checked against a throwaway daemon (commands, characters,
   application info, refusals). Not yet seen in the real panel: installing

@@ -1,4 +1,4 @@
-"""Tests for the search bar's speed-ups: instant commands, characters, recent items, application actions.
+"""Tests for the search speed-ups: instant commands, characters, recent items, application actions, web finder.
 
 ``quick_commands`` runs against a fake tool catalogue, so nothing on the
 desktop changes, and Plasma's on-screen display is a recorded fake.
@@ -7,6 +7,7 @@ searches Python's own Unicode names. ``usage_history`` and
 ``quick_results.recent`` read a throwaway database in the activity manager's
 layout. ``app_actions`` runs with ``pacman`` answers and the terminal faked,
 and with private autostart folders, so no package or login entry is touched.
+The web finder's search reads a recorded SearXNG answer; no search is sent.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from happy_bot import app_actions, characters, daemon_routes, quick_commands, quick_results, usage_history  # noqa: E402
+from happy_bot import (app_actions, characters, daemon_routes, instant_search, quick_commands,  # noqa: E402
+                       quick_results, usage_history)
 from happy_bot.tools.registry import RISK_CHANGE, RISK_DANGER, Tool, ToolFailure, object_schema  # noqa: E402
 
 
@@ -328,6 +330,38 @@ class AppActionTests(unittest.TestCase):
         logged = json.loads((self.folder / "actions.jsonl").read_text().splitlines()[0])
         self.assertEqual((logged["tool"], logged["risk"]), ("app_uninstall", "danger"))
         self.assertEqual(daemon_routes.quick_app(Server(), {"path": ["/nowhere.desktop"]}, {})[0], 404)
+
+
+class WebFinderTests(unittest.TestCase):
+    SEARXNG = ("Title: Introducing Kwi - KDE Blogs\nDescription: A new terminal.\nURL: https://blogs.kde.org/kwi/\n"
+               "Relevance Score: 1.3\n\nTitle: kwi - Arch Linux\nDescription: Modern terminal. Upstream URL: x\n"
+               "URL: https://archlinux.org/packages/extra/x86_64/kwi/\n")
+
+    def test_key_value_records_become_hits_with_titles_and_snippets(self) -> None:
+        from happy_bot.mcp_client import ToolResult
+        hits = instant_search.extract_hits(ToolResult(self.SEARXNG))
+        self.assertEqual([(hit["title"], hit["location"], hit["snippet"], hit["kind"]) for hit in hits], [
+            ("Introducing Kwi - KDE Blogs", "https://blogs.kde.org/kwi/", "A new terminal.", "link"),
+            ("kwi - Arch Linux", "https://archlinux.org/packages/extra/x86_64/kwi/", "Modern terminal. Upstream URL: x", "link")])
+
+    def test_web_search_keeps_pages_only_and_marks_them(self) -> None:
+        from happy_bot.mcp_client import ToolResult
+        result = ToolResult(self.SEARXNG + "\nPath: /home/u/notes.txt\n")
+        with mock.patch.object(instant_search, "call_role", return_value=result) as call:
+            hits = instant_search.search_web(None, {}, "kwi")
+        self.assertEqual(call.call_args[0][2], "web_search")
+        self.assertEqual([hit["source"] for hit in hits], ["web", "web"])
+
+    def test_the_route_says_when_web_search_is_not_set_up(self) -> None:
+        from happy_bot.tool_roles import RoleNotConfigured
+
+        class Server:
+            mcp, settings = None, {}
+
+        with mock.patch.object(instant_search, "call_role", side_effect=RoleNotConfigured("web_search")):
+            status, reply = daemon_routes.search_web(Server(), {"q": ["kwi"]}, {})
+        self.assertEqual((status, reply["code"]), (409, "not_configured"))
+        self.assertEqual(daemon_routes.search_web(Server(), {"q": [""]}, {})[1]["hits"], [])
 
 
 if __name__ == "__main__":

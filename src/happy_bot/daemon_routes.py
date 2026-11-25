@@ -35,7 +35,8 @@ Endpoints:
   "Help with …": a screenshot of that window for the chat's next request
   (``app_context.remember_screenshot``), when an AI that sees pictures may
   see it; ``taken`` says whether one was.
-- ``GET /search?q=...``: instant file search through the ``file_search`` role.
+- ``GET /search?q=...``: instant file search through the ``file_search`` role;
+  ``GET /search/web?q=...`` the web finder's pages through ``web_search``.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
   The read also carries what the settings page needs to offer choices:
   ``effective_folders`` (where each standard folder is now) and
@@ -345,6 +346,19 @@ def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
         hits = instant_search.search_files(server.mcp, server.settings, text, limit)
     except RoleNotConfigured:
         return _error(409, "File search is not set up yet.", "not_configured")
+    except McpError as exc:
+        return _error(502, str(exc), "tool_failed")
+    return 200, {"ok": True, "query": text, "hits": hits}
+
+
+def search_web(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    text = _first(query, "q").strip()[:MAX_QUERY_CHARS]
+    if not text:
+        return 200, {"ok": True, "query": "", "hits": []}
+    try:
+        hits = instant_search.search_web(server.mcp, server.settings, text, 8)
+    except RoleNotConfigured:
+        return _error(409, "Web search is not set up yet.", "not_configured")
     except McpError as exc:
         return _error(502, str(exc), "tool_failed")
     return 200, {"ok": True, "query": text, "hits": hits}
@@ -753,6 +767,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/panel"): panel_change,
     ("GET", "/app/wait"): app_wait,
     ("GET", "/search"): search,
+    ("GET", "/search/web"): search_web,
     ("GET", "/settings"): get_settings,
     ("PUT", "/settings"): put_settings,
     ("GET", "/tools/discover"): discover_tools,
