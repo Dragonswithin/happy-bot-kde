@@ -25,7 +25,10 @@
   Runtime state belongs under `$XDG_RUNTIME_DIR/happy-bot`. The one
   exception, chosen by the maintainer, is the user's conversation history: saved 0600
   under `$XDG_DATA_HOME/happy-bot/conversations` and deleted after
-  `history_days` (default 30) without use.
+  `history_days` (default 30) without use. Pictures chosen by the
+  maintainer for the README (`docs/images/`) are documentation, not
+  runtime output, and may be committed; check them for private details
+  first.
 - Keep root/system actions behind an explicit external broker. This project can
   report broker availability, but it should not grow an unbounded root helper.
 - Before closeout, run focused checks: Python syntax, shell syntax, service

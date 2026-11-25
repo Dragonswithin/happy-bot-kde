@@ -3,10 +3,7 @@
 **An AI search bar for the KDE Plasma 6 panel. Type what you want and your
 computer does it.**
 
-<!-- Screenshot: save one as docs/images/happy-bot.png (the panel plus the
-open assistant with a real answer) and uncomment the next line.
-![Happy Bot open from the Plasma panel](docs/images/happy-bot.png)
--->
+![Happy Bot open above the Plasma panel, with its search bar in the panel](docs/images/happy-bot.webp)
 
 Happy Bot sits in your panel beside the application launcher, or floats
 over your windows. Ask it to "put these two windows side by side", "find
