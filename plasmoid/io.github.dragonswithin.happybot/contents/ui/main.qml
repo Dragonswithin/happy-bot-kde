@@ -53,8 +53,9 @@ import "barInput.js" as BarInput
  *   chat or welcome screen, and typing there is a request: nothing is
  *   searched as the user types and Enter sends it to the assistant, which
  *   searches when the request needs it. Only the file finder ("Find a file"
- *   on the welcome screen, `session.findingFiles`, `searchable`) searches as
- *   the user types, the same search as the panel bar (applications,
+ *   on the welcome screen, `session.findingFiles`, `searchable`) shows the
+ *   same recent chips as the empty panel bar until something is typed, and
+ *   searches as the user types, the same search as the panel bar (applications,
  *   settings, answers, saved chats, files); there Down/Up move a
  *   selection, Tab completes the top result's name, Enter opens the
  *   selected result, and the Ask row below asks the assistant to find it. Leaving (Back,
@@ -775,12 +776,20 @@ PlasmoidItem {
         } else {
             searchDelay.stop();
             session.clearSearch();
+            if (session.findingFiles) {
+                session.showRecent();  // the finder's field emptied: back to the recent items
+            }
         }
     }
 
     /** Down and Up through the results in the order shown; past the last one is the Ask row (-1). */
     function moveSelection(delta) {
         const count = session.hits.length;
+        // The file finder's recent chips (empty field): -1 is the field itself, before the first chip.
+        if (session.showingRecent && count > 0 && !(root.surface.selectedIndex < 0 && delta < 0)) {
+            root.surface.selectedIndex = Math.max(-1, Math.min(count - 1, root.surface.selectedIndex + delta));
+            return;
+        }
         if (count === 0) {
             root.recall(delta);
             return;

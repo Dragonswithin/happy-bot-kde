@@ -104,8 +104,8 @@ import QtQuick
  * file manager, copy the path, send it to the phone). `appInfo` and
  * `appAction` serve an application result's menu (`/quick/app`: update,
  * uninstall, start at login; src/happy_bot/app_actions.py).
- * Before anything is typed, `showRecent` asks for the empty bar's
- * suggestions (`/quick/recent`: recent applications, files, settings, chats,
+ * Before anything is typed in the panel bar or the file finder, `showRecent`
+ * asks for the suggestions (`/quick/recent`: recent applications, files, settings, chats,
  * and websites when switched on); while they are shown `showingRecent` is
  * true and `hits` holds them instead of matches. Searching or `clearSearch`
  * ends that. Replies can
@@ -298,10 +298,11 @@ Item {
         });
     }
 
-    /** "Find a file": typing now shows matching files, until `stopFindingFiles`. */
+    /** "Find a file": typing now shows matching files, until `stopFindingFiles`; until then, recent items. */
     function startFindingFiles() {
         clearSearch();
         session.findingFiles = true;
+        showRecent();
     }
 
     function stopFindingFiles() {
