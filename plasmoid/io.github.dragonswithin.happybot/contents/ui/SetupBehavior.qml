@@ -37,8 +37,10 @@ import org.kde.kirigami as Kirigami
  *   instructions for new conversations. Saved with its own button, since it
  *   is long text; "Restore suggested" puts back the daemon's starting text
  *   (`page.suggestedInstructions`) for the user to review and save.
- * - Limits: `agent.max_steps`, `agent.command_timeout_seconds` and
- *   `agent.notify_after_seconds`.
+ * - Limits: `agent.max_steps` and `agent.command_timeout_seconds`.
+ * - Notifications: whether a long request ends with a desktop notification
+ *   and after how long (`agent.notify_after_seconds`; off is 0). Its icon
+ *   follows `ui.robot_mascot` (src/happy_bot/ui_settings.py, `assistant_icon`).
  * - Terminal: `agent.terminal`, chosen from the supported terminals the
  *   daemon found installed (`page.terminals`), or automatic.
  *
@@ -336,15 +338,34 @@ Kirigami.FormLayout {
         text: i18n("Unless the assistant asks for longer. Installs run in a terminal window and are not limited by this.")
     }
 
+    Item {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Notifications")
+    }
+
+    QQC2.CheckBox {
+        id: notifyWhenDone
+        text: i18n("Notify me when a long request finishes")
+        checked: section.agent ? section.agent.notify_after_seconds > 0 : true
+        // Off is stored as 0 seconds; on again starts from the daemon's default, a minute.
+        onToggled: section.setAgent("notify_after_seconds", checked ? 60 : 0)
+    }
+
     QQC2.SpinBox {
-        Kirigami.FormData.label: i18n("Notify when done after:")
-        from: 0
+        Kirigami.FormData.label: i18n("When it took longer than:")
+        visible: notifyWhenDone.checked
+        from: 1
         to: 3600
         stepSize: 10
-        value: section.agent ? section.agent.notify_after_seconds : 60
-        textFromValue: (value, locale) => value === 0 ? i18n("Never") : i18np("%1 second", "%1 seconds", value)
-        valueFromText: (text, locale) => parseInt(text) || 0
+        value: section.agent && section.agent.notify_after_seconds > 0 ? section.agent.notify_after_seconds : 60
+        textFromValue: (value, locale) => i18np("%1 second", "%1 seconds", value)
+        valueFromText: (text, locale) => parseInt(text) || 1
         onValueModified: section.setAgent("notify_after_seconds", value)
+    }
+
+    Hint {
+        visible: notifyWhenDone.checked
+        text: i18n("Its icon is the robot mascot when that is chosen under Appearance, otherwise the wand.")
     }
 
     Item {

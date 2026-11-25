@@ -23,6 +23,11 @@ Files are no longer searched while the user types (only in the "Find a file" fin
 timings), so the old ``instant_*`` settings are gone: ``RETIRED_UI_KEYS`` are dropped from stored
 settings instead of being refused as unknown.
 
+Desktop notifications (``ask_stream.notify_finished``, ``happy-bot ask --notify``) show the same
+picture as the panel: ``assistant_icon`` names the wand or, with ``robot_mascot`` on, the mascot's
+installed theme icon (``scripts/install.sh`` and the package put ``contents/images/happy-bot.svg``
+there as ``MASCOT_ICON``).
+
 The hotkey belongs to the app too, but it is a desktop shortcut of the app's own copy (set on its
 Appearance page), so it is not kept here.
 """
@@ -39,6 +44,8 @@ UI_RANGES: dict[str, tuple[int, int]] = {
     "popup_width": (20, 70), "popup_height": (12, 50), "floating_opacity": (15, 100),
     "floating_x": (-1, 100_000), "floating_y": (-1, 100_000),
 }
+WAND_ICON = "tools-wizard"
+MASCOT_ICON = "io.github.dragonswithin.happybot"
 RETIRED_UI_KEYS = ("instant_search", "instant_min_chars", "instant_delay_ms", "instant_results")
 COPIES = ("panel", "app")
 
@@ -69,3 +76,8 @@ def validate_ui(raw: Any) -> dict[str, Any]:
     if not isinstance(imported, list) or any(item not in COPIES for item in imported):
         raise UiSettingsError(f"'ui': 'imported' may only list {', '.join(COPIES)}")
     return {**ui, "imported": sorted(set(imported))}
+
+
+def assistant_icon(ui: Any) -> str:
+    """The theme icon name for the assistant outside the widget: the mascot when ``robot_mascot`` is on."""
+    return MASCOT_ICON if isinstance(ui, dict) and ui.get("robot_mascot") is True else WAND_ICON

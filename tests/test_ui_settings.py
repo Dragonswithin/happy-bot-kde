@@ -2,13 +2,16 @@
 
 The schema is checked directly: defaults fill in, ranges and unknown keys are refused. The route
 is checked against a stand-in daemon whose ``replace_settings`` validates with the real settings
-schema, so a refused change leaves the stored settings as they were.
+schema, so a refused change leaves the stored settings as they were. ``assistant_icon`` and the
+finished-request notification (``ask_stream.notify_finished``, with ``notify-send`` stubbed out)
+are checked to show the mascot only when it is chosen.
 """
 
 from __future__ import annotations
 
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +22,23 @@ import isolation  # noqa: E402,F401  (must come before the package: private runt
 
 from happy_bot import daemon_routes  # noqa: E402
 from happy_bot.settings import validate_settings  # noqa: E402
-from happy_bot.ui_settings import UI_DEFAULTS, UiSettingsError, validate_ui  # noqa: E402
+from happy_bot import ask_stream  # noqa: E402
+from happy_bot.ui_settings import MASCOT_ICON, UI_DEFAULTS, WAND_ICON, UiSettingsError, assistant_icon, validate_ui  # noqa: E402
+
+
+class NotificationIconTests(unittest.TestCase):
+    def test_the_mascot_setting_picks_the_notification_icon(self) -> None:
+        self.assertEqual(assistant_icon({**UI_DEFAULTS, "robot_mascot": True}), MASCOT_ICON)
+        for ui in (UI_DEFAULTS, None, {"robot_mascot": "yes"}):
+            self.assertEqual(assistant_icon(ui), WAND_ICON)
+
+    def test_the_finished_notification_shows_the_chosen_icon(self) -> None:
+        sent: list[list[str]] = []
+        with mock.patch.object(ask_stream.shutil, "which", return_value="/usr/bin/notify-send"), \
+                mock.patch.object(ask_stream, "run_command", side_effect=lambda command, timeout: sent.append(command) or {}), \
+                mock.patch.object(ask_stream.threading, "Thread", side_effect=lambda target, **_: mock.Mock(start=target)):
+            ask_stream.notify_finished("Wallpaper", MASCOT_ICON)
+        self.assertIn(f"--icon={MASCOT_ICON}", sent[0])
 
 
 class UiSchemaTests(unittest.TestCase):

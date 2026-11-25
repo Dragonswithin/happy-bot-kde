@@ -122,7 +122,8 @@ text-only models and stays as an option afterwards.
   results by title)
 - ● Continue a conversation from the CLI and back. (happy-bot history,
   ask --conversation)
-- ● A notification when a long task finishes (done for long requests);
+- ● A notification when a long task finishes (done for long requests; a switch
+  under Behaviour turns it off, and its icon follows the mascot setting);
   clicking it reopens the thread. (its Open button opens the popup through the
   applet's shortcut action, which the maintainer saw open the popup; the button itself
   not yet clicked)

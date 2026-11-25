@@ -53,9 +53,10 @@ The user's ``agent`` settings shape the turn: their instructions and the
 abilities they switched off go into a new conversation's system prompt, the
 switched-off tool groups are left out of the registry, and ``max_steps``
 caps the model requests. A turn that takes longer than
-``notify_after_seconds`` (0: never) ends with a desktop notification, so the
+``notify_after_seconds`` (0: never; the settings page's "Notify me when a
+long request finishes" switch) ends with a desktop notification, so the
 user learns it finished even with the popup closed; its Open button opens
-the popup again.
+the popup again, and its icon follows the mascot setting.
 
 Models: requests go down the user's ``model_order`` (a request that names a
 ``model`` uses only that one). Models that cannot be used are skipped with a
@@ -95,7 +96,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from . import app_context, desktop_actions
 from . import settings as settings_store
-from . import spend
+from . import spend, ui_settings
 from .agent_loop import run_turn, system_prompt
 from .conversation import Message
 from .desktop_context import run_command
@@ -206,7 +207,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         server.state.update(status="idle")
         notify_after = agent["notify_after_seconds"]
         if notify_after and time.monotonic() - started > notify_after:
-            notify_finished(conversation.title)
+            notify_finished(conversation.title, ui_settings.assistant_icon(server.settings.get("ui")))
         app_visibility.run_after_turn()
 
 
@@ -306,8 +307,10 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
     return held[0] if held else None
 
 
-def notify_finished(title: str) -> None:
+def notify_finished(title: str, icon: str = ui_settings.WAND_ICON) -> None:
     """Desktop notification that a long request finished, with an Open button; failures are ignored.
+
+    ``icon`` is the theme icon shown (``ui_settings.assistant_icon``: the wand or the mascot).
 
     ``notify-send --wait`` blocks until the notification is used or closed,
     so it runs on its own thread; choosing Open opens the popup on the
@@ -317,7 +320,7 @@ def notify_finished(title: str) -> None:
         return
 
     def show() -> None:
-        result = run_command(["notify-send", "--app-name=Happy Bot", "--icon=tools-wizard", "--action=open=Open",
+        result = run_command(["notify-send", "--app-name=Happy Bot", f"--icon={icon}", "--action=open=Open",
                               "--wait", "--", "The assistant finished", title or "Your request is done."], timeout=3600)
         if result.get("stdout", "").strip() == "open":
             try:

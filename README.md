@@ -126,8 +126,9 @@ used.
   and shows an approval card.
 - Long steps show that they are alive: a spinner, how long they have run,
   and the latest line of output. Stop ends a running command at once, and a
-  desktop notification says when a request that took over a minute (your
-  choice, under Behaviour) is done.
+  desktop notification says when a request that took over a minute is done
+  (under Behaviour you can turn it off or change the time). It shows the
+  robot mascot when you chose the mascot under Appearance.
 - Installs, builds and anything that needs your password open in a terminal
   window, where you watch the progress and type the password yourself; the
   assistant never handles it. It waits for that window's command to finish

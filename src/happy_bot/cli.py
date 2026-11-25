@@ -12,7 +12,7 @@ action needs approval it asks on the terminal; without a terminal it declines
 at once, so a script can never approve a dangerous action by accident.
 ``ask --dry-run`` lets the model only look things up and list its steps;
 ``ask --notify`` also shows the answer and anything not done as a desktop
-notification, which is how routines started by a systemd timer report back
+notification (with the mascot as its icon when that is chosen), which is how routines started by a systemd timer report back
 (``routines.py``). Every other command prints one JSON reply.
 
 ``routine-check`` is what a network or battery routine's timer runs
@@ -116,6 +116,15 @@ def request_json(
         return body
 
 
+def _assistant_icon() -> str:
+    """The notification icon the user chose (the mascot or the wand), from the settings file; the wand if unreadable."""
+    from . import settings as settings_store, ui_settings
+    try:
+        return ui_settings.assistant_icon(settings_store.load_settings().get("ui"))
+    except Exception:  # a missing or broken settings file must not stop the answer being shown
+        return ui_settings.WAND_ICON
+
+
 def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, notify: bool = False) -> int:
     """Send one request and print the streamed turn. Returns the process exit status.
 
@@ -168,7 +177,7 @@ def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, n
         sys.stdout.write("\n")
     if notify and shutil.which("notify-send"):
         body = ("".join(answer).strip() + ("\n" + "\n".join(problems) if problems else "")).strip()
-        subprocess.run(["notify-send", "--app-name=Happy Bot", "--icon=tools-wizard", "--",
+        subprocess.run(["notify-send", "--app-name=Happy Bot", f"--icon={_assistant_icon()}", "--",
                         "Assistant: " + message[:80], body[:1500] or "Done."], check=False, timeout=10)
     return status
 
