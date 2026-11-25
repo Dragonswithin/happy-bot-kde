@@ -122,8 +122,15 @@ PlasmoidItem {
     property int recallIndex: 0
 
     // plasmawindowed publishes this string as the tray's theme icon name.
-    Plasmoid.icon: root.standalone && session.ui.robot_mascot
-        ? Plasmoid.pluginName : Look.assistantIcon(session.ui.robot_mascot)
+    Plasmoid.icon: {
+        if (session.ui.robot_mascot && iconActivity.trayPose) {
+            return Plasmoid.pluginName + "-" + iconActivity.trayPose;
+        }
+        if (iconActivity.recording) {
+            return "audio-input-microphone";
+        }
+        return root.standalone && session.ui.robot_mascot ? Plasmoid.pluginName : Look.assistantIcon(session.ui.robot_mascot);
+    }
     Plasmoid.title: i18n("Happy Bot")
     Plasmoid.status: {
         if (wantsInput) {
@@ -132,9 +139,9 @@ PlasmoidItem {
         if (session.pendingApprovals > 0) {
             return PlasmaCore.Types.NeedsAttentionStatus;
         }
-        return session.busy || popup.visible || root.floatingOpen ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
+        return iconActivity.recording || session.busy || popup.visible || root.floatingOpen ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
     }
-    toolTipSubText: session.statusText
+    toolTipSubText: iconActivity.recording ? i18n("Recording microphone") : session.statusText
     activationTogglesExpanded: false
     preferredRepresentation: barMode ? fullRepresentation : compactRepresentation
 
@@ -159,6 +166,28 @@ PlasmoidItem {
     readonly property var floating: floatingLoader.item
     readonly property bool floatingOpen: floating !== null && floating.expanded
     readonly property var surface: floatingOpen ? floating : popup
+
+    IconActivity { id: iconActivity }
+
+    // A capture can be shorter than the normal status refresh. Both applet
+    // instances wait independently, including while an assistant request runs.
+    Timer {
+        id: activityWait
+        property string revision: ""
+        interval: 0
+        running: true
+        onTriggered: session.request("GET", "/icon/activity?seen=" + revision, null, data => {
+            iconActivity.apply(data);
+            revision = data.revision;
+            interval = 0;
+            restart();
+        }, () => {
+            iconActivity.apply({});
+            revision = "";
+            interval = 5000;
+            restart();
+        })
+    }
 
     AssistantSession {
         id: session
@@ -235,6 +264,7 @@ PlasmoidItem {
         iconName: Plasmoid.icon
         busy: session.busy
         needsAttention: session.pendingApprovals > 0
+        Accessible.description: iconActivity.recording ? i18n("Recording microphone") : ""
         open: popup.visible
         onClicked: {
             session.captureApplication();  // the application the user was in, as from the floating button
@@ -253,7 +283,7 @@ PlasmoidItem {
             posX: session.ui.floating_x
             posY: session.ui.floating_y
             idleOpacity: session.ui.floating_opacity / 100
-            iconSource: Plasmoid.icon
+            activity: iconActivity
             busy: session.busy
             useRobotMascot: session.ui.robot_mascot
             holdOpen: session.capturing

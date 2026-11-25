@@ -39,6 +39,7 @@ package() {
   install -Dm755 "${_root}/launchers/happy-bot-app" "${pkgdir}/usr/bin/happy-bot-app"
   install -Dm644 "${_root}/plasmoid/io.github.dragonswithin.happybot/contents/images/happy-bot.svg" \
     "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.dragonswithin.happybot.svg"
+  python3 "${_root}/scripts/mascot_tray_icons.py" "${pkgdir}/usr/share/icons/hicolor/scalable/apps"
   install -Dm644 "${_root}/desktop/io.github.dragonswithin.happybot.desktop" \
     "${pkgdir}/usr/share/applications/io.github.dragonswithin.happybot.desktop"
   sed 's|^ExecStart=%h/.local/bin/|ExecStart=/usr/bin/|' "${_root}/systemd/user/happy-bot-daemon.service" \

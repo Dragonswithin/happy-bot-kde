@@ -175,6 +175,11 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     return 200, payload
 
 
+def icon_activity(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """Current icon cues, immediately on first connection or as soon as any cue changes."""
+    return 200, server.activity.wait(_first(query, "seen"))
+
+
 def context(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     kind = _first(query, "kind", "combined")
     captured = desktop_context.combined_context(kind)
@@ -653,6 +658,7 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 
 
 ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/icon/activity"): icon_activity,
     ("GET", "/health"): health,
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,

@@ -1,0 +1,6 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <path d="M40 6c-1.5 4.8-7 8.6-7 13a6.5 6.5 0 0 0 13 0c0-4.4-3.9-8.3-6-13Z"
+        fill="#66ceff" stroke="#183840" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M36 19q0 2.8 2.2 3.2" fill="none" stroke="#e2faff" stroke-width="2" stroke-linecap="round"/>
+</svg>
