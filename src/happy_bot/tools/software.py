@@ -8,7 +8,13 @@ model what it needs to choose well and report accurately:
 - ``search_software`` asks the distribution's repositories (``pacman -Ss``),
   the AUR (``yay -Ss --aur``, when yay is installed) and every Flatpak remote
   (``flatpak search``) at once, and labels each hit with its source, so the
-  model never misses the AUR or a project's own Flatpak remote again.
+  model never misses the AUR or a project's own Flatpak remote again. Hits
+  already installed are marked (pacman's and yay's own marks; ``flatpak
+  list`` for Flatpaks) and named first, so the model does not offer to
+  install what the user has. When Shelly (an Arch package manager covering
+  all three sources) is installed, the result ends with its install
+  commands (``SHELLY_INSTALLS``), so the model installs through the user's
+  own package manager; ``shell_risk`` treats them like ``pacman -S``.
 - ``check_updates`` lists what is waiting, without changing anything: the
   distribution's packages (``checkupdates``, which syncs a private copy of
   the package lists), the AUR (``yay -Qua``) and Flatpak apps (``flatpak
@@ -56,20 +62,44 @@ def search_software(arguments: dict[str, Any]) -> str:
     query = str(arguments.get("query") or "").strip()
     if not query or not re.fullmatch(r"[\w .+-]{2,60}", query):
         raise ToolFailure("'query' must be a short name to search for")
-    sections = []
-    repo = re.findall(r"^(\S+)/(\S+) (\S+).*\n\s+(.*)$", _optional(["pacman", "-Ss", query]), re.M)
+    sections, installed = [], []
+    # pacman and yay end an installed package's line with "[installed]" or "(Installed)"; the rest of
+    # the line is captured so that mark is kept, and installed ones are also named up front.
+    repo = re.findall(r"^(\S+)/(\S+) (\S+)(.*)\n\s+(.*)$", _optional(["pacman", "-Ss", query]), re.M)
+    installed += [name for _, name, _, rest, _ in repo if _INSTALLED.search(rest)]
     sections.append("Distribution repositories:\n" + ("\n".join(
-        f"  {name} {version} [{repository}] - {description[:100]}" for repository, name, version, description in repo[:MAX_HITS])
-        or "  none"))
+        f"  {name} {version} [{repository}]{_mark(rest)} - {description[:100]}"
+        for repository, name, version, rest, description in repo[:MAX_HITS]) or "  none"))
     if shutil.which("yay"):
-        aur = re.findall(r"^aur/(\S+) (\S+).*\n\s+(.*)$", _optional(["yay", "-Ss", "--aur", query], timeout=90), re.M)
+        aur = re.findall(r"^aur/(\S+) (\S+)(.*)\n\s+(.*)$", _optional(["yay", "-Ss", "--aur", query], timeout=90), re.M)
+        installed += [name for name, _, rest, _ in aur if _INSTALLED.search(rest)]
         sections.append("AUR (community; prefer names ending in -bin for pre-built):\n" + ("\n".join(
-            f"  {name} {version} - {description[:100]}" for name, version, description in aur[:MAX_HITS]) or "  none"))
+            f"  {name} {version}{_mark(rest)} - {description[:100]}" for name, version, rest, description in aur[:MAX_HITS])
+            or "  none"))
     flatpaks = _optional(["flatpak", "search", "--columns=name,application,remotes", query])
     rows = [line.split("\t") for line in flatpaks.splitlines() if "\t" in line]
+    have = set(_optional(["flatpak", "list", "--app", "--columns=application"]).split()) if rows else set()
+    installed += [row[1] for row in rows if len(row) >= 3 and row[1] in have]
     sections.append("Flatpak (all configured remotes):\n" + ("\n".join(
-        f"  {row[0]} [{row[1]}] from {row[2]}" for row in rows[:MAX_HITS] if len(row) >= 3) or "  none"))
+        f"  {row[0]} [{row[1]}] from {row[2]}{' [installed]' if row[1] in have else ''}"
+        for row in rows[:MAX_HITS] if len(row) >= 3) or "  none"))
+    if shutil.which("shelly"):
+        sections.append(SHELLY_INSTALLS)
+    if installed:
+        sections.insert(0, "Already installed (start it or say so; do not offer to install it again): "
+                        + ", ".join(dict.fromkeys(installed)))
     return "\n".join(sections)
+
+
+SHELLY_INSTALLS = (
+    "Install with Shelly, the user's package manager, through run_in_terminal: shelly install standard NAME "
+    "(distribution repositories), shelly install aur NAME (AUR), shelly install flatpak APP_ID (Flatpak). "
+    "Use and show these, not pacman, yay or flatpak commands.")
+_INSTALLED = re.compile(r"[\[(]installed[^\])]*[\])]", re.I)
+
+
+def _mark(rest: str) -> str:
+    return " [installed]" if _INSTALLED.search(rest) else ""
 
 
 def recent_updates(arguments: dict[str, Any]) -> str:

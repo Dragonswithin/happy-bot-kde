@@ -19,8 +19,9 @@ How it looks at a command:
 - Each program is checked against the lists below; some need a matching
   argument (``git clean``, ``pacman -R``, ``find -delete``). Installing or
   upgrading system software (``pacman -S``, ``yay -S``, ``apt install``,
-  system-wide ``flatpak install``) is an OS-level change and counts too;
-  searching and querying (``pacman -Ss``, ``-Q``) do not.
+  system-wide ``flatpak install``, ``shelly install``) is an OS-level change
+  and counts too; searching and querying (``pacman -Ss``, ``-Q``, ``shelly
+  search``) do not.
 - Commands passed as strings (``sh -c``, ``bash -c``, ``xargs``, ``eval``,
   command substitution) are classified recursively.
 - Inline interpreter code (``python -c``, ``perl -e``, ``node -e``) cannot be
@@ -241,6 +242,8 @@ def _classify_simple(command: str, cwd: str, depth: int) -> str:
     if program == "loginctl":
         verb = arguments[:1]
         return "ends a login session" if verb and verb[0] in ("terminate-session", "terminate-user", "kill-session", "kill-user") else ""
+    if program == "shelly":
+        return _shelly_changes(arguments)
     if program in PACKAGE_REMOVERS:
         for argument in arguments:
             if argument in PACKAGE_REMOVERS[program] or (
@@ -366,6 +369,33 @@ def _installs_software(program: str, arguments: list[str]) -> str:
     return ""
 
 
+# Shelly (an Arch package manager for the repositories, the AUR, Flatpak and AppImages) takes a
+# command word first; a first word that is not a command is a search that then offers to install.
+_SHELLY_LOOKS = {"search", "list", "list-updates", "news", "resolve", "help"}
+_SHELLY_COMMANDS = _SHELLY_LOOKS | {
+    "install", "upgrade", "update", "downgrade", "remove", "purify", "mark", "keyring", "repo-db", "sync", "config",
+    "utility", "backup", "run", "build"}
+
+
+def _shelly_changes(arguments: list[str]) -> str:
+    """A reason when a ``shelly`` call installs, upgrades or removes system software, else ''."""
+    words = [argument for argument in arguments if not argument.startswith("-")]
+    if not words or words[0] in _SHELLY_LOOKS:
+        return ""
+    verb = words[0]
+    if verb in ("remove", "purify"):
+        return f"removes installed software (shelly {verb})"
+    if verb == "install" and words[1:2] == ["flatpak"] and "--user" in arguments:
+        return ""
+    if verb in ("install", "upgrade", "update", "downgrade"):
+        return f"installs or upgrades system software (shelly {verb})"
+    if verb in ("mark", "keyring", "repo-db"):
+        return f"changes how system software is installed (shelly {verb})"
+    if verb not in _SHELLY_COMMANDS:
+        return "searches and then installs system software (shelly)"
+    return ""
+
+
 # Programs that would stop to ask for a password on a terminal. Without one
 # they fail or hang, so such commands must run where the user can answer.
 _PASSWORD_PROGRAMS = {"sudo", "su", "doas", "run0", "passwd", "kdesu", "kdesudo"}
@@ -387,6 +417,8 @@ def needs_password(command: str) -> str:
             return f"{program} asks for your password"
         if program in ("yay", "paru") and _installs_software(program, arguments):
             return f"{program} asks for your password to install"
+        if program == "shelly" and _shelly_changes(arguments):
+            return "shelly asks for your password to change system software"
         if program in ("pacman", "apt", "apt-get", "dnf", "zypper") and (
                 _installs_software(program, arguments) or any(a.startswith("-R") or a in ("remove", "purge") for a in arguments)):
             return f"{program} must run as root"

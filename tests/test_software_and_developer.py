@@ -68,13 +68,40 @@ class SoftwareTests(unittest.TestCase):
             "flatpak": "Firefox\torg.mozilla.firefox\tflathub\n",
         }
         with mock.patch.object(software.shutil, "which", return_value="/usr/bin/x"), \
-                mock.patch.object(software, "run_command", side_effect=lambda command, timeout=60: result(outputs[command[0]])):
+                mock.patch.object(software, "run_command", side_effect=lambda command, timeout=60: result(
+                    "" if command[:2] == ["flatpak", "list"] else outputs[command[0]])):
             text = software.search_software({"query": "firefox"})
+        self.assertNotIn("installed", text)
         self.assertIn("firefox 140.0-1 [extra] - Fast browser", text)
         self.assertIn("firefox-bin 141.0-1 - Binary build", text)
         self.assertIn("Firefox [org.mozilla.firefox] from flathub", text)
         with self.assertRaisesRegex(ToolFailure, "'query'"):
             software.search_software({"query": "x; rm -rf ~"})
+
+    def test_search_marks_what_is_already_installed(self) -> None:
+        def run(command, timeout=60):
+            return result({
+                "pacman": "cachyos-extra-znver4/prismlauncher 11.1.1-1.1 [installed]\n    Minecraft launcher\n"
+                          "extra/modrinth-app 0.23.5-1\n    Another launcher\n",
+                "yay": "aur/shard 0.1.28-1 (+3 0.10) (Installed)\n    A launcher (CLI)\n",
+                "flatpak": ("org.prismlauncher.PrismLauncher\n" if command[1] == "list"
+                            else "Prism Launcher\torg.prismlauncher.PrismLauncher\tflathub\n"),
+            }[command[0]])
+        with mock.patch.object(software.shutil, "which", return_value="/usr/bin/x"), \
+                mock.patch.object(software, "run_command", side_effect=run):
+            text = software.search_software({"query": "minecraft"})
+        self.assertTrue(text.startswith("Already installed (start it or say so; do not offer to install it again): "
+                                        "prismlauncher, shard, org.prismlauncher.PrismLauncher\n"), text)
+        self.assertIn("prismlauncher 11.1.1-1.1 [cachyos-extra-znver4] [installed] - Minecraft launcher", text)
+        self.assertIn("modrinth-app 0.23.5-1 [extra] - Another launcher", text)
+        self.assertIn("shard 0.1.28-1 [installed] - A launcher (CLI)", text)
+        self.assertIn("Prism Launcher [org.prismlauncher.PrismLauncher] from flathub [installed]", text)
+        self.assertTrue(text.endswith(software.SHELLY_INSTALLS))  # "which" finds every program here, Shelly too
+
+    def test_without_shelly_no_shelly_commands_are_suggested(self) -> None:
+        with mock.patch.object(software.shutil, "which", side_effect=lambda name: None if name == "shelly" else "/usr/bin/x"), \
+                mock.patch.object(software, "run_command", side_effect=lambda command, timeout=60: result("")):
+            self.assertNotIn("shelly", software.search_software({"query": "minecraft"}).lower())
 
     def test_update_history_and_kernel_reboot_note(self) -> None:
         with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as log:
