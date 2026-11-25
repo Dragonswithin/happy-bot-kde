@@ -26,9 +26,14 @@ Endpoints:
   (``panel_widget``), for the app's Appearance page.
 - ``GET /context/app``: the application the user is working in (name, class,
   window title, icon name, KWin window id; all empty when the user's
-  ``agent.app_context`` is "off"), noted by the popup when it is opened from the floating
-  button or the hotkey and sent with its requests as background
-  (``desktop_context.current_application``).
+  ``agent.app_context`` is "off"), noted by the popup when it is opened from
+  the floating button or the hotkey and sent with its requests as background
+  (``desktop_context.current_application``); ``screenshots`` says whether an
+  AI that sees pictures may see it. Nothing is captured here.
+- ``POST /context/screenshot`` ``{"window": id}``: only after the user chose
+  "Help with …": a screenshot of that window for the chat's next request
+  (``app_context.remember_screenshot``), when an AI that sees pictures may
+  see it; ``taken`` says whether one was.
 - ``GET /search?q=...``: instant file search through the ``file_search`` role.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
   The read also carries what the settings page needs to offer choices:
@@ -107,7 +112,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import (app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
+from . import (app_context, app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
@@ -230,7 +235,16 @@ def current_application(server: "AssistantServer", query: dict[str, list[str]], 
     """The window the user is in; empty when their app_context setting is "off", so nothing is noted."""
     if (server.settings.get("agent") or {}).get("app_context") == "off":
         return 200, {"ok": True, "app": "", "class": "", "title": "", "icon": "", "window": ""}
-    return 200, {"ok": True, **desktop_context.current_application()}
+    found = desktop_context.current_application()
+    return 200, {"ok": True, **found, "screenshots": app_context.screenshots_wanted(server.settings) and bool(found["window"])}
+
+
+def capture_screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """``{"window": id}``: after "Help with …", a screenshot of that window for the chat's next request."""
+    if (server.settings.get("agent") or {}).get("app_context") == "off":
+        return 200, {"ok": True, "taken": False}
+    taken = app_context.remember_screenshot(server.settings, str(body.get("window") or ""), server.runtime_dir)
+    return 200, {"ok": True, "taken": taken}
 
 
 def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -573,6 +587,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/health"): health,
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,
+    ("POST", "/context/screenshot"): capture_screenshot,
     ("POST", "/ui"): change_ui,
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,

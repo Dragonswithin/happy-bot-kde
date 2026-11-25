@@ -53,12 +53,16 @@ import "barInput.js" as BarInput
  *
  * The floating Happy Bot and the hotkey (the widget's global shortcut)
  * both call `openForApplication`, which notes the application the user is
- * in (`session.captureApplication`) so questions are about it. In the app,
+ * in (`session.captureApplication`) so questions are about it; the panel's
+ * icon, bar and logo note it as well. In the app,
  * Happy Bot opens right at the floating button, in the same view as the
  * popup; in a panel, in the bar or popup.
  * While the floating one is open it is the `surface` the keyboard handlers
  * work on (selection, Enter, putting text in the field). Opening from the
- * panel clears the application note. The button's position is saved in
+ * panel notes the application too: with the panel focused, the window the
+ * user was in is the topmost one on the desktop (kwin_bridge's
+ * CURRENT_WINDOW_JS), so "Help with …" works there as from the floating
+ * button. The button's position is saved in
  * `floatingX`/`floatingY` when it is dragged.
  *
  * The floating button's right-click opens its own menu (settings, new
@@ -140,6 +144,12 @@ PlasmoidItem {
                 root.floating.selectedIndex = -1;
             }
         }
+        // A "Help with …" screenshot briefly made the application active; take the keyboard back.
+        onCapturingChanged: {
+            if (!capturing) {
+                root.surface.refocus();
+            }
+        }
     }
 
     Timer {
@@ -151,6 +161,7 @@ PlasmoidItem {
     ResultsPopup {
         id: popup
         useRobotMascot: session.ui.robot_mascot
+        holdOpen: session.capturing
         session: session
         widthInGridUnits: session.ui.popup_width
         heightInGridUnits: session.ui.popup_height
@@ -183,7 +194,7 @@ PlasmoidItem {
         needsAttention: session.pendingApprovals > 0
         open: popup.visible
         onClicked: {
-            session.forgetApplication();  // opened from the panel, not from an application
+            session.captureApplication();  // the application the user was in, as from the floating button
             root.togglePopup();
         }
         onMenuRequested: contextMenu.openRelative()
@@ -202,6 +213,7 @@ PlasmoidItem {
             iconSource: Plasmoid.icon
             busy: session.busy
             useRobotMascot: session.ui.robot_mascot
+            holdOpen: session.capturing
             widthInGridUnits: session.ui.popup_width
             heightInGridUnits: session.ui.popup_height
             onClicked: root.openForApplication()
@@ -238,7 +250,7 @@ PlasmoidItem {
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: {
-            session.forgetApplication();
+            session.captureApplication();
             if (session.pendingApprovals > 0) {
                 root.openPopup();
             } else {
@@ -259,7 +271,7 @@ PlasmoidItem {
         onDismissed: root.closePopup()
         onMenuRequested: contextMenu.openRelative()
         onIconClicked: {
-            session.forgetApplication();
+            session.captureApplication();
             root.togglePopup();
         }
         onInputFocusedChanged: {

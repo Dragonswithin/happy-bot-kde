@@ -9,7 +9,8 @@ and echo tagging; only the wire format differs:
   "name", "description", "parameters", "strict": false}``: non-strict, because the assistant's tool
   schemas have optional fields), ``stream``, and ``store: false`` so OpenAI keeps no copy; the whole
   history is sent each time. Leading system messages become ``instructions``.
-- History: user and system messages are ``{"role", "content"}`` items; a tool result is a
+- History: user and system messages are ``{"role", "content"}`` items (a user message with
+  pictures has list content: ``input_text``, then one ``input_image`` per picture); a tool result is a
   ``function_call_output`` item. An assistant message from this same address is replayed from its
   ``echo``: every output item of that response, unchanged and in order (reasoning items with their
   ``encrypted_content``, messages, function calls), because OpenAI requires reasoning items to come
@@ -36,7 +37,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from ..conversation import Message, ProviderEvent, TextDelta, ThinkingDelta, ToolCallReady, ToolSpec, TurnEnd
-from .base import ProviderError
+from .base import ProviderError, image_data_url
 from .openai_compatible import DEFAULT_TIMEOUT_SECONDS, _echo_for, _explain_http_error, _finish_tool_call, _headers, _make_echo
 
 
@@ -48,7 +49,10 @@ def _input_items(messages: Sequence[Message], base_url: str) -> tuple[str, list[
         if message.role == "system" and not items:
             instructions.append(message.text)
         elif message.role in ("system", "user"):
-            items.append({"role": message.role, "content": message.text})
+            pictures = [url for url in map(image_data_url, message.images) if url] if message.role == "user" else []
+            items.append({"role": message.role, "content": [
+                {"type": "input_text", "text": message.text},
+                *({"type": "input_image", "image_url": url} for url in pictures)] if pictures else message.text})
         elif message.role == "tool":
             items.append({"type": "function_call_output", "call_id": message.tool_call_id, "output": message.text})
         elif message.role == "assistant":

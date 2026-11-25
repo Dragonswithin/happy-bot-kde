@@ -74,6 +74,8 @@ def message_to_json(message: Message) -> dict[str, Any]:
         data["context"] = message.context
     if message.private:
         data["private"] = True
+    if message.images:
+        data["images"] = list(message.images)
     for call, saved in zip(message.tool_calls, data.get("tool_calls") or []):
         if call.echo:
             saved["echo"] = call.echo
@@ -87,7 +89,8 @@ def message_from_json(data: dict[str, Any]) -> Message:
         for call in data.get("tool_calls") or []
     )
     return Message(str(data["role"]), str(data.get("text") or ""), calls, str(data.get("tool_call_id") or ""),
-                   str(data.get("echo") or ""), str(data.get("context") or ""), data.get("private") is True)
+                   str(data.get("echo") or ""), str(data.get("context") or ""), data.get("private") is True,
+                   tuple(str(path) for path in data.get("images") or [] if isinstance(path, str)))
 
 
 class ConversationArchive:

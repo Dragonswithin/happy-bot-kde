@@ -107,5 +107,30 @@ class ResponsesProviderTests(unittest.TestCase):
                             [Message("user", "hi")])
 
 
+
+class PictureTests(unittest.TestCase):
+    """A user message's pictures (Message.images) go out in each format's image parts."""
+
+    def test_pictures_become_image_parts_in_both_formats(self) -> None:
+        import base64
+        import tempfile
+        from happy_bot.providers.openai_compatible import _message_to_wire
+
+        with tempfile.TemporaryDirectory() as tmp:
+            picture = Path(tmp, "shot.png")
+            picture.write_bytes(b"\x89PNG\r\n\x1a\nrest")
+            not_png = Path(tmp, "x.png")
+            not_png.write_bytes(b"GIF89a")
+            message = Message("user", "what is this?", images=(str(picture), str(not_png), "/missing.png"))
+            url = "data:image/png;base64," + base64.b64encode(picture.read_bytes()).decode()
+            self.assertEqual(_message_to_wire(message)["content"],
+                             [{"type": "text", "text": "what is this?"}, {"type": "image_url", "image_url": {"url": url}}])
+            _, items = openai_responses._input_items([message], "")
+            self.assertEqual(items[0]["content"], [{"type": "input_text", "text": "what is this?"},
+                                                   {"type": "input_image", "image_url": url}])
+        # With no picture left to send, the content stays plain text.
+        self.assertEqual(_message_to_wire(Message("user", "hi", images=("/missing.png",)))["content"], "hi")
+
+
 if __name__ == "__main__":
     unittest.main()

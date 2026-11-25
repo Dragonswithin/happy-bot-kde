@@ -46,9 +46,18 @@ PlasmaCore.Dialog {
 
     type: PlasmaCore.Dialog.AppletPopup
     flags: Qt.Dialog
-    hideOnWindowDeactivate: true
+    // Not while `holdOpen`: the application is briefly made active for a "Help with …" screenshot.
+    property bool holdOpen: false
+    hideOnWindowDeactivate: !holdOpen
     backgroundHints: PlasmaCore.Dialog.NoBackground
 
+    /** Takes the keyboard back after another window was briefly made active. */
+    function refocus() {
+        if (visible) {
+            requestActivate();
+            resultsView.focusInput();
+        }
+    }
 
     onVisibleChanged: {
         if (visible) {

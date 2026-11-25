@@ -22,15 +22,26 @@ the history: the note joined to the message or left out, private results kept or
 ``WITHHELD``, and for an online AI every tool result and note passed through
 ``redaction.redact`` again, so a secret a local AI read is hidden before an online one sees it.
 The history itself is never changed, so a later local model still sees everything.
+
+Screenshots: never when Happy Bot opens, only when the user chooses "Help with …", and only when
+some AI in their model order both sees pictures (its ``vision`` setting) and may see the app
+(``screenshots_wanted``, also reported by ``GET /context/app`` so the popup knows whether to ask).
+Then ``remember_screenshot`` (``POST /context/screenshot``) captures that window
+(``app_snapshot.capture_window``) and keeps it for that window. The chat's next request takes it
+(``take_screenshot``) and stores it on the user's message (``Message.images``); ``for_model`` keeps
+the picture only for a model that sees pictures and may see the app. A screenshot is used once, so
+a later question in the same chat does not resend an old picture.
 """
 
 from __future__ import annotations
 
+import threading
+from pathlib import Path
 from typing import Any
 
 from . import app_snapshot
 from .conversation import Message
-from .redaction import redact
+from .redaction import is_local_address, redact
 from .settings import APP_CONTEXT_DEFAULT as DEFAULT_POLICY, APP_CONTEXT_POLICIES as POLICIES  # noqa: F401
 
 MAX_TITLE_CHARS = 200
@@ -46,6 +57,40 @@ def shows_context(policy: str, local_model: bool) -> bool:
 def shows_private_results(policy: str, local_model: bool) -> bool:
     """Whether a model is given what tools read inside the user's applications."""
     return local_model or policy == "any"
+
+
+_screenshots: dict[str, str] = {}  # KWin window id -> the PNG taken when Happy Bot opened from it
+_screenshots_lock = threading.Lock()
+
+
+def screenshots_wanted(settings: dict[str, Any]) -> bool:
+    """Whether some AI in the model order sees pictures and may see the app (so a screenshot is worth taking)."""
+    agent = settings.get("agent") or {}
+    policy = agent.get("app_context", DEFAULT_POLICY)
+    for name in settings.get("model_order") or []:
+        model = (settings.get("models") or {}).get(name) or {}
+        local = is_local_address(str(model.get("base_url") or ""))
+        if model.get("vision") and shows_context(policy, local) and (local or not agent.get("local_only")):
+            return True
+    return False
+
+
+def remember_screenshot(settings: dict[str, Any], window_id: str, runtime_dir: Path) -> bool:
+    """Capture the window the user asked help with, when a screenshot could be used; whether one was taken."""
+    if not window_id or not screenshots_wanted(settings):
+        return False
+    path = app_snapshot.capture_window(window_id, runtime_dir / "screenshots")
+    if path:
+        with _screenshots_lock:
+            _screenshots[window_id] = path
+    return bool(path)
+
+
+def take_screenshot(about: Any) -> str:
+    """The screenshot kept for the window ``about`` names, once; "" when there is none."""
+    window_id = str(about.get("window") or "") if isinstance(about, dict) else ""
+    with _screenshots_lock:
+        return _screenshots.pop(window_id, "") if window_id else ""
 
 
 def background_note(about: Any, full: bool = False) -> str:
@@ -94,9 +139,10 @@ def _window(window_id: str) -> dict[str, Any] | None:
         return None
 
 
-def for_model(history: list[Message], policy: str, local_model: bool) -> list[Message]:
+def for_model(history: list[Message], policy: str, local_model: bool, vision: bool = False) -> list[Message]:
     """The history as one model may see it (see the module docstring); ``history`` is not changed."""
     context, private = shows_context(policy, local_model), shows_private_results(policy, local_model)
+    pictures = vision and context
     prepared = []
     for message in history:
         text = message.text
@@ -106,8 +152,10 @@ def for_model(history: list[Message], policy: str, local_model: bool) -> list[Me
             text = WITHHELD
         if not local_model and (message.role == "tool" or (message.context and context)):
             text = redact(text)
-        if text == message.text and not message.context and not message.private:
+        images = message.images if pictures else ()
+        if text == message.text and not message.context and not message.private and images == message.images:
             prepared.append(message)
         else:
-            prepared.append(Message(message.role, text, message.tool_calls, message.tool_call_id, message.echo))
+            prepared.append(Message(message.role, text, message.tool_calls, message.tool_call_id, message.echo,
+                                    images=images))
     return prepared

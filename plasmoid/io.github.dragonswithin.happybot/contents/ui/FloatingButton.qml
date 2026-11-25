@@ -119,6 +119,14 @@ Window {
         });
     }
 
+    /** Takes the keyboard back after another window was briefly made active (a screenshot for "Help with …"). */
+    function refocus() {
+        if (floating.expanded) {
+            floating.requestActivate();
+            view.focusInput();
+        }
+    }
+
     function close() {
         if (floating.expanded) {
             floating.expanded = false;
@@ -154,8 +162,10 @@ Window {
     onHeightChanged: layout()
     onPlacedXChanged: layout()
     onPlacedYChanged: layout()
-    // A click anywhere else takes focus away: close, as the panel popup does.
-    onActiveChanged: if (!active && expanded) close()
+    // A click anywhere else takes focus away: close, as the panel popup does; not while `holdOpen`
+    // (the application is briefly made active for a "Help with …" screenshot).
+    property bool holdOpen: false
+    onActiveChanged: if (!active && expanded && !holdOpen) close()
 
     // --- open: Happy Bot itself ------------------------------------------------
     Item {

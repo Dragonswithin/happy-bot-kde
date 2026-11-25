@@ -30,16 +30,19 @@ import QtQuick
  * answer it holds the defaults.
  * `helpWith` is the application the user was in (`{app, class, title, window}`,
  * from `/context/app`, empty when the user's privacy setting turned it off)
- * when the popup was opened from the floating button or the hotkey
- * (`captureApplication`), or null. While set, it is sent with every request
+ * when Happy Bot was opened (`captureApplication`), or null. While set, it is sent with every request
  * as `about_window`, so the user never has to say which application they
  * mean; the welcome screen's help shortcut names it (AssistantWelcome.qml),
  * and it does not limit what they can ask about. `helpChat` is set when the
  * chat was started from that shortcut: its requests also carry
  * `full_context`, so the daemon adds the selected text, the window's controls
  * and its open file (src/happy_bot/app_context.py, which also decides which
- * AI may see any of it). A new or reopened chat clears `helpChat`; opening
- * from the panel clears `helpWith` (`forgetApplication`).
+ * AI may see any of it). Choosing that shortcut also calls `captureForHelp`,
+ * which asks for a screenshot of the application (`POST /context/screenshot`)
+ * when the daemon said an AI that sees pictures may see it
+ * (`screenshotsWanted`); nothing is captured when Happy Bot opens. A new or
+ * reopened chat clears `helpChat`. Every way of opening Happy Bot notes the
+ * application (`captureApplication`), the panel included.
  *
  * Conversation: `ask` posts to `/ask`, which answers with a server-sent
  * event stream. XMLHttpRequest reports the growing response at readyState
@@ -115,6 +118,8 @@ Item {
     property var helpWith: null
     property string helpWithIcon: ""  // the application's icon name, for the welcome screen only
     property bool helpChat: false  // this chat began with "Help with …": requests carry the full context
+    property bool screenshotsWanted: false  // from /context/app: an AI that sees pictures may see this app
+    property bool capturing: false  // a "Help with …" screenshot is being taken (the app is briefly in front)
     property var ui: ({
         robot_mascot: false, popup_width: 30, popup_height: 26, floating_opacity: 40, floating_x: -1, floating_y: -1,
         imported: []
@@ -347,15 +352,23 @@ Item {
             session.helpWith = data.app || data.title
                 ? { app: data.app, "class": data["class"], title: data.title, window: data.window || "" } : null;
             session.helpWithIcon = session.helpWith ? data.icon || "" : "";
+            session.screenshotsWanted = session.helpWith !== null && data.screenshots === true;
         }, function(data) {
             session.helpWith = null;
             session.helpWithIcon = "";
         });
     }
 
-    function forgetApplication() {
-        session.helpWith = null;
-        session.helpWithIcon = "";
+    /** After "Help with …": a screenshot of the application for the chat's next request, when one could be
+     *  used. Never when Happy Bot opens. `capturing` is true meanwhile, so the popup stays open while the
+     *  application is briefly made active, and takes the keyboard back when it turns false. */
+    function captureForHelp() {
+        if (!session.helpWith || !session.screenshotsWanted || !session.helpWith.window || session.capturing) {
+            return;
+        }
+        session.capturing = true;
+        request("POST", "/context/screenshot", { window: session.helpWith.window },
+                function(data) { session.capturing = false; }, function(data) { session.capturing = false; });
     }
 
     function newChat() {

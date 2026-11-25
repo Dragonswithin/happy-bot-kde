@@ -17,7 +17,9 @@ also carry ``about_window`` (``{"app", "class", "title", "window"}``, from
 the hotkey, and ``full_context: true`` in a chat started from the welcome
 screen's "Help with …" button. ``app_context.background_note`` turns it into
 a note about that application (with ``full_context``, also its selection,
-controls and open file), stored on the user's message (``Message.context``);
+controls and open file, and the screenshot ``GET /context/app`` took when an
+AI that sees pictures may see the app), stored on the user's message
+(``Message.context``, ``Message.images``);
 the application is read only when the user's ``agent.app_context`` lets some
 AI in the chain see it. Each model then gets the history through
 ``app_context.for_model``, which shows the note and what tools read inside
@@ -167,7 +169,8 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         # Read the application only when some AI in the chain may be told about it.
         note = app_context.background_note(body.get("about_window"), full=body.get("full_context") is True) \
             if any(app_context.shows_context(policy, is_local_address(model["base_url"])) for _, model, _ in chain) else ""
-        conversation.history.append(Message("user", message, context=note))
+        shot = app_context.take_screenshot(body.get("about_window")) if note and body.get("full_context") is True else ""
+        conversation.history.append(Message("user", message, context=note, images=(shot,) if shot else ()))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")
 
@@ -299,7 +302,7 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
     policy = agent.get("app_context", app_context.DEFAULT_POLICY)
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
              max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate, redact=not local,
-             prepare=lambda history: app_context.for_model(history, policy, local))
+             prepare=lambda history: app_context.for_model(history, policy, local, bool(model.get("vision"))))
     return held[0] if held else None
 
 

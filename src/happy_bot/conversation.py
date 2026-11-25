@@ -20,6 +20,13 @@ that is not part of what they typed, and ``private`` on a tool message marks
 what a tool read inside one of their applications. Both are kept with the
 history but reach a model only through ``app_context.for_model``, which
 decides per model what it may see; providers never read them.
+
+``images`` on a user message are absolute paths of PNG pictures sent with
+it (a screenshot of the user's application). A provider sends each one that
+still exists as an image part (``providers.base.image_data_url``); the files
+live in the runtime directory, so an old conversation reopened after logout
+simply has none. ``app_context.for_model`` keeps them only for a model the
+user marked as seeing pictures (``vision``) and allowed to see the app.
 """
 
 from __future__ import annotations
@@ -53,6 +60,7 @@ class Message:
     echo: str = ""
     context: str = ""
     private: bool = False
+    images: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

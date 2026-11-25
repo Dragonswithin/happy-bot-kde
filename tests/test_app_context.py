@@ -66,6 +66,35 @@ class ForModelTests(unittest.TestCase):
         self.assertIs(prepared[0], original[0])
 
 
+class ScreenshotTests(unittest.TestCase):
+    def settings(self, policy: str, vision_local: bool, vision_online: bool) -> dict:
+        return {"agent": {"app_context": policy, "local_only": False}, "model_order": ["npu", "claude"],
+                "models": {"npu": {"base_url": "http://127.0.0.1:52625/v1", "vision": vision_local},
+                           "claude": {"base_url": "https://api.anthropic.com/v1", "vision": vision_online}}}
+
+    def test_a_screenshot_is_wanted_only_for_a_picture_ai_allowed_to_see_the_app(self) -> None:
+        self.assertFalse(app_context.screenshots_wanted(self.settings("local", False, True)))
+        self.assertTrue(app_context.screenshots_wanted(self.settings("local", True, False)))
+        self.assertTrue(app_context.screenshots_wanted(self.settings("any", False, True)))
+        self.assertFalse(app_context.screenshots_wanted(self.settings("off", True, True)))
+
+    def test_it_is_taken_on_request_and_used_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(app_snapshot, "capture_window", return_value=f"{tmp}/a.png") as capture:
+            self.assertFalse(app_context.remember_screenshot(self.settings("local", False, False), "{w1}", Path(tmp)))
+            capture.assert_not_called()
+            self.assertTrue(app_context.remember_screenshot(self.settings("any", False, True), "{w1}", Path(tmp)))
+        self.assertEqual(app_context.take_screenshot({"window": "{w1}"}), f"{tmp}/a.png")
+        self.assertEqual(app_context.take_screenshot({"window": "{w1}"}), "")
+
+    def test_pictures_reach_only_picture_ais_allowed_to_see_the_app(self) -> None:
+        message = [Message("user", "what is this?", context=NOTE, images=("/tmp/a.png",))]
+        self.assertEqual(app_context.for_model(message, "local", True, vision=True)[0].images, ("/tmp/a.png",))
+        self.assertEqual(app_context.for_model(message, "local", True, vision=False)[0].images, ())
+        self.assertEqual(app_context.for_model(message, "local", False, vision=True)[0].images, ())
+        self.assertEqual(app_context.for_model(message, "any", False, vision=True)[0].images, ("/tmp/a.png",))
+
+
 class BackgroundNoteTests(unittest.TestCase):
     def test_light_and_full_notes(self) -> None:
         window = {"id": "{w1}", "pid": 42, "app": "org.kde.kate", "title": "notes.txt — Kate"}

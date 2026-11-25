@@ -590,6 +590,7 @@ Rectangle {
                         }
                         onHelpChosen: prompt => {
                             view.session.helpChat = true;
+                            view.session.captureForHelp();
                             welcome.promptChosen(prompt);
                         }
                         onPromptChosen: prompt => {

@@ -34,11 +34,13 @@ architecture and phase order are in `docs/ROADMAP.md`.
   involved; Down and Enter, or a click, opens one. Otherwise Happy Bot
   searches files or the web when your request needs it.
 - The welcome screen's help shortcut names the application you were in
-  ("Help with Kate") when you open Happy Bot from the floating button or
-  the hotkey. The AI is told that application, its window title and its
-  version, and Plasma's; a chat started with "Help with …" also gets the
-  text you selected, the window's buttons and text, and the file it has
-  open. Who may see this is yours to choose on the Behaviour page: AIs on
+  ("Help with Kate") however you open Happy Bot: the floating button, the
+  hotkey or the panel. The AI is told that application, its window title
+  and its version, and Plasma's; a chat started with "Help with …" also
+  gets the text you selected, the window's buttons and text, the file it
+  has open and, for an AI marked as seeing pictures, a screenshot of the
+  window. The screenshot is taken only when you click "Help with …" (your
+  app comes to the front for a moment), never when Happy Bot opens. Who may see this is yours to choose on the Behaviour page: AIs on
   this computer only (the default), any AI, or none. "Close chat" goes back
   to the welcome screen; the chat stays in your saved ones.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones

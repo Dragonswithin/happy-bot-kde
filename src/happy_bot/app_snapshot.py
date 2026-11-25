@@ -16,6 +16,15 @@ the model; this module only reads the facts, on the daemon's request thread:
   ``recently-used.xbel``, whose name appears in the window title; the longest such name, then
   the newest).
 
+- ``capture_window``: a PNG screenshot of the window, taken with Spectacle (``-b -n -a``, the
+  active window only), only when the user chose "Help with …" (never when Happy Bot opens).
+  Plasma lets helper programs capture only the active window, and by then Happy Bot has focus, so
+  the window is made active first (``_activate``, through KWin) and is captured only once KWin
+  reports that very window as active, so the picture can never show Happy Bot or another
+  application; the popup takes focus back afterwards. Pictures go to ``screenshots/`` in the daemon's
+  runtime directory (a memory-backed folder cleared at logout); ones older than
+  ``SCREENSHOT_KEEP_SECONDS`` are removed whenever another is taken.
+
 Every reader is best effort: a fact that cannot be read (no package manager, no accessibility,
 the window has closed, nothing selected) is left out, never an error. Lengths are capped
 (``MAX_SELECTION_CHARS``, ``MAX_CONTROLS_CHARS``) so a large window or selection cannot fill the
@@ -25,9 +34,12 @@ model's context. Nothing here decides who sees the facts; that is ``app_context`
 from __future__ import annotations
 
 import functools
+import json
 import os
 import re
 import shutil
+import time
+import uuid
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 from typing import Any
@@ -35,6 +47,7 @@ from urllib.parse import unquote, urlparse
 
 from .desktop_context import run_command
 
+SCREENSHOT_KEEP_SECONDS = 24 * 3600
 MAX_SELECTION_CHARS = 4000
 MAX_CONTROLS_CHARS = 6000
 _BOOKMARK_NS = "{http://www.freedesktop.org/standards/desktop-bookmarks}"
@@ -139,3 +152,58 @@ def full_facts(window: dict[str, Any]) -> dict[str, str]:
             pass
     facts["document"] = open_document(str(window.get("app") or ""), str(window.get("title") or ""))
     return facts
+
+
+def _active_window_id() -> str:
+    from . import kwin_bridge
+
+    try:
+        found = kwin_bridge.shared().run("return { id: workspace.activeWindow ? String(workspace.activeWindow.internalId) : '' };")
+    except (kwin_bridge.KWinUnavailable, kwin_bridge.KWinScriptError):
+        return ""
+    return str((found or {}).get("id") or "")
+
+
+def _activate(window_id: str) -> None:
+    from . import kwin_bridge
+
+    script = ("var list = workspace.windowList();\n"
+              "for (var i = 0; i < list.length; i++) {\n"
+              "  if (String(list[i].internalId) == %s) { workspace.activeWindow = list[i]; return { found: true }; }\n"
+              "}\n"
+              "return { found: false };") % json.dumps(window_id)
+    try:
+        kwin_bridge.shared().run(script)
+    except (kwin_bridge.KWinUnavailable, kwin_bridge.KWinScriptError):
+        pass
+
+
+def capture_window(window_id: str, directory: Path) -> str:
+    """A screenshot of the window ``window_id``, made active first, as a PNG path, or "" (see above)."""
+    if not window_id or not shutil.which("spectacle"):
+        return ""
+    _activate(window_id)
+    for _attempt in range(10):
+        if _active_window_id() == window_id:
+            break
+        time.sleep(0.1)
+    else:
+        return ""
+    time.sleep(0.15)  # let the window draw itself as active before it is captured
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    cutoff = time.time() - SCREENSHOT_KEEP_SECONDS
+    for old in directory.glob("*.png"):
+        try:
+            if old.stat().st_mtime < cutoff:
+                old.unlink()
+        except OSError:
+            pass
+    target = directory / f"{uuid.uuid4().hex}.png"
+    run_command(["spectacle", "-b", "-n", "-a", "-o", str(target)], timeout=10)
+    try:
+        if target.stat().st_size > 0:
+            target.chmod(0o600)
+            return str(target)
+    except OSError:
+        pass
+    return ""

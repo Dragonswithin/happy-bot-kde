@@ -1083,6 +1083,16 @@ Findings:
   read; Dolphin's could (101 controls, a note of about 5,000 characters).
   Screenshots for picture-capable models wait on image support in the
   providers: the `vision` model setting is stored but nothing sends images.
+- Screenshots followed: both providers send pictures (`Message.images`,
+  `providers.base.image_data_url`), and the maintainer marked the online
+  AIs as seeing pictures. The capture first ran when Happy Bot opened; the
+  maintainer refused that ("users would get very upset if it took pictures
+  at launch"), so it happens only after "Help with …" is clicked
+  (`POST /context/screenshot`): KWin makes the application active, Spectacle
+  captures that window once KWin reports it active, and the popup or
+  floating view stays open (`holdOpen`) and takes focus back. The panel
+  widget also noted no application ("Desktop help" always); it now notes
+  the topmost window as the floating button does.
 
 ## Decisions
 

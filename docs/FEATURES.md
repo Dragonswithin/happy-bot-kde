@@ -63,8 +63,8 @@ text-only models and stays as an option afterwards.
   popping up over replies); "Find a file" on the welcome screen opens a file
   finder with matches as they type.
 - ✓ The welcome screen's help shortcut names the application in use ("Help
-  with Kate", with its icon) when opened from the floating button or the
-  hotkey; "Close chat" returns to the welcome screen, keeping the chat.
+  with Kate", with its icon) however Happy Bot is opened (floating button,
+  hotkey or panel); "Close chat" returns to the welcome screen, keeping the chat.
 - ✓ What the AI is told about that application: its name, window title and
   version (from its package), and Plasma's and the system's; in a chat
   started with "Help with …", also the selected text, the window's controls
@@ -73,8 +73,11 @@ text-only models and stays as an option afterwards.
   default, any AI, or off) decides which AI sees it, and what tools read
   inside applications, even across a hand-over from a local AI to an online
   one; secrets a local AI read are hidden again for an online one.
-  (screenshots for AIs that see pictures are not sent yet: no provider
-  sends images)
+  A screenshot of the window goes to an AI marked as seeing pictures
+  (`vision`), taken only when "Help with …" is clicked: the application is
+  made active for a moment (Plasma lets helpers capture only the active
+  window), captured with Spectacle, and Happy Bot takes focus back; it is
+  used once. Both provider formats send pictures (`Message.images`).
 - ● Happy Bot as an app of its own: "Happy Bot" in the application menu runs
   the widget outside the panel (`happy-bot-app`, Plasma's plasmawindowed),
   where it is only the floating Happy Bot; launching it again opens or

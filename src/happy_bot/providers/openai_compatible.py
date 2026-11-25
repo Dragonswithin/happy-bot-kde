@@ -27,6 +27,10 @@ tool call's ``extra_content`` (Gemini's thought signatures). Those are kept as
 back only to the same address, so a conversation that moves to another model
 never carries one service's fields to another.
 
+A user message with pictures (``Message.images``) is sent with list
+``content``: its text part, then one ``image_url`` part per picture as a
+``data:`` URL.
+
 Blocking: ``stream`` blocks on network reads, up to ``timeout`` seconds
 between chunks. It checks ``cancel`` after every received line and closes the
 connection when cancelled or when the generator is closed. Uses only
@@ -52,7 +56,7 @@ from ..conversation import (
     ToolSpec,
     TurnEnd,
 )
-from .base import ProviderError
+from .base import ProviderError, image_data_url
 
 DEFAULT_TIMEOUT_SECONDS = 300.0
 PROBE_TIMEOUT_SECONDS = 6.0
@@ -105,6 +109,10 @@ def _message_to_wire(message: Message, base_url: str = "") -> dict[str, Any]:
     if message.role == "tool":
         return {"role": "tool", "tool_call_id": message.tool_call_id, "content": message.text}
     wire: dict[str, Any] = {"role": message.role, "content": message.text}
+    pictures = [url for url in map(image_data_url, message.images) if url] if message.role == "user" else []
+    if pictures:
+        wire["content"] = [{"type": "text", "text": message.text},
+                           *({"type": "image_url", "image_url": {"url": url}} for url in pictures)]
     if message.tool_calls:
         wire["content"] = message.text or None
         wire["tool_calls"] = [
