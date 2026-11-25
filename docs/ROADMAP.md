@@ -1101,6 +1101,16 @@ Findings:
   losing the rest. `openai_compatible._tool_call_slot` keeps calls apart by
   id when there is no index (and when an index is reused with a new id);
   checked against Gemini afterwards: two calls, both valid.
+- So that other services' differences are caught before users meet them,
+  `model_check.py` checks each configured AI through the real provider
+  code: a streamed answer, one tool call with nested arguments, two calls
+  at once, its own tool call and result sent back (echo), a conversation
+  another AI started (hand-over), and a picture for `vision` models
+  (`POST /models/check`, `happy-bot model check [NAME|--all]`, the AI Model
+  page's Test). With the provider fix reverted it fails Gemini's parallel
+  calls; with it, all five configured AIs (NPU, GPU, Claude, Gemini, GPT)
+  passed every check on 2026-11-24, the online three naming the test
+  picture's colour.
 
 ## Decisions
 

@@ -23,7 +23,9 @@ calls it when the app is already running), ``settings`` opens its settings
 (starting it first if needed), ``start`` starts it, and
 ``autostart-on``/``autostart-off`` say whether it starts at login.
 ``eval`` runs ``evaluation.SCENARIOS`` as dry runs against a model and
-prints pass or fail with timings.
+prints pass or fail with timings. ``model check`` (one model, or ``--all``)
+runs the compatibility check (``model_check.py``, ``POST /models/check``):
+whether Happy Bot talks to each AI correctly, not how well it chooses.
 ``mcp-serve`` speaks MCP on stdin and stdout so another AI program can use
 the built-in tools (``mcp_serve.py``). ``file-index-serve`` is the MCP server
 behind setup's built-in file search choices (``file_index_server.py``); the
@@ -284,6 +286,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     model_remove.add_argument("name")
     model_test = model_sub.add_parser("test", help="Check that a model answers and can call tools.")
     model_test.add_argument("name", nargs="?", default="")
+    model_check = model_sub.add_parser(
+        "check", help="Check that Happy Bot works with a model: answers, tool calls (one and two at once), tool "
+                      "results, continuing another AI's chat, pictures. A few small requests per model.")
+    model_check.add_argument("name", nargs="?", default="", help="Default: the first in the order.")
+    model_check.add_argument("--all", action="store_true", help="Check every model in the order.")
 
     sub.add_parser("screenshot", help="Take an explicit context screenshot into XDG_RUNTIME_DIR.")
 
@@ -365,6 +372,11 @@ def run_model(args: argparse.Namespace) -> dict[str, Any]:
     command = args.model_command
     if command == "test":
         return request_json("POST", "/models/test", {"name": args.name}, timeout=300.0)
+    if command == "check":
+        names = current_settings().get("model_order", []) if args.all else [args.name]
+        reports = [request_json("POST", "/models/check", {"name": name}, timeout=900.0) for name in names]
+        return {"ok": all(report.get("ok") is not False for report in reports),
+                "passed": all(report.get("passed") is True for report in reports), "models": reports}
     api_key = sys.stdin.readline().strip() if getattr(args, "key_stdin", False) else ""
     if command == "probe":
         return request_json("POST", "/models/probe", {"base_url": args.url, "api_key": api_key}, timeout=30.0)

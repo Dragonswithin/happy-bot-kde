@@ -106,7 +106,10 @@ panel widget always look and behave the same.
   open its key page, paste the key, pick a model; Claude, OpenAI, Google
   Gemini, Grok, Qwen, Muse, Mistral, DeepSeek, Kimi, Groq and OpenRouter) or
   **By hand…** for any other OpenAI-compatible service. Each one is tested
-  when added.
+  when added, and **Test** next to it checks that Happy Bot works with it:
+  answering, one and two tool calls at once, reading a tool's result,
+  continuing a chat another AI started, and pictures if it sees them (a few
+  small requests; for an online AI a fraction of a cent).
 - **Search & Tools:** press **Set up** next to Files or Web and choose
   **Use this** on the recommended choice; Happy Bot adds it and tries a
   search before keeping it. Choices come from what the computer already has
@@ -194,6 +197,7 @@ happy-bot model probe http://127.0.0.1:8080          # what does it offer?
 happy-bot model add NAME --url URL [--model ID]       # local, no key
 happy-bot model add NAME --url URL --model ID --key-stdin   # paste the key, Enter
 happy-bot model test                                  # answers? can call tools?
+happy-bot model check [NAME | --all]                  # does Happy Bot work with it? (see below)
 happy-bot model use NAME
 happy-bot ask "what is on my clipboard?"
 ```

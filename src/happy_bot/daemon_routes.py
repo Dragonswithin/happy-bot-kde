@@ -61,6 +61,10 @@ Endpoints:
   assistant to type into other apps, and asking it now (the RemoteDesktop
   portal's dialog, ``input_portal``) rather than in the middle of a request.
 - ``POST /models/probe``: list the models a service offers, to help setup.
+- ``POST /models/check``: the full compatibility check of a configured model
+  (``model_check``: answering, one and two tool calls, its tool results,
+  continuing another AI's conversation, pictures), ``{"name", "results",
+  "passed"}``; ``passed`` is false when any check failed.
 - ``POST /models/test``: check that a configured model answers and can call
   tools (``model_setup.check_model``). This sends one small request to the model.
 - ``GET /models/presets``: the online AI services setup offers, with where to
@@ -113,7 +117,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from . import (app_context, app_control, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
-               model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
+               model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import settings as settings_store
 from .agent_loop import user_folders
 from .mcp_client import McpError
@@ -445,6 +449,17 @@ def test_model(server: "AssistantServer", query: dict[str, list[str]], body: dic
     return 200, {"ok": True, "name": name, **result}
 
 
+def check_model_route(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    """The named (or first) model's compatibility check (``model_check.run``); blocks while it runs."""
+    name = str(body.get("name") or next(iter(server.settings.get("model_order") or []), ""))
+    model = server.settings.get("models", {}).get(name)
+    if model is None:
+        return _error(404, f"no model named '{name}' is set up", "invalid")
+    results = model_check.run(model)
+    return 200, {"ok": True, "name": name, "results": results,
+                 "passed": not any(result["status"] == "fail" for result in results)}
+
+
 def model_presets_route(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     return 200, {"ok": True, "presets": model_presets.listing()}
 
@@ -611,6 +626,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/typing"): typing_status,
     ("POST", "/typing/allow"): allow_typing,
     ("POST", "/models/test"): test_model,
+    ("POST", "/models/check"): check_model_route,
     ("GET", "/models/presets"): model_presets_route,
     ("POST", "/models/use"): use_model,
     ("POST", "/cancel"): cancel,

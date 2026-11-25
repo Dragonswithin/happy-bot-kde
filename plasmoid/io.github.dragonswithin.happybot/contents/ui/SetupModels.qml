@@ -17,7 +17,9 @@ import org.kde.kirigami as Kirigami
  * - The list follows `model_order` (src/happy_bot/settings.py): the first
  *   AI answers, and when it fails the next one does (src/happy_bot/ask_stream.py).
  *   Each row shows where the AI runs (this computer, with its port, or
- *   online and where), arrows to move it up or down, Test, Remove, and
+ *   online and where), arrows to move it up or down, Test (the full
+ *   compatibility check, `POST /models/check`, src/happy_bot/model_check.py,
+ *   summarised as passed, works-with-a-note or a problem), Remove, and
  *   "Settings", which opens that AI's own settings under it
  *   (ModelDetails.qml). Moving one keeps `active_model` equal to the first.
  * - "Find on this computer" (`POST /models/discover`) lists the models local
@@ -126,11 +128,21 @@ Kirigami.FormLayout {
         section.testedName = name;
         section.testing = true;
         section.testResult = "";
-        section.page.client.request("POST", "/models/test", { name: name }, function(data) {
+        // The full compatibility check (src/happy_bot/model_check.py): a few small requests.
+        section.page.client.request("POST", "/models/check", { name: name }, function(data) {
             section.testing = false;
-            section.showResult(data.tools === true, data.tools
-                ? i18n("%1 answers and can use tools. It is ready.", name)
-                : i18n("%1 answers but did not use a tool, so Happy Bot cannot search or act with it.", name));
+            const labels = {
+                answers: i18n("answering"), tool_call: i18n("using a tool"), parallel_calls: i18n("using two tools at once"),
+                tool_result: i18n("reading a tool's result"), handover: i18n("continuing another AI's chat"),
+                picture: i18n("seeing a picture")
+            };
+            const describe = items => items.map(item => i18n("%1: %2", labels[item.check] || item.check, item.detail)).join("; ");
+            const failed = (data.results || []).filter(item => item.status === "fail");
+            const warned = (data.results || []).filter(item => item.status === "warn");
+            section.showResult(failed.length === 0, failed.length > 0
+                ? i18n("%1 has a problem with %2", name, describe(failed))
+                : warned.length > 0 ? i18n("%1 works. Worth knowing, %2", name, describe(warned))
+                : i18n("%1 passed every check. It is ready.", name));
         }, function(data) {
             section.testing = false;
             section.showResult(false, data.error || i18n("The test failed"));
