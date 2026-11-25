@@ -1,10 +1,80 @@
 # Happy Bot
 
-A search bar for the KDE Plasma 6 panel: type anything and the computer does
-it. It finds files through your existing local index, answers from the web
-through your configured search tool, and acts on the system through tools,
-using any model you configure, local or hosted with an API key. The goal,
-architecture and phase order are in `docs/ROADMAP.md`.
+**An AI search bar for the KDE Plasma 6 panel. Type what you want and your
+computer does it.**
+
+<!-- Screenshot: save one as docs/images/happy-bot.png (the panel plus the
+open assistant with a real answer) and uncomment the next line.
+![Happy Bot open from the Plasma panel](docs/images/happy-bot.png)
+-->
+
+Happy Bot sits in your panel beside the application launcher, or floats
+over your windows. Ask it to "put these two windows side by side", "find
+the PDF I downloaded last week", "turn on night light" or "what is using
+all my disk space?". It finds files through the search you already have,
+answers from the web through a search tool you choose, and acts on the
+desktop through KDE's own interfaces and tool servers (MCP). It does this
+with **whichever AI you pick**: one running on your own computer
+(llama.cpp, Ollama, LM Studio, …) or an online service with your own API
+key.
+
+It is an add-on you choose to install. Nothing in Plasma depends on it,
+and it does nothing until you ask.
+
+## Privacy and Safety
+
+- **No account, no telemetry.** Happy Bot only talks to the AI and search
+  services you set up, plus Open-Meteo when you ask about the weather.
+- **What it reads from your apps stays on this computer by default.** That
+  means the app you are in, its window, selected text, and a screenshot
+  taken only when you click "Help with …". Only AIs running on this
+  computer see it unless you choose otherwise under Behaviour. With an
+  online AI, whatever the tools read for a request (clipboard, file
+  contents) is sent to that service.
+- **It asks before anything risky.** Deleting, moving to the trash,
+  replacing files, installing software and other system changes wait on
+  an approval card. You can make it ask more often.
+- **It never handles your password.** Anything that needs one opens in a
+  terminal window, where you type it yourself.
+- **Changes can be undone.** "undo that" reverses the last change, and
+  every change is recorded until you log out.
+- **Only you can reach it.** The background service listens only on this
+  computer, needs a token only your account can read, and refuses web
+  pages.
+- **History is private and expires.** Conversations are readable only by
+  you and are deleted after 30 days without use (you can keep none).
+
+## Quick Start
+
+You need Plasma 6 on Wayland, Python 3.11 or newer and PyGObject
+(`python-gobject` or `python3-gi`).
+
+```bash
+git clone https://github.com/Dragonswithin/happy-bot-kde.git
+cd happy-bot-kde
+scripts/install.sh
+```
+
+No root is needed: everything goes into your home folder. Happy Bot
+appears in the panel beside your launcher. Right-click it and choose
+**Configure Happy Bot…** to add an AI (**Find on this computer** or
+**Online service…**) and a file and web search, then just type.
+`scripts/install.sh --uninstall` removes it again. There are more details
+under [Install](#install).
+
+## Feedback Welcome
+
+Happy Bot is young (version 0.1) and made by one person. If you try it, I
+would love to hear how it went, especially which AI and distribution you
+used.
+
+- Something broke or behaved oddly:
+  [open an issue](https://github.com/Dragonswithin/happy-bot-kde/issues/new/choose),
+  or choose **Send feedback…** from Happy Bot's right-click menu.
+- Ideas, questions and first impressions:
+  [Discussions](https://github.com/Dragonswithin/happy-bot-kde/discussions).
+- Contributing code: see `CONTRIBUTING.md`. The goal, architecture and
+  phase order are in `docs/ROADMAP.md`.
 
 ## What Works Today
 
@@ -241,19 +311,22 @@ From a checkout of this repository, as your normal user:
 scripts/install.sh
 ```
 
-That installs the daemon and command-line client, starts the daemon as a
-systemd user service tied to your Plasma session, installs the panel widget
-and, the first time, adds the search bar to the panel that holds your
-application launcher. Then press Enter in the empty bar (or right-click it
-and choose Configure Happy Bot) to set it up:
+That installs the daemon, the command-line client and the Happy Bot app,
+starts the daemon as a systemd user service tied to your Plasma session,
+installs the panel widget and, the first time, adds it to the panel that
+holds your application launcher (`--no-panel` skips that). Then right-click
+Happy Bot and choose **Configure Happy Bot…** to set it up:
 
-1. **AI model.** "Find models on this computer" lists model services that
-   are running locally; or add a hosted service by address, model id and API
-   key. Each model is tested when you add it.
-2. **Search and tools.** "Look for tools I already have" finds tool servers
-   you set up for other AI programs and offers to use them for file search
-   and web search.
-3. **Approvals and folders.** Sensible defaults; change them if you want.
+1. **AI Model.** **Find on this computer** lists model services that are
+   running locally; **Online service…** adds a hosted one with your API
+   key; **By hand…** takes any OpenAI-compatible address. Each one is
+   tested when you add it.
+2. **Search & Tools.** **Set up** next to Files or Web offers what the
+   computer already has (KDE's file search, tool servers set up for other
+   AI programs, a SearXNG you run) and a few web searches, and tries a
+   search before keeping it.
+3. **Behaviour** and **History & Folders.** Sensible defaults; change them
+   if you want.
 
 Nothing needs to be edited by hand. Running the installer again upgrades in
 place; after an upgrade, log out and in (or restart plasmashell) so the panel
@@ -262,8 +335,10 @@ loads the new widget code.
 What goes where:
 
 - `src/happy_bot/` to `~/.local/lib/happy-bot/happy_bot/`
-- `launchers/happy-bot-daemon` and `launchers/happy-bot` to
-  `~/.local/bin/`
+- `launchers/happy-bot-daemon`, `launchers/happy-bot` and
+  `launchers/happy-bot-app` to `~/.local/bin/`
+- the "Happy Bot" menu entry, the KRunner plugin and the global-shortcut
+  entry to `~/.local/share/`
 - `systemd/user/happy-bot-daemon.service` to
   `~/.config/systemd/user/`
 - the Plasma widget to your Plasma package store (`kpackagetool6`)
@@ -276,10 +351,9 @@ scripts/install.sh --uninstall           # keeps your settings
 scripts/install.sh --uninstall --purge   # removes them too
 ```
 
-The panel widget's own settings page (Panel) chooses between the icon
-(default) and a search bar in the panel and sets the bar width; its
-Keyboard Shortcuts page sets a shortcut that opens the panel popup or
-focuses the bar. Happy Bot's own hotkey is on the app's Appearance page.
+Whether the panel shows Happy Bot's icon (the default) or a search bar,
+the bar's width and Happy Bot's hotkey are on the **Appearance** page of
+Happy Bot's settings.
 
 Translations of the widget live in `po/<language>.po`. `scripts/translations.sh
 template` writes the template to start one from, `merge` brings every

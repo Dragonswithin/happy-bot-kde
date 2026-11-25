@@ -1,0 +1,8 @@
+# Chooser shown at "New issue" (and by the app's "Send feedback…", which
+# opens issues/new/choose from metadata.json's BugReportUrl). Blank issues
+# stay allowed; general questions and impressions go to Discussions.
+blank_issues_enabled: true
+contact_links:
+  - name: Questions, impressions and show-and-tell
+    url: https://github.com/Dragonswithin/happy-bot-kde/discussions
+    about: Not a bug or a specific idea? Tell us how it went in Discussions.

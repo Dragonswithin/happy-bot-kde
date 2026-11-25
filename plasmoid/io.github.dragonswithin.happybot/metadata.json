@@ -6,6 +6,7 @@
         "Name": "Dragonswithin"
       }
     ],
+    "BugReportUrl": "https://github.com/Dragonswithin/happy-bot-kde/issues/new/choose",
     "Category": "Utilities",
     "Description": "Panel search bar that finds, answers and acts using any AI model you configure.",
     "EnabledByDefault": false,

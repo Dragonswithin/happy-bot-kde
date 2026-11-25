@@ -66,8 +66,10 @@ import "barInput.js" as BarInput
  * `floatingX`/`floatingY` when it is dragged.
  *
  * The floating button's right-click opens its own menu (settings, new
- * conversation, hide the floating button), without "Remove from panel",
- * which there would remove the floating button along with the widget.
+ * conversation, send feedback, quit the app), without "Remove from panel",
+ * which there would remove the floating button along with the widget. Both
+ * menus' "Send feedback…" opens `feedbackUrl` (metadata.json's
+ * BugReportUrl) in the browser; nothing is sent from Happy Bot itself.
  * Settings: nearly all of Happy Bot's settings belong to the app. The
  * daemon keeps them (models, tools, behaviour, history, routines, and the
  * look and feel in `session.ui`), so the panel widget follows the app.
@@ -123,6 +125,8 @@ PlasmoidItem {
     // Run as the Happy Bot app (happy-bot-app: plasmawindowed, which gives the "application" form
     // factor) rather than in a panel or on the desktop: then this is the floating Happy Bot only.
     readonly property bool standalone: Plasmoid.formFactor === PlasmaCore.Types.Application
+    // Where "Send feedback…" goes: metadata.json's BugReportUrl, which Plasma's About page also shows.
+    readonly property string feedbackUrl: Plasmoid.metaData.bugReportUrl || ""
     // The app's host window (plasmawindowed's), hidden: the floating Happy Bot is the app's face.
     readonly property var hostWindow: standalone ? root.Window.window : null
     property bool hostWindowSeen: false
@@ -300,6 +304,13 @@ PlasmoidItem {
         }
 
         PlasmaExtras.MenuItem {
+            text: i18n("Send feedback…")
+            icon: "tools-report-bug"
+            visible: root.feedbackUrl.length > 0
+            onClicked: Qt.openUrlExternally(root.feedbackUrl)
+        }
+
+        PlasmaExtras.MenuItem {
             separator: true
         }
 
@@ -325,6 +336,13 @@ PlasmoidItem {
             text: i18n("New conversation")
             icon: "document-new"
             onClicked: session.newChat()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Send feedback…")
+            icon: "tools-report-bug"
+            visible: root.feedbackUrl.length > 0
+            onClicked: Qt.openUrlExternally(root.feedbackUrl)
         }
 
         PlasmaExtras.MenuItem {

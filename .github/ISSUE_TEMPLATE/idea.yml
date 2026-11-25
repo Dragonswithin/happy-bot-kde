@@ -1,0 +1,31 @@
+# GitHub issue form for ideas and requests. It asks for the everyday
+# request a user wishes Happy Bot handled, since ideas are weighed against
+# docs/ROADMAP.md and docs/FEATURES.md by what people actually type into
+# the bar, not by feature names.
+name: Idea or request
+description: Something you wish Happy Bot could do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: What would you type into Happy Bot?
+      description: The request in your own words, as you would type it into the bar.
+      placeholder: |
+        "move this week's screenshots into a folder called Bugs"
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today?
+      description: What Happy Bot does now, or how you do it without Happy Bot.
+    validations:
+      required: false
+  - type: textarea
+    id: why
+    attributes:
+      label: Anything else?
+      description: Why it matters to you, apps involved, or how you would want it to ask before acting.
+    validations:
+      required: false
