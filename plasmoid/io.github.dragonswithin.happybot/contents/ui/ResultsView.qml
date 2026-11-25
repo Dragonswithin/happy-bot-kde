@@ -148,7 +148,8 @@ Rectangle {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: view.fieldAtBottom ? parent.top : inputBar.bottom
+        // Placed by y, not by switching anchors (see inputBar).
+        y: view.fieldAtBottom ? 0 : inputBar.height
         implicitHeight: headerRow.implicitHeight + Kirigami.Units.smallSpacing * 2
         height: implicitHeight
 
@@ -253,14 +254,16 @@ Rectangle {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: view.fieldAtBottom ? undefined : parent.top
-        anchors.bottom: view.fieldAtBottom ? parent.bottom : undefined
+        // At the bottom or the top by y. Switching anchors.top and anchors.bottom at run time
+        // (the floating button moving across the screen's middle) left the band anchored to both
+        // for a moment: it stretched over the whole view and kept that height, hiding everything
+        // but the field (tests/tst_FieldSide.qml).
+        y: view.fieldAtBottom ? view.height - height : 0
         height: implicitHeight
         implicitHeight: composer.implicitHeight + Kirigami.Units.largeSpacing * 2
 
         Rectangle {
-            anchors.top: view.fieldAtBottom ? parent.top : undefined
-            anchors.bottom: view.fieldAtBottom ? undefined : parent.bottom
+            y: view.fieldAtBottom ? 0 : parent.height - height
             width: parent.width
             height: 1
             color: Qt.alpha(Kirigami.Theme.textColor, 0.12)

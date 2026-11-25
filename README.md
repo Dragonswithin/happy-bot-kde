@@ -415,6 +415,7 @@ happy-bot status --pretty
 happy-bot context --kind window --pretty
 /usr/lib/qt6/bin/qmltestrunner -input tests/tst_StreamingAnswer.qml   # the Qt 6 runner
 /usr/lib/qt6/bin/qmltestrunner -input tests/tst_BehaviourPage.qml
+/usr/lib/qt6/bin/qmltestrunner -input tests/tst_FieldSide.qml
 happy-bot model check --all          # does Happy Bot work with each configured AI? (small requests)
 ```
 

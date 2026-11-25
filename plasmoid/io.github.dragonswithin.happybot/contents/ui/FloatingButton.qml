@@ -69,7 +69,7 @@ Window {
     Behavior on reveal {
         NumberAnimation { duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
     }
-    // Open, the window is exactly the view's size (smaller than the button when only the field shows).
+    // Open, the window is exactly the view's size.
     readonly property int openWidth: Math.min(screenWidth, Math.max(1, view.width))
     readonly property int openHeight: Math.min(screenHeight, Math.max(1, view.height))
 
