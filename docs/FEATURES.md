@@ -57,6 +57,59 @@ read with OCR (``text_from_image``) for text-only models.
 - ⏸ Voice output: optional spoken answers through a text-to-speech endpoint
   the user chooses.
 
+## Ideas Chosen 2026-11-25 (Not Started)
+
+From a brainstorm of what fits Happy Bot, the maintainer chose these for the
+backlog. Unmarked: not started; each is planned only once placed in a phase
+in ``docs/ROADMAP.md``. Spoken answers and a wake word were left out: both
+need new local inference or always-on listening, which are the maintainer's
+call.
+
+Search speed-ups (the panel bar finds and launches; no AI involved):
+
+- Zero-typing start: focusing the empty bar shows recent applications,
+  files, chats and websites as chips.
+- Instant commands from the results: "volume 30", "dark mode", "timer 10m",
+  "lock" run at once through the existing tools, without asking the AI.
+- Actions on a result: an application's Update, Uninstall (through the
+  user's package manager), Autostart on or off and Send to phone; a file's
+  Send to phone and Ask about this.
+- Emoji and special characters: "emoji heart", "euro sign" put the character
+  on the clipboard.
+
+Fix the selected text:
+
+- Select text in any application, press a key, and choose "Fix grammar",
+  "Shorter", "Translate" or "Explain" as answer buttons; a local AI rewrites
+  it and "Replace" types the result back through the typing permission.
+
+Mascot nudges and a morning card:
+
+- Nudges with a fix button: a calm pose when the battery is low, updates
+  are waiting, the disk is nearly full or a restart is pending; clicking it
+  offers one-press fixes as answer buttons.
+- A morning card the first time Happy Bot opens each day: weather, waiting
+  updates, today's reminders and anything left unfinished.
+- A short happy pose when a long install or task finishes.
+
+Automation and help:
+
+- "Save this as a routine" offered as a button after a multi-step request
+  succeeds.
+- Routines started by events: a monitor or dock connected, headphones or a
+  Bluetooth device connected, switching to battery (beside the existing
+  network and battery conditions).
+- Focus mode: one request sets Do Not Disturb, closes chat applications,
+  starts a timer and gives the mascot a focused pose.
+- "What's this?" for a screen region: drag a box (Spectacle) and a model
+  that sees pictures explains it or reads its text to copy.
+- Voice typing anywhere: what is said is typed into the field in use
+  instead of going to the AI.
+- "Show me" for how-to questions: open the exact System Settings page and
+  point at the setting instead of describing the steps.
+- Tidy-up suggestions: large old downloads, duplicates and old screenshots,
+  listed with a preview and cleared with one approval.
+
 ## 1. The Bar
 
 - ● The mascot reacts to the computer: heat, sustained CPU load, memory
