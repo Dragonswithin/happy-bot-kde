@@ -76,9 +76,9 @@ used.
 ## What Works Today
 
 - The panel icon or widget shortcut opens the full assistant next to the
-  panel. Under **Show in panel → Search bar**, typing in the bar opens the
-  results under it; click the bar's logo to open the assistant. Vertical
-  panels always show the icon.
+  panel. Under **Show in panel → Search bar**, the bar is a search like the
+  application launcher's (below); click the bar's logo, or press Enter on
+  an empty bar, to open the assistant. Vertical panels always show the icon.
 - **Happy Bot the app**: "Happy Bot" in the application menu starts the
   floating Happy Bot, a button over other windows that you drag anywhere and
   that fades while not in use. Clicking it opens Happy Bot right there,
@@ -95,17 +95,19 @@ used.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.
-- It searches first, like the application launcher: with no chat open,
-  what you type brings up open windows, installed applications, System
-  Settings pages, quick answers (sums, conversions, dates), saved chats and
-  files (through a search tool you already have), with no AI model
-  involved, in a list that scrolls. The top result is selected and Enter
-  opens it. The AI is asked only from the "Ask Happy Bot about …" row under
-  the results: click it, or press Down to it and Enter (when nothing
-  matches it is already selected). A reply in an open chat, and a request
-  begun from the welcome screen ("Search the web for …", "Help with …"),
-  are not searched. "Find a file" on the welcome screen searches files
-  only.
+- The panel's search bar searches as you type, like the application
+  launcher: right above the bar it lists installed applications, System
+  Settings pages, quick answers (sums, conversions, dates),
+  saved chats and files (through a search tool you already have), with no
+  AI model involved, in a list that scrolls. The top result is selected and
+  Enter opens it, so "minecraft" and Enter starts your Minecraft launcher.
+  The AI is asked only from the "Ask Happy Bot about …" row under the
+  results: click it, or press Down to it and Enter (when nothing matches it
+  is already selected).
+- In the popup and the floating Happy Bot, what you type is a request for
+  the assistant, which searches files or the web when it needs to. "Find a
+  file" on the welcome screen searches as you type there, the same way as
+  the panel's search bar.
 - The welcome screen's help shortcut names the application you were in
   ("Help with Kate") however you open Happy Bot: the floating button, the
   hotkey or the panel. The AI is told that application, its window title
@@ -218,7 +220,7 @@ Besides the bar and the settings above:
 
 - **Quick results in KRunner**, with no AI model: a calculator, unit
   conversions (with `qalc`), dates ("3 weeks from friday"), world clocks
-  ("time in Tokyo"), open windows, applications, System Settings pages and
+  ("time in Tokyo"), applications, System Settings pages and
   earlier conversations. In Happy Bot's own field, optional prefixes say
   what Enter asks: `?` the web, `>` run a command. Up and Down recall
   earlier requests; in the file finder Tab completes, and files have a
@@ -416,6 +418,7 @@ happy-bot context --kind window --pretty
 /usr/lib/qt6/bin/qmltestrunner -input tests/tst_StreamingAnswer.qml   # the Qt 6 runner
 /usr/lib/qt6/bin/qmltestrunner -input tests/tst_BehaviourPage.qml
 /usr/lib/qt6/bin/qmltestrunner -input tests/tst_FieldSide.qml
+/usr/lib/qt6/bin/qmltestrunner -input tests/tst_ResultGroups.qml
 happy-bot model check --all          # does Happy Bot work with each configured AI? (small requests)
 ```
 

@@ -91,7 +91,7 @@ Endpoints:
 - ``GET /check``: the self-check (``self_check.run_checks``): every
   dependency's state with a fix for each problem.
 - ``GET /quick?q=...``: results the bar shows besides files (answers,
-  windows, applications, settings pages, conversations; ``quick_results``).
+  applications, settings pages, conversations; ``quick_results``).
 - ``POST /quick/activate``: ``{"action": {...}}`` from one of those results.
 - ``GET /reminders``: reminders and timers that are set
   (``{id, when, text}``, soonest first; ``tools/reminders.py``).

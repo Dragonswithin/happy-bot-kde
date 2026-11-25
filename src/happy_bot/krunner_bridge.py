@@ -17,8 +17,8 @@ and answers at ``PATH``:
 - ``Actions()``: none.
 
 Threading: DBus calls arrive on the shared GLib loop (``glib_loop``). Gathering
-quick results asks KWin for its windows, which needs that same loop, so each
-call is answered from a worker thread (``invocation.return_value`` may be
+results asks the file index and may wait on other DBus calls, which need that
+same loop, so each call is answered from a worker thread (``invocation.return_value`` may be
 called from any thread). ``start`` never raises: without PyGObject or a
 session bus, KRunner simply does not show the assistant.
 """

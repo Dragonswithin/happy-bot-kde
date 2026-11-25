@@ -28,7 +28,7 @@ Chosen by the maintainer on 2026-11-23, in this order, to follow the Phase 6 exi
 2. **Media and phone** (§10, §11): MPRIS playback control and KDE Connect.
 3. **Reminders and routines** (§10, §12): timers, reminders, scheduled
    requests and named routines as user systemd timers.
-4. **Bar quick results** (§1): apps, settings pages, windows, calculator and
+4. **Bar quick results** (§1): apps, settings pages, calculator and
    conversions while typing, with no model call.
 
 ## Image And Voice Input (Requested 2026-11-23, Deferred by the maintainer)
@@ -58,15 +58,17 @@ text-only models and stays as an option afterwards.
 
 ## 1. The Bar
 
-- ✓ Meta+Space popup. Search first, like the launcher: with no chat open,
-  typing shows windows, applications, settings pages, answers, saved chats
-  and files (up to 20) in a scrolling list; Enter opens the selected (top)
-  result, and the AI is asked only from the "Ask Happy Bot about …" row
-  (the maintainer typed "minecraft" and got an AI answer instead of the
-  Prism Launcher they had installed). Typing in the panel's search bar opens
-  these results under it. Replies in an open chat and requests begun from
-  the welcome screen are not searched (results once popped up over them);
-  "Find a file" searches files only.
+- ● The panel's search bar searches as you type, like the launcher:
+  applications, settings pages, answers, saved chats and files (up
+  to 20) show in a scrolling list right above the bar, which never takes
+  the keyboard; Enter opens the selected (top) result, and the AI is asked
+  only from the "Ask Happy Bot about …" row (the maintainer typed
+  "minecraft" and got an AI answer instead of the Prism Launcher they had
+  installed). (not yet tried in a running panel)
+- ✓ Meta+Space popup and the floating Happy Bot: typing is a request and
+  Enter sends it to the assistant; nothing is searched as the user types
+  (results once popped up over replies), except in "Find a file", which
+  searches like the panel bar (applications, settings and files).
 - ✓ The welcome screen's help shortcut names the application in use ("Help
   with Kate", with its icon) however Happy Bot is opened (floating button,
   hotkey or panel); "Close chat" returns to the welcome screen, keeping the chat.
@@ -106,9 +108,10 @@ text-only models and stays as an option afterwards.
   or more AIs are set up: "Automatic" follows the user's order, or one AI
   answers every request of that chat; the pick is saved with the chat and
   comes back when it is reopened.
-- ● Instant results that are not files: apps, System Settings pages, open
-  windows, recent conversations and calculator results, all with no model.
-  (quick results, in the bar again since it searches first)
+- ● Instant results that are not files: apps, System Settings pages,
+  recent conversations and calculator results, all with no model. (quick
+  results, in the panel bar's list, under headings; open windows were
+  dropped as odd among search results)
 - ● Inline calculator, unit, currency, time-zone and date arithmetic ("3 weeks
   from friday") with no model. (currency is not done: qalc's rates need a
   network fetch)

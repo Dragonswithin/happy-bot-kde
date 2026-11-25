@@ -1,7 +1,7 @@
 """Tests for the search bar's own results: computed answers and quick results.
 
 ``quick_answers`` is pure apart from ``qalc`` (used for real when installed,
-else those cases are skipped). ``quick_results`` runs against fake window,
+else those cases are skipped). ``quick_results`` runs against fake
 application and settings-page sources, and its activation against a recorded
 fake of process start-up, so nothing is launched.
 """
@@ -63,18 +63,12 @@ class AnswerTests(unittest.TestCase):
 
 class QuickResultTests(unittest.TestCase):
     def setUp(self) -> None:
-        windows = [{"id": "{w1}", "title": "notes.txt — Kate", "app": "kate"}]
         applications = [{"id": "org.kde.kate.desktop", "name": "Kate", "generic": "Text Editor", "keywords": "",
                          "comment": "", "path": "/usr/share/applications/org.kde.kate.desktop"}]
         pages = [{"module": "kcm_pulseaudio", "name": "Sound", "comment": "Audio devices", "keywords": "volume;speaker",
                   "icon": "audio-speakers"}]
 
-        class FakeBridge:
-            def run(self, script):
-                return windows
-
         patches = [
-            mock.patch.object(quick_results.kwin_bridge, "shared", return_value=FakeBridge()),
             mock.patch.object(quick_results.apps, "installed_applications", return_value=applications),
             mock.patch.object(quick_results, "settings_pages", return_value=pages),
             mock.patch.object(quick_results, "_desktop_icon", return_value="kate"),
@@ -84,9 +78,9 @@ class QuickResultTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         quick_results._cache.clear()
 
-    def test_windows_then_applications_then_settings_then_conversations(self) -> None:
+    def test_applications_then_settings_then_conversations_and_no_windows(self) -> None:
         results = quick_results.gather("kate", [{"id": "c1", "title": "Kate plugin question"}])
-        self.assertEqual([item["action"]["type"] for item in results], ["window", "launch", "conversation"])
+        self.assertEqual([item["action"]["type"] for item in results], ["launch", "conversation"])
         sound = quick_results.gather("volume")
         self.assertEqual((sound[0]["title"], sound[0]["action"]), ("Sound", {"type": "settings", "target": "kcm_pulseaudio"}))
 
