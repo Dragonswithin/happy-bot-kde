@@ -1,7 +1,8 @@
 """Results the search bar shows while the user types, besides files: no model involved.
 
 ``gather(text, conversations)`` returns up to ``MAX_RESULTS`` results, best
-first:
+first (at most three windows, five applications, three settings pages and
+three conversations):
 
 1. a computed answer (``quick_answers``: arithmetic, conversions, dates,
    world clocks), whose action copies it;
@@ -40,7 +41,7 @@ from typing import Any
 from . import kwin_bridge, quick_answers
 from .tools import apps
 
-MAX_RESULTS = 6
+MAX_RESULTS = 12
 MIN_CHARS = 2
 CACHE_SECONDS = 60.0
 SETTINGS_DIRS = (Path("/usr/share/applications"), Path("/usr/local/share/applications"))
@@ -133,12 +134,12 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None) -> list
                         "icon": "accessories-calculator", "action": {"type": "copy", "target": answer["value"]}})
     if len(text) < MIN_CHARS or answer:
         return results
-    for source in (_windows, _applications, _settings):
+    for source, most in ((_windows, 3), (_applications, 5), (_settings, 3)):
         try:
-            results.extend(source(text)[:3])
+            results.extend(source(text)[:most])
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
             continue
-    results.extend(_conversations(text, conversations or [])[:2])
+    results.extend(_conversations(text, conversations or [])[:3])
     return results[:MAX_RESULTS]
 
 

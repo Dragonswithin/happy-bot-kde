@@ -87,17 +87,26 @@ import QtQuick
  * `deleteConversation` removes one; deleting the open one starts a new one. `cancel` aborts
  * the request, which makes the daemon stop the turn.
  *
- * The file finder: nothing is searched while the user types a request or a
- * reply. Only after they choose "Find a file" (`startFindingFiles`, which
- * sets `findingFiles` until `stopFindingFiles`) does typing call
- * `searchFiles`, which asks the daemon for at most `searchLimit` file
- * matches (`/search`; `hits`). `activateQuick` carries out a file match's
- * actions (show in the file manager, copy the path) through the daemon. Replies
- * can arrive out of order, so each request carries a sequence number and a
- * reply is applied only if it is the newest one sent. `hits` is a list of
+ * Searching: `search(text)` looks up what is on this computer, with no
+ * model. main.qml decides when (typing with no chat open, or in the file
+ * finder). It asks the daemon for quick results (`/quick`: answers, open
+ * windows, installed applications, settings pages, saved conversations;
+ * `quickHits`) and for at most `searchLimit` file matches (`/search`;
+ * `fileHits`) at once; `hits` is both, quick first. In the file finder
+ * ("Find a file": `startFindingFiles` sets `findingFiles` until
+ * `stopFindingFiles`) only files are asked for. `searching` is true until
+ * both replies are in and `searchedText` is the text they are for, so Enter
+ * typed before the results can wait for them. A quick hit has `kind`
+ * "quick" and an `action`; `activateQuick` carries it out, and also a file
+ * match's actions (show in the file manager, copy the path). Replies can
+ * arrive out of order, so each request carries a sequence number and a
+ * reply is applied only if it is the newest one sent. A file hit is
  * `{title, location, snippet, kind}`; `searchError`/`searchErrorCode` carry
  * the daemon's message and code ("not_configured", "tool_failed") when the
- * last search failed.
+ * finder's last file search failed (outside the finder a failed file search
+ * just shows no files). `composing` is set while the field holds a request
+ * started from the welcome screen ("Search the web for …", "Help with …"),
+ * which is not searched; main.qml clears it when the field is emptied.
  *
  * Nothing here blocks: all requests are asynchronous on the GUI thread. A
  * failed or unreachable daemon sets `status` to "offline" and adds an error
@@ -131,9 +140,14 @@ Item {
     readonly property bool hasTranscript: entries.count > 0
     property int pendingApprovals: 0
 
-    property int searchLimit: 8
+    property int searchLimit: 20
     property bool findingFiles: false
-    property var hits: []
+    property bool composing: false
+    property var quickHits: []
+    property var fileHits: []
+    readonly property var hits: quickHits.concat(fileHits)
+    property bool searching: false
+    property string searchedText: ""
     property string searchError: ""
     property string searchErrorCode: ""
     property int searchSequence: 0
@@ -229,7 +243,10 @@ Item {
 
     function clearSearch() {
         session.searchSequence += 1;
-        session.hits = [];
+        session.quickHits = [];
+        session.fileHits = [];
+        session.searching = false;
+        session.searchedText = "";
         session.searchError = "";
         session.searchErrorCode = "";
     }
@@ -245,7 +262,8 @@ Item {
         clearSearch();
     }
 
-    function searchFiles(text) {
+    /** Looks up `text` on this computer: quick results and files, or only files in the finder. */
+    function search(text) {
         const query = (text || "").trim();
         if (query.length === 0) {
             clearSearch();
@@ -253,20 +271,45 @@ Item {
         }
         session.searchSequence += 1;
         const sequence = session.searchSequence;
+        const filesOnly = session.findingFiles;
+        let pending = filesOnly ? 1 : 2;
+        session.searchedText = query;
+        session.searching = true;
+        function finished() {
+            pending -= 1;
+            if (pending === 0 && sequence === session.searchSequence) {
+                session.searching = false;
+            }
+        }
+        if (filesOnly) {
+            session.quickHits = [];
+        } else {
+            request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
+                if (sequence === session.searchSequence) {
+                    session.quickHits = data.results || [];
+                }
+                finished();
+            }, function(data) {
+                if (sequence === session.searchSequence) {
+                    session.quickHits = [];
+                }
+                finished();
+            });
+        }
         request("GET", "/search?limit=" + session.searchLimit + "&q=" + encodeURIComponent(query), null, function(data) {
-            if (sequence !== session.searchSequence) {
-                return;
+            if (sequence === session.searchSequence) {
+                session.searchError = "";
+                session.searchErrorCode = "";
+                session.fileHits = data.hits || [];
             }
-            session.searchError = "";
-            session.searchErrorCode = "";
-            session.hits = data.hits || [];
+            finished();
         }, function(data) {
-            if (sequence !== session.searchSequence) {
-                return;
+            if (sequence === session.searchSequence) {
+                session.fileHits = [];
+                session.searchError = filesOnly ? data.error || i18n("Search failed") : "";
+                session.searchErrorCode = filesOnly ? data.code || "tool_failed" : "";
             }
-            session.hits = [];
-            session.searchError = data.error || i18n("Search failed");
-            session.searchErrorCode = data.code || "tool_failed";
+            finished();
         });
     }
 

@@ -78,6 +78,7 @@ Window {
     signal moved(int x, int y)
     signal queryEdited(string text)
     signal accepted(string text)
+    signal askRequested(string text)
     signal selectionMove(int delta)
     signal completeRequested()
     signal hitActivated(string location)
@@ -191,6 +192,7 @@ Window {
 
             onQueryEdited: text => floating.queryEdited(text)
             onAccepted: text => floating.accepted(text)
+            onAskRequested: text => floating.askRequested(text)
             onSelectionMove: delta => floating.selectionMove(delta)
             onCompleteRequested: floating.completeRequested()
             onHitActivated: location => floating.hitActivated(location)

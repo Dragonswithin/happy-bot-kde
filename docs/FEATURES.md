@@ -58,10 +58,15 @@ text-only models and stays as an option afterwards.
 
 ## 1. The Bar
 
-- ✓ Meta+Space popup, Enter sends to the assistant. Nothing is searched
-  while the user types a request or a reply (the maintainer found results
-  popping up over replies); "Find a file" on the welcome screen opens a file
-  finder with matches as they type.
+- ✓ Meta+Space popup. Search first, like the launcher: with no chat open,
+  typing shows windows, applications, settings pages, answers, saved chats
+  and files (up to 20) in a scrolling list; Enter opens the selected (top)
+  result, and the AI is asked only from the "Ask Happy Bot about …" row
+  (the maintainer typed "minecraft" and got an AI answer instead of the
+  Prism Launcher they had installed). Typing in the panel's search bar opens
+  these results under it. Replies in an open chat and requests begun from
+  the welcome screen are not searched (results once popped up over them);
+  "Find a file" searches files only.
 - ✓ The welcome screen's help shortcut names the application in use ("Help
   with Kate", with its icon) however Happy Bot is opened (floating button,
   hotkey or panel); "Close chat" returns to the welcome screen, keeping the chat.
@@ -103,7 +108,7 @@ text-only models and stays as an option afterwards.
   comes back when it is reopened.
 - ● Instant results that are not files: apps, System Settings pages, open
   windows, recent conversations and calculator results, all with no model.
-  (quick results, in KRunner only since typing no longer searches)
+  (quick results, in the bar again since it searches first)
 - ● Inline calculator, unit, currency, time-zone and date arithmetic ("3 weeks
   from friday") with no model. (currency is not done: qalc's rates need a
   network fetch)
@@ -276,7 +281,10 @@ text-only models and stays as an option afterwards.
   verify in the launcher. (verified 2026-11-23: asked to install
   kcolorchooser, it searched every source, installed it from the
   distribution's repository in a terminal after approval and the
-  maintainer's password, and confirmed it in the launcher)
+  maintainer's password, and confirmed it in the launcher; the software
+  search marks what is already installed, and with Shelly installed the
+  assistant installs through `shelly install` in a terminal, which needs
+  approval like pacman)
 - ● System update with reboot detection. (check_updates lists what is
   waiting from the distribution, the AUR and Flatpak, warns when the kernel
   is among them, and gives the one command run_in_terminal uses; after it,

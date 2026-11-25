@@ -18,9 +18,10 @@ import org.kde.plasma.extras as PlasmaExtras
  *
  * The body shows one thing at a time:
  *
- * - FILES in the file finder, or while there are file matches or a search
- *   problem: FileResults.qml (the matches, scrolling, with an "Ask Happy Bot
- *   to find" row pinned below them).
+ * - RESULTS while typed text is searched (`session.searchedText`), in the
+ *   file finder, or while there are results or a search problem:
+ *   FileResults.qml (applications, windows, settings, answers and files,
+ *   scrolling, with an "Ask Happy Bot about …" row pinned below them).
  * - ASSISTANT otherwise: the welcome screen or the conversation,
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
@@ -35,8 +36,9 @@ import org.kde.plasma.extras as PlasmaExtras
  * the AssistantSession.qml instance. Selection and visibility rules belong
  * to main.qml; this view only draws `selectedIndex` and reports intent:
  *
- * - `queryEdited(text)`: the text changed. `accepted(text)`: Enter (or the
- *   Ask row), trimmed. `selectionMove(delta)`: Down (+1) or Up (-1).
+ * - `queryEdited(text)`: the text changed. `accepted(text)`: Enter, trimmed.
+ *   `askRequested(text)`: the Ask row under the results was clicked, which
+ *   always asks the assistant whatever result is selected. `selectionMove(delta)`: Down (+1) or Up (-1).
  *   `completeRequested()`: Tab, to complete the text from the top result. Escape
  *   clears the text, or closes when it is already empty (`closeRequested`).
  * - `resultActivated(hit)`: a clicked file match or quick result.
@@ -74,6 +76,7 @@ Rectangle {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool filesVisible: hasHits || hasSearchError || session.findingFiles
+        || session.searchedText.length > 0
     readonly property bool conversationVisible: !filesVisible
     readonly property bool sidebarVisible: session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
@@ -90,6 +93,7 @@ Rectangle {
 
     signal queryEdited(string text)
     signal accepted(string text)
+    signal askRequested(string text)
     signal selectionMove(int delta)
     signal completeRequested()
     signal hitActivated(string location)
@@ -491,7 +495,7 @@ Rectangle {
                 useRobotMascot: view.useRobotMascot
                 onResultActivated: hit => view.resultActivated(hit)
                 onFileActionRequested: (hit, action) => view.fileActionRequested(hit, action)
-                onAskRequested: text => view.accepted(text)
+                onAskRequested: text => view.askRequested(text)
             }
 
             PlasmaComponents3.ScrollView {
@@ -594,6 +598,7 @@ Rectangle {
                             welcome.promptChosen(prompt);
                         }
                         onPromptChosen: prompt => {
+                            view.session.composing = true;  // a request to finish, not something to search for
                             view.setInput(prompt);
                             view.focusInput();
                         }

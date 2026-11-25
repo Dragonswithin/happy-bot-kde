@@ -12,15 +12,19 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
 
 /**
- * The file matches in Happy Bot's popup (ResultsView.qml shows it in place
- * of the conversation while files are shown, mostly in the file finder,
- * `AssistantSession.findingFiles`): one row per match in `session.hits`
- * (file-type icon, name, folder), a hint while the finder has nothing yet, a
- * problem line when the search failed (`session.searchError`), and below
- * them an "Ask Happy Bot to find" row for the typed `query`. The matches
- * scroll; the ask row is pinned under them so it always shows whole, however
- * many matches there are. It is highlighted while no match is selected, so
- * it is plain that Enter asks rather than opens a file.
+ * The search results in Happy Bot's popup (ResultsView.qml shows it in place
+ * of the welcome screen while typed text is searched, and in the file
+ * finder, `AssistantSession.findingFiles`): one row per result in
+ * `session.hits`, quick results first (applications, windows, settings
+ * pages, answers, saved conversations: their icon and kind) then files
+ * (file-type icon, name, folder); "Searching…", a "nothing matches" line or
+ * the finder's hint while there are none; a problem line when the finder's
+ * search failed (`session.searchError`); and below them an "Ask Happy Bot
+ * about …" row (in the finder, "Ask Happy Bot to find …") for the typed
+ * `query`. The results scroll; the ask row is pinned under them so it
+ * always shows whole, however many results there are. It is highlighted
+ * while no result is selected (`selectedIndex` -1), so it is plain when
+ * Enter asks rather than opens.
  *
  * `selectedIndex` (owned by main.qml) is only drawn, and the scroll follows
  * it; new matches start at the top. A match can be clicked
@@ -211,10 +215,13 @@ Item {
                     PlasmaComponents3.Label {
                         Layout.fillWidth: true
                         Layout.margins: Kirigami.Units.largeSpacing
-                        visible: results.session.findingFiles && !results.hasHits && !results.hasSearchError
+                        visible: !results.hasHits && !results.hasSearchError
+                            && (results.session.findingFiles || results.session.searchedText.length > 0)
                         wrapMode: Text.Wrap
                         opacity: 0.7
-                        text: i18n("Type part of a file's name and matching files show here; click one to open it. Enter asks Happy Bot to look for it.")
+                        text: results.session.searching ? i18n("Searching…")
+                            : results.session.searchedText.length > 0 ? i18n("Nothing on this computer matches. Ask Happy Bot below.")
+                            : i18n("Type part of a file's name and matching files show here; click one to open it. Enter asks Happy Bot to look for it.")
                     }
 
                     RowLayout {
@@ -273,14 +280,14 @@ Item {
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
                     text: results.session.findingFiles ? i18n("Ask Happy Bot to find “%1”", results.query)
-                        : i18n("Ask the assistant: “%1”", results.query)
+                        : i18n("Ask Happy Bot about “%1”", results.query)
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
 
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
-                    text: i18n("Press Enter")
+                    text: askRow.highlighted ? i18n("Press Enter") : i18n("Click to ask")
                     font: Kirigami.Theme.smallFont
                     opacity: 0.65
                 }

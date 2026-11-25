@@ -15,8 +15,9 @@ import org.kde.plasma.components as PlasmaComponents3
  * The applet's search-bar panel form: a text field in the panel beside the
  * launcher, used when the user picks "Search bar" under "Show in panel"
  * (the `inputInPanel` setting) on a horizontal panel. In this form the user
- * can type a request here. Enter, the logo, or the widget shortcut opens
- * ResultsPopup.qml, which takes focus for searching files and continuing the chat.
+ * start typing here: the text moves on into ResultsPopup.qml, which opens
+ * under it with what matches on this computer. Enter, the logo, or the
+ * widget shortcut opens the popup too.
  *
  * While the field has focus, Plasma draws its blue panel focus indicator
  * along the panel. A widget cannot switch that off; users who choose this
@@ -28,6 +29,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * - `focusRequested`: the user clicked the unfocused field. The panel
  *   window must be granted keyboard focus before the field can take it.
  * - `accepted(text)`: Enter. `text` is trimmed and may be empty.
+ * - `textEdited(text)`: the user typed or deleted (not `setText`); main.qml
+ *   opens the popup with the results for it.
  * - `selectionMove(delta)`: Down (+1) or Up (-1).
  * - `dismissed`: Escape on an empty field. Escape on text clears it first.
  * - `iconClicked`: a left click on the logo at the bar's left end. It works
@@ -69,6 +72,7 @@ Item {
 
     signal focusRequested()
     signal accepted(string text)
+    signal textEdited(string text)
     signal selectionMove(int delta)
     signal dismissed()
     signal menuRequested()
@@ -102,6 +106,7 @@ Item {
         rightPadding: spinner.visible ? spinner.width + Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing
         Accessible.name: i18n("Ask or search anything")
 
+        onTextEdited: bar.textEdited(text)
         Keys.onReturnPressed: bar.accepted(text.trim())
         Keys.onEnterPressed: bar.accepted(text.trim())
         Keys.onDownPressed: bar.selectionMove(1)

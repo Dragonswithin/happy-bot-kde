@@ -76,9 +76,9 @@ used.
 ## What Works Today
 
 - The panel icon or widget shortcut opens the full assistant next to the
-  panel. Under **Show in panel → Search bar**, you can also type a request
-  inline and press Enter, or click the bar's logo to open the assistant
-  with your draft. Vertical panels always show the icon.
+  panel. Under **Show in panel → Search bar**, typing in the bar opens the
+  results under it; click the bar's logo to open the assistant. Vertical
+  panels always show the icon.
 - **Happy Bot the app**: "Happy Bot" in the application menu starts the
   floating Happy Bot, a button over other windows that you drag anywhere and
   that fades while not in use. Clicking it opens Happy Bot right there,
@@ -95,11 +95,17 @@ used.
 - With two or more AIs set up, a drop-down beside the typing field picks the
   AI for the current chat ("Automatic" follows your order); reopening a
   chat brings its pick back.
-- Nothing is searched while you type a request or a reply. "Find a file"
-  on the welcome screen opens a file finder that shows matching files as
-  you type, through a search tool you already have, with no AI model
-  involved; Down and Enter, or a click, opens one. Otherwise Happy Bot
-  searches files or the web when your request needs it.
+- It searches first, like the application launcher: with no chat open,
+  what you type brings up open windows, installed applications, System
+  Settings pages, quick answers (sums, conversions, dates), saved chats and
+  files (through a search tool you already have), with no AI model
+  involved, in a list that scrolls. The top result is selected and Enter
+  opens it. The AI is asked only from the "Ask Happy Bot about …" row under
+  the results: click it, or press Down to it and Enter (when nothing
+  matches it is already selected). A reply in an open chat, and a request
+  begun from the welcome screen ("Search the web for …", "Help with …"),
+  are not searched. "Find a file" on the welcome screen searches files
+  only.
 - The welcome screen's help shortcut names the application you were in
   ("Help with Kate") however you open Happy Bot: the floating button, the
   hotkey or the panel. The AI is told that application, its window title
@@ -237,8 +243,9 @@ Besides the bar and the settings above:
   duplicates, the trash, comparing files, reading text in pictures (OCR),
   recent files, bookmarks and reading web pages.
 - **For power users**: the system log, user services, processes, Git,
-  containers, network checks, software search across every source and the
-  update history.
+  containers, network checks, software search across every source (marking
+  what is already installed) and the update history. With Shelly installed,
+  the assistant installs through Shelly in a terminal window.
 
 Commands:
 

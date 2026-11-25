@@ -34,6 +34,7 @@ PlasmaCore.Dialog {
 
     signal queryEdited(string text)
     signal accepted(string text)
+    signal askRequested(string text)
     signal selectionMove(int delta)
     signal completeRequested()
     signal hitActivated(string location)
@@ -88,6 +89,7 @@ PlasmaCore.Dialog {
 
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)
+        onAskRequested: text => popup.askRequested(text)
         onSelectionMove: delta => popup.selectionMove(delta)
         onCompleteRequested: popup.completeRequested()
         onHitActivated: location => popup.hitActivated(location)

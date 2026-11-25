@@ -25,22 +25,32 @@ import "barInput.js" as BarInput
  *   the cursor in its field; the same again, Escape on an empty field, the
  *   close button or a click anywhere else closes it. The panel itself never
  *   takes keyboard focus, so Plasma's panel focus indicator never appears.
- * - Search-bar form: the panel field accepts an initial request. Enter opens
- *   the same focused assistant as the panel logo or widget shortcut. A draft
- *   moves into the popup's composer and returns to the bar on click-away.
- *   Focusing the empty panel field alone lets the user type inline.
+ * - Search-bar form: typing in the panel field opens the popup under it
+ *   with the text moved into its field, where the search below shows
+ *   results (with a chat open, Enter does that instead). A draft returns to
+ *   the bar on click-away. Focusing the empty panel field alone does not
+ *   open anything.
  * - The open assistant shows the file finder, current chat or welcome screen.
- * - Typing. Nothing is searched while the user types a request or a reply;
- *   Enter sends it to the assistant, which searches when the request needs
- *   it. Only the file finder ("Find a file" on the welcome screen,
- *   `session.findingFiles`) shows matching files as the user types, after a
- *   short pause (`searchDelay`). There Down/Up move a selection, Tab
- *   completes the top match's name, and Enter opens the selected match or,
- *   with none selected, asks the assistant to find the file. Leaving
- *   (Back, Escape on an empty field, closing, sending) ends the finder.
- *   Optional prefixes (barInput.js) say what Enter asks (`?` web, `>` a shell
- *   command). With no matches, Up and Down recall earlier requests from this
- *   session.
+ * - Typing searches first, like the application launcher (`searchable`):
+ *   with no chat open, what the user types is looked up on this computer
+ *   after a short pause (`searchDelay`, `session.search`): open windows,
+ *   installed applications, settings pages, quick answers, saved
+ *   conversations, then files, in a list that scrolls, with an "Ask Happy
+ *   Bot about …" row below it. The top result is selected; Down and Up move
+ *   the selection, Down past the last result reaches the Ask row, and Tab
+ *   completes the top result's name. Enter opens the selected result; the
+ *   assistant is asked only from the Ask row (clicked, or selected with
+ *   Enter), which is selected when nothing matched. Enter typed before the
+ *   results arrive waits for them (`acceptAfterSearch`), so a quick Enter
+ *   still opens the top result rather than asking. Not searched: a reply in
+ *   an open chat, a request begun from the welcome screen ("Search the web
+ *   for …", "Help with …": `session.composing`) and text with a prefix
+ *   (barInput.js: `?` web, `>` a shell command); Enter sends those to the
+ *   assistant. "Find a file" on the welcome screen is the file finder
+ *   (`session.findingFiles`): files only, and Enter with the Ask row
+ *   selected asks the assistant to find the file. Leaving (Back, Escape on
+ *   an empty field, closing, sending) ends it. With no results, Up and Down
+ *   recall earlier requests from this session.
  *
  * Happy Bot also runs as an app of its own (`standalone`): `happy-bot-app`
  * starts this widget in Plasma's plasmawindowed, and the "Happy Bot" entry
@@ -95,6 +105,8 @@ PlasmoidItem {
         && Plasmoid.formFactor !== PlasmaCore.Types.Vertical
     property bool wantsInput: false
     property string pendingQuery: ""
+    // Enter pressed while the search for this text was still running: acted on when it finishes.
+    property string acceptAfterSearch: ""
     // Requests sent from the bar in this session, oldest first, for Up/Down
     // recall; `recallIndex` is the one shown (equal to the length: none).
     property var sentRequests: []
@@ -142,10 +154,18 @@ PlasmoidItem {
     AssistantSession {
         id: session
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
+        // The top result starts selected, so Enter opens it; with none, the Ask row is selected (-1).
         onHitsChanged: {
-            popup.selectedIndex = -1;
+            popup.selectedIndex = session.hits.length > 0 ? 0 : -1;
             if (root.floating) {
-                root.floating.selectedIndex = -1;
+                root.floating.selectedIndex = popup.selectedIndex;
+            }
+        }
+        onSearchingChanged: {
+            if (!session.searching && root.acceptAfterSearch.length > 0) {
+                const text = root.acceptAfterSearch;
+                root.acceptAfterSearch = "";
+                root.handleAccepted(text);
             }
         }
         // A "Help with …" screenshot briefly made the application active; take the keyboard back.
@@ -158,8 +178,8 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        interval: 200  // ms of no typing before the file finder searches
-        onTriggered: session.searchFiles(root.pendingQuery)
+        interval: 200  // ms of no typing before searching
+        onTriggered: session.search(root.pendingQuery)
     }
 
     ResultsPopup {
@@ -173,6 +193,7 @@ PlasmoidItem {
         location: Plasmoid.location
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
+        onAskRequested: text => root.askAssistant(text)
         onSelectionMove: delta => root.moveSelection(delta)
         onCompleteRequested: root.completeFromTop()
         onHitActivated: location => root.openLocation(location)
@@ -225,6 +246,7 @@ PlasmoidItem {
             onMoved: (x, y) => session.saveUi({ floating_x: x, floating_y: y })
             onQueryEdited: text => root.handleEdited(text)
             onAccepted: text => root.handleAccepted(text)
+            onAskRequested: text => root.askAssistant(text)
             onSelectionMove: delta => root.moveSelection(delta)
             onCompleteRequested: root.completeFromTop()
             onHitActivated: location => root.openLocation(location)
@@ -269,6 +291,12 @@ PlasmoidItem {
             root.openPopup();
             if (text) {
                 root.handleAccepted(text);
+            }
+        }
+        // Typing in the bar searches first: the popup opens under it with the text in its field.
+        onTextEdited: text => {
+            if (text.trim().length > 0 && root.searchable(text.trim()) && !popup.visible) {
+                root.openPopup();
             }
         }
         onSelectionMove: delta => root.recall(delta)
@@ -526,10 +554,21 @@ PlasmoidItem {
         }
     }
 
-    /** Only the file finder searches while typing; a request or a reply is left alone until Enter. */
+    /** Whether typing `text` searches this computer (see "Typing searches first" above). */
+    function searchable(text) {
+        if (session.findingFiles) {
+            return true;
+        }
+        return !session.hasTranscript && !session.composing && BarInput.parse(text).mode === "all";
+    }
+
     function handleEdited(text) {
         root.pendingQuery = String(text || "").trim();
-        if (session.findingFiles && root.pendingQuery.length > 0) {
+        root.acceptAfterSearch = "";
+        if (root.pendingQuery.length === 0) {
+            session.composing = false;
+        }
+        if (root.pendingQuery.length > 0 && root.searchable(root.pendingQuery)) {
             searchDelay.restart();
         } else {
             searchDelay.stop();
@@ -537,13 +576,16 @@ PlasmoidItem {
         }
     }
 
+    /** Down and Up through the results in the order shown; past the last one is the Ask row (-1). */
     function moveSelection(delta) {
         const count = session.hits.length;
         if (count === 0) {
             root.recall(delta);
             return;
         }
-        root.surface.selectedIndex = Math.max(-1, Math.min(count - 1, root.surface.selectedIndex + delta));
+        const position = root.surface.selectedIndex < 0 ? count : root.surface.selectedIndex;
+        const next = Math.max(0, Math.min(count, position + delta));
+        root.surface.selectedIndex = next === count ? -1 : next;
     }
 
     function openLocation(location) {
@@ -551,7 +593,19 @@ PlasmoidItem {
         root.closePopup();
     }
 
+    /** A file opens; a quick result does its action (an application starts, a window comes forward...).
+     *  A saved conversation opens in Happy Bot, which stays open. */
     function openHit(hit) {
+        if (hit.kind === "quick") {
+            session.activateQuick(hit);
+            if (hit.action.type === "conversation") {
+                searchDelay.stop();
+                root.clearInput();
+                return;
+            }
+            root.closePopup();
+            return;
+        }
         root.openLocation(hit.location);
     }
 
@@ -584,10 +638,27 @@ PlasmoidItem {
     }
 
     function handleAccepted(text) {
+        // Enter before the results for this text are in: act once they are (onSearchingChanged).
+        if (text.length > 0 && root.searchable(text)
+                && (searchDelay.running || session.searching || session.searchedText !== text)) {
+            searchDelay.stop();
+            if (!session.searching || session.searchedText !== text) {
+                session.search(text);
+            }
+            root.acceptAfterSearch = text;
+            return;
+        }
+        root.acceptAfterSearch = "";
         if (root.surface.selectedIndex >= 0 && root.surface.selectedIndex < session.hits.length) {
             root.openHit(session.hits[root.surface.selectedIndex]);
             return;
         }
+        root.askAssistant(text);
+    }
+
+    /** Sends `text` to the assistant (Enter with the Ask row selected or no results, or the Ask row clicked). */
+    function askAssistant(text) {
+        root.acceptAfterSearch = "";
         if (session.findingFiles && text.length > 0) {
             // No match chosen: the assistant searches harder (other words, the whole index).
             searchDelay.stop();
