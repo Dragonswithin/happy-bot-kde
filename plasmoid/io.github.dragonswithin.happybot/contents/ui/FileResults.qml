@@ -15,7 +15,7 @@ import org.kde.plasma.components as PlasmaComponents3
  * The search results, in the popup's file finder (ResultsView.qml,
  * `AssistantSession.findingFiles`) and above the panel's search bar
  * (PanelResults.qml): one row per result in `session.hits`, each kind under
- * a heading where it starts (Answer, Applications, Settings,
+ * a heading where it starts (Answer, Applications, Settings, Bookmarks, Recent websites,
  * Saved chats, Files: `Look.hitGroup`), applications first; quick results
  * show their icon and kind, files their file-type icon, name and folder; "Searching…", a "nothing matches" line or
  * the finder's hint while there are none; a problem line when the finder's

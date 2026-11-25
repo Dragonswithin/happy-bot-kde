@@ -62,7 +62,7 @@ QtObject {
     }
 
     // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
-    readonly property var hitGroups: ["answer", "applications", "settings", "chats", "files"]
+    readonly property var hitGroups: ["answer", "applications", "settings", "bookmarks", "websites", "chats", "files"]
 
     /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
     function hitGroup(hit) {
@@ -72,7 +72,8 @@ QtObject {
         if (hit.kind !== "quick") {
             return "files";
         }
-        const groups = { copy: "answer", launch: "applications", settings: "settings", conversation: "chats" };
+        const groups = { copy: "answer", launch: "applications", settings: "settings", bookmark: "bookmarks",
+                         visited: "websites", conversation: "chats" };
         return groups[hit.action ? hit.action.type : ""] || "applications";
     }
 
@@ -82,6 +83,8 @@ QtObject {
         case "answer": return i18n("Answer");
         case "applications": return i18n("Applications");
         case "settings": return i18n("Settings");
+        case "bookmarks": return i18n("Bookmarks");
+        case "websites": return i18n("Recent websites");
         case "chats": return i18n("Saved chats");
         default: return i18n("Files");
         }

@@ -129,6 +129,12 @@ read with OCR (``text_from_image``) for text-only models.
   recent conversations and calculator results, all with no model. (quick
   results, in the panel bar's list, under headings; open windows were
   dropped as odd among search results)
+- ● Browser bookmarks and recently visited websites in those results, each
+  switched on under Appearance → Search (off by default): Firefox-family and
+  Chromium-family browsers, native or Flatpak, read from private copies of
+  their databases into memory (``browsers``), refreshed every minute; a
+  click opens the page in the default browser. (asked for by the maintainer
+  2026-11-25)
 - ● Inline calculator, unit, currency, time-zone and date arithmetic ("3 weeks
   from friday") with no model. (currency is not done: qalc's rates need a
   network fetch)

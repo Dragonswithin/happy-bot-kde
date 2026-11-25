@@ -23,16 +23,18 @@ TestCase {
         const hits = [quick("Sound", "settings", "System Settings · Audio devices"), { kind: "file", title: "a.txt", location: "/a.txt" },
                       quick("Prism Launcher", "launch", "Application · Minecraft launcher"),
                       quick("minecraft", "conversation", "Earlier conversation"), quick("Steam", "launch", "Application"),
-                      quick("2+2 = 4", "copy", "Press Enter to copy")];
+                      quick("2+2 = 4", "copy", "Press Enter to copy"),
+                      quick("KDE", "visited", "Visited · kde.org · Firefox"), quick("Arch Wiki", "bookmark", "Bookmark · wiki.archlinux.org · Firefox")];
         compare(Look.groupHits(hits).map(hit => hit.title),
-                ["2+2 = 4", "Prism Launcher", "Steam", "Sound", "minecraft", "a.txt"]);
+                ["2+2 = 4", "Prism Launcher", "Steam", "Sound", "Arch Wiki", "KDE", "minecraft", "a.txt"]);
         compare(Look.groupHits(hits).map(hit => Look.hitGroup(hit)),
-                ["answer", "applications", "applications", "settings", "chats", "files"]);
+                ["answer", "applications", "applications", "settings", "bookmarks", "websites", "chats", "files"]);
     }
 
     function test_detailWithoutTheKind() {
         compare(Look.hitWhere(quick("Prism Launcher", "launch", "Application · Minecraft launcher")), "Minecraft launcher");
         compare(Look.hitWhere(quick("minecraft", "conversation", "Earlier conversation")), "");
+        compare(Look.hitWhere(quick("KDE", "visited", "Visited · kde.org · Firefox")), "kde.org · Firefox");
         compare(Look.hitWhere(quick("2+2 = 4", "copy", "Press Enter to copy")), "Press Enter to copy");
     }
 }

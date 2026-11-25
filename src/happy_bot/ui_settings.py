@@ -14,6 +14,8 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "popup_width": 30,          # the popup's size, in grid units: width 20 to 70,
       "popup_height": 26,         #   height 12 to 50
       "floating_opacity": 40,     # how visible the floating Happy Bot is while not in use, 15 to 100 percent
+      "search_bookmarks": false,  # search results include browser bookmarks (browsers.py)
+      "search_history": false,    # ... and recently visited websites; both read on this computer only
       "floating_x": -1,           # its place, logical pixels from the screen's top left;
       "floating_y": -1,           #   -1 = near the bottom right
       "imported": []              # which copies ("panel", "app") have handed over their old Plasma
@@ -37,7 +39,7 @@ from __future__ import annotations
 from typing import Any
 
 UI_DEFAULTS: dict[str, Any] = {
-    "robot_mascot": False, "popup_width": 30, "popup_height": 26,
+    "robot_mascot": False, "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
     "floating_opacity": 40, "floating_x": -1, "floating_y": -1, "imported": [],
 }
 UI_RANGES: dict[str, tuple[int, int]] = {

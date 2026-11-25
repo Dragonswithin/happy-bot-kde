@@ -92,7 +92,8 @@ Endpoints:
 - ``GET /check``: the self-check (``self_check.run_checks``): every
   dependency's state with a fix for each problem.
 - ``GET /quick?q=...``: results the bar shows besides files (answers,
-  applications, settings pages, conversations; ``quick_results``).
+  applications, settings pages, browser bookmarks and history when the user
+  switched them on, conversations; ``quick_results``).
 - ``POST /quick/activate``: ``{"action": {...}}`` from one of those results.
 - ``GET /reminders``: reminders and timers that are set
   (``{id, when, text}``, soonest first; ``tools/reminders.py``).
@@ -633,7 +634,9 @@ def check(server: "AssistantServer", query: dict[str, list[str]], body: dict[str
 
 def quick(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     text = _first(query, "q").strip()[:MAX_QUERY_CHARS]
-    return 200, {"ok": True, "query": text, "results": quick_results.gather(text, server.conversations.list())}
+    ui = server.settings.get("ui") or {}
+    return 200, {"ok": True, "query": text, "results": quick_results.gather(
+        text, server.conversations.list(), ui.get("search_bookmarks") is True, ui.get("search_history") is True)}
 
 
 def quick_activate(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:

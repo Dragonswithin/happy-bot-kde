@@ -19,7 +19,9 @@ import org.kde.plasma.plasmoid
  *
  * - Look and feel (the daemon's `ui` settings, src/happy_bot/ui_settings.py):
  *   the mascot or the wand, the floating Happy Bot's look (how faded while
- *   not in use, back to its corner) and the popup's size. They are read from `GET /health` and each change is saved
+ *   not in use, back to its corner), the popup's size, and whether search
+ *   results include browser bookmarks and recently visited websites
+ *   (`search_bookmarks`, `search_history`; src/happy_bot/browsers.py). They are read from `GET /health` and each change is saved
  *   at once with `POST /ui`, so the panel widget, which reads the same
  *   values, always matches the app.
  * - The app itself (`GET /app`, `POST /app`, src/happy_bot/app_control.py):
@@ -229,6 +231,32 @@ KCM.SimpleKCM {
             font: Kirigami.Theme.smallFont
             opacity: 0.7
             text: i18n("Sizes are in multiples of the desktop's font size. They apply to the floating Happy Bot and to the panel widget's popup.")
+        }
+
+        Item {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Search")
+        }
+
+        QQC2.CheckBox {
+            Kirigami.FormData.label: i18n("Also show:")
+            text: i18n("Bookmarks from your web browsers")
+            checked: page.ui !== null && page.ui.search_bookmarks === true
+            onToggled: page.save({ search_bookmarks: checked })
+        }
+
+        QQC2.CheckBox {
+            text: i18n("Websites you visited recently")
+            checked: page.ui !== null && page.ui.search_history === true
+            onToggled: page.save({ search_history: checked })
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            text: i18n("In the panel's search bar and \"Find a file\", from Firefox, Chrome, Chromium, Brave, Vivaldi, Edge, Opera and similar browsers. They are read on this computer and never sent anywhere.")
         }
 
         Item {

@@ -99,7 +99,10 @@ used.
   launcher: right above the bar it lists installed applications, System
   Settings pages, quick answers (sums, conversions, dates),
   saved chats and files (through a search tool you already have), with no
-  AI model involved, in a list that scrolls. The top result is selected and
+  AI model involved, in a list that scrolls. Under Appearance → Search you
+  can add your browsers' bookmarks and recently visited websites (Firefox,
+  Chrome, Chromium, Brave, Vivaldi, Edge, Opera and others), read on this
+  computer only. The top result is selected and
   Enter opens it, so "minecraft" and Enter starts your Minecraft launcher.
   The AI is asked only from the "Ask Happy Bot about …" row under the
   results: click it, or press Down to it and Enter (when nothing matches it

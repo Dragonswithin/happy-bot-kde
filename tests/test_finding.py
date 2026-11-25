@@ -67,8 +67,8 @@ class FindingTests(unittest.TestCase):
                                    "INSERT INTO moz_places VALUES (1, 'https://kde.org');"
                                    "INSERT INTO moz_bookmarks VALUES (1, 'KDE home', 1);")
         text = finding.browser_bookmarks({"contains": "kde"})
-        self.assertIn("KDE Store  https://store.kde.org  [chromium]", text)
-        self.assertIn("KDE home  https://kde.org  [firefox]", text)
+        self.assertIn("KDE Store  https://store.kde.org  [Chromium]", text)
+        self.assertIn("KDE home  https://kde.org  [Firefox]", text)
         self.assertIn("Arch Wiki", finding.browser_bookmarks({"contains": "arch wiki"}))
 
     def test_page_text_keeps_content_and_drops_scripts(self) -> None:

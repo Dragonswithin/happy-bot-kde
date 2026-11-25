@@ -1,7 +1,8 @@
 """Results the search bar shows while the user types, besides files: no model involved.
 
-``gather(text, conversations)`` returns up to ``MAX_RESULTS`` results, best
-first (at most five applications, three settings pages and three
+``gather(text, conversations, bookmarks, history)`` returns up to
+``MAX_RESULTS`` results, best first (at most five applications, three
+settings pages, four bookmarks, four recently visited websites and three
 conversations):
 
 1. a computed answer (``quick_answers``: arithmetic, conversions, dates,
@@ -9,7 +10,10 @@ conversations):
 2. installed applications (``tools/apps.match_applications``), to start;
 3. System Settings pages (the ``kcm_*.desktop`` entries Plasma ships, which
    the launcher hides), to open;
-4. saved conversations whose title matches, to reopen.
+4. browser bookmarks and recently visited websites, each only when the user
+   switched it on (``ui.search_bookmarks``, ``ui.search_history``), from the
+   in-memory ``browsers.BrowserIndex``, to open in the default browser;
+5. saved conversations whose title matches, to reopen.
 
 Open windows are not offered: the maintainer found them odd among search
 results (the task switcher is for those).
@@ -20,7 +24,8 @@ the action back to ``activate`` (``POST /quick/activate``), except
 ``conversation``, which it opens itself. Action types: ``copy`` (put
 ``target`` on the clipboard), ``launch``
 (start the ``.desktop`` file at ``target``), ``settings`` (open System
-Settings at the module ``target``), ``reveal`` (show the file ``target``
+Settings at the module ``target``), ``bookmark`` and ``visited`` (open the
+web address ``target`` with ``xdg-open``), ``reveal`` (show the file ``target``
 selected in the file manager, through ``org.freedesktop.FileManager1``; the
 applet offers it, with ``copy``, on a file match's right-click menu).
 
@@ -40,10 +45,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import quick_answers
+from . import browsers, quick_answers
 from .tools import apps
 
-MAX_RESULTS = 12
+MAX_RESULTS = 20
+_browsers = browsers.BrowserIndex()
 MIN_CHARS = 2
 CACHE_SECONDS = 60.0
 SETTINGS_DIRS = (Path("/usr/share/applications"), Path("/usr/local/share/applications"))
@@ -116,7 +122,19 @@ def _conversations(text: str, conversations: list[dict[str, Any]]) -> list[dict[
             for item in conversations if _words_match(text, item.get("title", ""))]
 
 
-def gather(text: str, conversations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _pages(text: str, bookmarks: bool, history: bool) -> list[dict[str, Any]]:
+    if not (bookmarks or history):
+        return []
+    _browsers.refresh_in_background(history)
+    marked, visited = _browsers.search(text, bookmarks, history)
+    return [{"kind": "quick", "title": page.title or browsers.host(page.url),
+             "subtitle": f"{'Bookmark' if page.bookmark else 'Visited'} · {browsers.host(page.url)} · {page.browser}",
+             "icon": page.icon, "action": {"type": "bookmark" if page.bookmark else "visited", "target": page.url}}
+            for page in [*marked, *visited]]
+
+
+def gather(text: str, conversations: list[dict[str, Any]] | None = None,
+           bookmarks: bool = False, history: bool = False) -> list[dict[str, Any]]:
     """Quick results for the typed text, best first (see module docstring)."""
     text = text.strip()
     results: list[dict[str, Any]] = []
@@ -131,6 +149,10 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None) -> list
             results.extend(source(text)[:most])
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
             continue
+    try:
+        results.extend(_pages(text, bookmarks, history))
+    except Exception:  # noqa: BLE001 - a browser database that cannot be read must not hide the rest
+        pass
     results.extend(_conversations(text, conversations or [])[:3])
     return results[:MAX_RESULTS]
 
@@ -171,6 +193,11 @@ def activate(action: dict[str, Any]) -> str:
         except (session_dbus.DBusUnavailable, session_dbus.DBusError) as error:
             raise ActivationError(f"the file manager could not show it ({error})") from error
         return f"Showed {target} in the file manager"
+    if kind in ("bookmark", "visited"):
+        if not re.match(r"https?://[^\s]+$", target):
+            raise ActivationError("not a web address")
+        _start(["xdg-open", target])
+        return f"Opened {browsers.host(target)}"
     if kind == "settings":
         if not re.fullmatch(r"kcm_[A-Za-z0-9_.-]+", target):
             raise ActivationError("not a System Settings page")

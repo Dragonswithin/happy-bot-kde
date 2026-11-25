@@ -3,9 +3,10 @@
 - ``recent_files``: the desktop's record of recently used files
   (``~/.local/share/recently-used.xbel``, written by KDE and GTK apps), for
   "where did I save…" questions, newest first, optionally filtered.
-- ``browser_bookmarks``: bookmarks from Chromium-family browsers (their
-  ``Bookmarks`` JSON) and Firefox (``places.sqlite``, read from a temporary
-  copy because Firefox keeps it locked), matching some words.
+- ``browser_bookmarks``: bookmarks from every browser profile ``browsers``
+  finds (the Firefox and Chromium families, native or Flatpak; databases read
+  from a temporary copy because browsers keep them locked), matching some
+  words.
 - ``file_origin``: where a downloaded file came from, from the extended
   attributes browsers set (``user.xdg.origin.url``, ``user.xdg.referrer.url``).
 - ``read_web_page``: fetch one http(s) page and return its readable text (or a
@@ -23,14 +24,11 @@ from __future__ import annotations
 
 import html
 import ipaddress
-import json
 import os
 import re
 import shutil
 import socket
-import sqlite3
 import subprocess
-import tempfile
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ElementTree
@@ -38,12 +36,12 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from .. import browsers
 from .registry import RISK_READ, Tool, ToolFailure, object_schema
 
 MAX_LISTED = 40
 MAX_PAGE_CHARS = 15000
 MAX_DOWNLOAD_BYTES = 8_000_000
-CHROMIUM_FAMILY = ("chromium", "google-chrome", "BraveSoftware/Brave-Browser", "vivaldi", "microsoft-edge")
 
 
 def recent_files(arguments: dict[str, Any]) -> str:
@@ -68,53 +66,15 @@ def recent_files(arguments: dict[str, Any]) -> str:
     return "\n".join(lines) or "No recently used file matches."
 
 
-def _chromium_bookmarks(path: Path) -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
-
-    def walk(node: Any) -> None:
-        if isinstance(node, dict):
-            if node.get("type") == "url":
-                found.append((node.get("name", ""), node.get("url", "")))
-            for child in node.get("children", []) or []:
-                walk(child)
-            for child in (node.get("roots") or {}).values():
-                walk(child)
-
-    try:
-        walk(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError):
-        pass
-    return found
-
-
-def _firefox_bookmarks(path: Path) -> list[tuple[str, str]]:
-    with tempfile.TemporaryDirectory() as tmp:
-        copy = Path(tmp) / "places.sqlite"
-        try:
-            shutil.copyfile(path, copy)
-            with sqlite3.connect(f"file:{copy}?mode=ro", uri=True) as database:
-                rows = database.execute("SELECT b.title, p.url FROM moz_bookmarks b JOIN moz_places p ON b.fk = p.id "
-                                        "WHERE b.type = 1").fetchall()
-        except (OSError, sqlite3.Error):
-            return []
-    return [(title or "", url) for title, url in rows]
-
-
 def browser_bookmarks(arguments: dict[str, Any]) -> str:
     wanted = str(arguments.get("contains") or "").lower().split()
-    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    sources: list[tuple[str, list[tuple[str, str]]]] = []
-    for browser in CHROMIUM_FAMILY:
-        for path in sorted((config / browser).glob("*/Bookmarks")):
-            sources.append((browser.split("/")[-1], _chromium_bookmarks(path)))
-    for path in sorted((Path.home() / ".mozilla/firefox").glob("*/places.sqlite")):
-        if "backup" not in path.parent.name and "back-" not in path.parent.name:
-            sources.append(("firefox", _firefox_bookmarks(path)))
     lines = []
-    for browser, bookmarks in sources:
-        for title, url in bookmarks:
+    for profile in browsers.profiles():
+        pairs = browsers.firefox_bookmarks(profile.folder / "places.sqlite") if profile.family == "firefox" \
+            else browsers.chromium_bookmarks(profile.folder / "Bookmarks")
+        for title, url in pairs:
             if all(word in f"{title} {url}".lower() for word in wanted):
-                lines.append(f"{title or url}  {url}  [{browser}]")
+                lines.append(f"{title or url}  {url}  [{profile.browser}]")
     return "\n".join(list(dict.fromkeys(lines))[:MAX_LISTED]) or "No bookmark matches."
 
 
