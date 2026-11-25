@@ -1093,6 +1093,14 @@ Findings:
   floating view stays open (`holdOpen`) and takes focus back. The panel
   widget also noted no application ("Desktop help" always); it now notes
   the topmost window as the floating button does.
+- The maintainer asked Gemini for help with Konsole and saw several failed
+  tool calls ("arguments were not valid JSON ... Extra data"). Captured
+  live: Gemini's OpenAI-compatible stream sends each tool call whole, with
+  its own `id` and no `index`; the provider filed every fragment without an
+  index under 0, gluing parallel calls into one (`{}{"query":...}`) and
+  losing the rest. `openai_compatible._tool_call_slot` keeps calls apart by
+  id when there is no index (and when an index is reused with a new id);
+  checked against Gemini afterwards: two calls, both valid.
 
 ## Decisions
 

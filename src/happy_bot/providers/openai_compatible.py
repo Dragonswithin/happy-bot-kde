@@ -11,7 +11,13 @@ Requests are streamed. The reply arrives as server-sent events; text deltas
 are yielded as they come, hidden reasoning is reported as ``ThinkingDelta``,
 and tool calls, which arrive as fragments of a JSON string spread over many
 events and keyed by ``index``, are reassembled and yielded complete once the
-stream ends. Arguments that are not a JSON object are passed on with
+stream ends, in the order they began (``_tool_call_slot``). Not every
+service numbers them: Gemini sends each call whole, with its own ``id`` and
+no ``index``, so a fragment without an index starts a new call when its id
+is new, and a fragment whose index belongs to a call with a different id is
+a new call too; a fragment with neither continues the latest call. Filing
+them all under index 0 had glued several calls into one with arguments that
+were not JSON. Arguments that are not a JSON object are passed on with
 ``arguments_error`` set so the agent loop can tell the model, instead of
 failing the turn.
 
@@ -129,6 +135,23 @@ def _message_to_wire(message: Message, base_url: str = "") -> dict[str, Any]:
     return wire
 
 
+def _tool_call_slot(pending: dict[tuple[str, Any], dict[str, Any]], fragment: dict[str, Any]) -> dict[str, Any]:
+    """The call a streamed tool-call fragment belongs to, created when it starts one (see the module docstring)."""
+    call_id = str(fragment.get("id") or "")
+    if isinstance(fragment.get("index"), int):
+        key: tuple[str, Any] = ("index", fragment["index"])
+        known = pending.get(key)
+        if known is not None and call_id and known["id"] and known["id"] != call_id:
+            key = ("id", call_id)  # a new call that reuses the index
+    elif call_id:
+        key = ("id", call_id)
+    elif pending:
+        key = next(reversed(pending))
+    else:
+        key = ("index", 0)
+    return pending.setdefault(key, {"id": "", "name": "", "arguments": [], "extra": {}})
+
+
 def _finish_tool_call(index: int, parts: dict[str, Any], base_url: str = "") -> ToolCall:
     raw = "".join(parts["arguments"]).strip()
     call_id = parts["id"] or f"call_{index}"
@@ -197,7 +220,7 @@ class OpenAICompatibleProvider:
                 for tool in tools
             ]
         response = self._open(body)
-        pending: dict[int, dict[str, Any]] = {}
+        pending: dict[tuple[str, Any], dict[str, Any]] = {}  # tool calls in the order they began
         reasoning: list[str] = []
         stop_reason = ""
         usage: dict[str, Any] = {}
@@ -233,8 +256,7 @@ class OpenAICompatibleProvider:
                     if delta.get("content"):
                         yield TextDelta(str(delta["content"]))
                     for fragment in delta.get("tool_calls") or []:
-                        slot = pending.setdefault(
-                            int(fragment.get("index", 0)), {"id": "", "name": "", "arguments": [], "extra": {}})
+                        slot = _tool_call_slot(pending, fragment)
                         if isinstance(fragment.get("extra_content"), dict):
                             slot["extra"]["extra_content"] = fragment["extra_content"]
                         function = fragment.get("function") or {}
@@ -249,9 +271,9 @@ class OpenAICompatibleProvider:
         finally:
             response.close()
         if stop_reason != "cancelled":
-            for index in sorted(pending):
-                if pending[index]["name"]:
-                    yield ToolCallReady(_finish_tool_call(index, pending[index], self.base_url))
+            for position, parts in enumerate(pending.values()):
+                if parts["name"]:
+                    yield ToolCallReady(_finish_tool_call(position, parts, self.base_url))
         yield TurnEnd(
             stop_reason=stop_reason,
             input_tokens=int(usage.get("prompt_tokens") or 0),

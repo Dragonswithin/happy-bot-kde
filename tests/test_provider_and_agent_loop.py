@@ -101,6 +101,27 @@ class ProviderTests(unittest.TestCase):
         calls = [e.call for e in self.run_stream(tools=[ECHO]) if isinstance(e, ToolCallReady)]
         self.assertEqual(calls, [ToolCall("a", "echo", {"text": "one"}), ToolCall("b", "echo", {"text": "two", "n": 2})])
 
+    def test_calls_without_an_index_are_kept_apart_by_id(self) -> None:
+        # Gemini's OpenAI-compatible stream, as captured: each call whole, with an id and no index.
+        self.service.replies.append([
+            {"choices": [{"delta": {"tool_calls": [{"id": "call_1", "type": "function",
+                                                    "function": {"name": "active_window", "arguments": "{}"}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"id": "call_2", "type": "function", "function": {
+                "name": "search_software", "arguments": '{"query":"terminal"}'}}]}}]},
+            {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}])
+        # A service that numbers every call 0, and continues one in a fragment with neither id nor index.
+        self.service.replies.append([
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "a", "function": {"name": "echo", "arguments": "{}"}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "b", "function": {
+                "name": "echo", "arguments": '{"text": '}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"function": {"arguments": '"two"}'}}]}}]},
+            {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}])
+        gemini = [e.call for e in self.run_stream(tools=[ECHO]) if isinstance(e, ToolCallReady)]
+        self.assertEqual(gemini, [ToolCall("call_1", "active_window", {}),
+                                  ToolCall("call_2", "search_software", {"query": "terminal"})])
+        reused = [e.call for e in self.run_stream(tools=[ECHO]) if isinstance(e, ToolCallReady)]
+        self.assertEqual(reused, [ToolCall("a", "echo", {}), ToolCall("b", "echo", {"text": "two"})])
+
     def test_bad_or_empty_tool_arguments_are_reported_not_fatal(self) -> None:
         self.service.replies.append(chunks_for(tool_calls=[("a", "echo", '{"text": '), ("b", "echo", "[1]")]))
         self.service.replies.append([
