@@ -23,6 +23,9 @@ import org.kde.plasma.extras as PlasmaExtras
  *   matches, scrolling, with an "Ask Happy Bot to find" row pinned below
  *   them). The panel bar's own results show above the bar instead
  *   (PanelResults.qml), never here.
+ * - ARTICLE while `session.article` is set (an offline Wikipedia article
+ *   opened from the Wikipedia finder): ArticleView.qml. Back returns to the
+ *   matches; "Ask about this" starts a request about the article.
  * - FIX while `session.fixing` is set (the "Fix selected text" shortcut):
  *   SelectionFixCard.qml, the selected text with its rewrite buttons and
  *   the result. The field then takes an instruction for the text (main.qml),
@@ -84,15 +87,18 @@ Rectangle {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool fixVisible: session.fixing !== null
-    readonly property bool filesVisible: !fixVisible && (hasHits || hasSearchError || session.finding
+    readonly property bool articleVisible: !fixVisible && session.article !== null
+    readonly property bool filesVisible: !fixVisible && !articleVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
-    readonly property bool conversationVisible: !filesVisible && !fixVisible
+    readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible
     readonly property bool sidebarVisible: session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
     readonly property real contentHeight: fixVisible
         ? fixCard.naturalHeight + inset * 2
+        : articleVisible
+        ? articleView.naturalHeight + inset * 2
         : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
@@ -230,7 +236,8 @@ Rectangle {
                 icon.name: "go-previous"
                 text: i18n("Back")
                 visible: view.session.finding || view.fixVisible
-                onClicked: view.fixVisible ? view.session.stopFixing() : view.session.stopFinding()
+                onClicked: view.fixVisible ? view.session.stopFixing()
+                    : view.articleVisible ? view.session.closeArticle() : view.session.stopFinding()
             }
 
             PlasmaComponents3.ToolButton {
@@ -354,6 +361,7 @@ Rectangle {
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
                     : view.fixVisible ? i18n("Or say what to do with the text…")
                     : view.session.finder === "web" ? i18n("Search the web…")
+                    : view.session.finder === "wiki" ? i18n("Look something up in Wikipedia…")
                     : view.session.finding ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
                 Keys.onReturnPressed: view.accepted(text.trim())
@@ -375,6 +383,8 @@ Rectangle {
                     } else if (view.fixVisible) {
                         view.session.stopFixing();
                         view.closeRequested();
+                    } else if (view.articleVisible) {
+                        view.session.closeArticle();
                     } else if (view.session.finding) {
                         view.session.stopFinding();
                     } else {
@@ -567,6 +577,45 @@ Rectangle {
 
             PlasmaComponents3.ScrollView {
                 anchors.fill: parent
+                visible: view.articleVisible
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                Flickable {
+                    id: articleFlick
+                    contentWidth: width
+                    contentHeight: articleView.naturalHeight + view.inset * 2
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    // Each article opens at its top.
+                    Connections {
+                        target: view.session
+                        function onArticleChanged() {
+                            if (view.session.article && view.session.article.loading) {
+                                articleFlick.contentY = 0;
+                            }
+                        }
+                    }
+
+                    ArticleView {
+                        id: articleView
+                        x: view.inset
+                        y: view.inset
+                        width: parent.width - view.inset * 2
+                        session: view.session
+                        onLinkActivated: link => view.hitActivated(link)
+                        onAskRequested: title => {
+                            view.session.stopFinding();
+                            view.setInput(i18n("About the Wikipedia article “%1”: ", title));
+                            view.focusInput();
+                        }
+                    }
+                }
+            }
+
+            PlasmaComponents3.ScrollView {
+                anchors.fill: parent
                 visible: view.fixVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
@@ -685,6 +734,15 @@ Rectangle {
                         }
                         onWebSearchChosen: {
                             view.session.startFinding("web");
+                            view.setInput("");
+                            view.focusInput();
+                        }
+                        onWikipediaChosen: {
+                            if (!view.session.wikipediaReady) {
+                                view.settingsRequested();  // set it up first (Search & Tools page)
+                                return;
+                            }
+                            view.session.startFinding("wiki");
                             view.setInput("");
                             view.focusInput();
                         }

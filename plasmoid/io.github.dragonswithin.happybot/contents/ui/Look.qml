@@ -57,6 +57,9 @@ QtObject {
         if (hit.kind === "link") {
             return "internet-web-browser";
         }
+        if (hit.kind === "article") {
+            return "documentation";
+        }
         const dot = hit.location.lastIndexOf(".");
         const extension = dot > hit.location.lastIndexOf("/") ? hit.location.substring(dot + 1).toLowerCase() : "";
         return extensionIcons[extension] || "text-x-generic";
@@ -64,15 +67,15 @@ QtObject {
 
     // The kinds of search result, in the order they are listed under their headings (FileResults.qml).
     readonly property var hitGroups: ["command", "answer", "characters", "applications", "settings", "bookmarks",
-                                      "websites", "web", "chats", "files"]
+                                      "websites", "web", "wikipedia", "chats", "files"]
 
     /** Which kind of result a hit is: a quick result by its action, anything from the file search "files". */
     function hitGroup(hit) {
         if (!hit) {
             return "";
         }
-        if (hit.source === "web") {
-            return "web";
+        if (hit.source === "web" || hit.source === "wikipedia") {
+            return hit.source;
         }
         if (hit.kind !== "quick") {
             return "files";
@@ -98,6 +101,7 @@ QtObject {
         case "answer": return i18n("Answer");
         case "characters": return i18n("Characters");
         case "web": return i18n("On the web");
+        case "wikipedia": return i18n("Wikipedia");
         case "applications": return i18n("Applications");
         case "settings": return i18n("Settings");
         case "bookmarks": return i18n("Bookmarks");
@@ -126,6 +130,9 @@ QtObject {
             }
             const parts = subtitle.split(" · ");
             return parts.length > 1 ? parts.slice(1).join(" · ") : "";
+        }
+        if (hit.source === "wikipedia") {
+            return hit.snippet || "";
         }
         if (hit.kind === "link") {
             const match = hit.location.match(/^https?:\/\/([^\/]+)/);

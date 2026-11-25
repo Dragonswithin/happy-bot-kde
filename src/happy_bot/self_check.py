@@ -12,6 +12,8 @@ for ``GET /check`` (the settings pages' "Check everything" button and
 - the installed panel applet's version matches the daemon's;
 - routines' systemd units match the settings, and the daemon has no
   recorded error;
+- offline Wikipedia, when it is set up, still has its archive, and its last
+  background download did not fail (``_wikipedia``);
 - the helper programs the most-used tools rely on are installed.
 
 ``fix`` is a plain sentence the user can act on, never a log path. A check
@@ -112,6 +114,25 @@ def _routines(server: "AssistantServer") -> dict[str, Any]:
                   "Open the Routines page and save any routine again, or restart the assistant.")
 
 
+def _wikipedia(server: "AssistantServer") -> list[dict[str, Any]]:
+    from . import wikipedia_library
+
+    wikipedia = server.settings.get("wikipedia") or {}
+    download = server.wikipedia_download.progress.snapshot()
+    results = []
+    if wikipedia.get("server"):
+        found = wikipedia_library.archives(wikipedia.get("folder") or "")
+        results.append(_check("Offline Wikipedia", bool(found),
+                              f"{Path(found[0].path).name} in {wikipedia['folder']}" if found
+                              else f"no archive in {wikipedia.get('folder')}",
+                              "On the Search & Tools page, press Set up… next to Wikipedia and choose it again."))
+    if download["state"] == "failed":
+        results.append(_check("Offline Wikipedia download", False, download["message"],
+                              "On the Search & Tools page, press Set up… next to Wikipedia to try again; "
+                              "it carries on from where it stopped."))
+    return results
+
+
 def run_checks(server: "AssistantServer") -> list[dict[str, Any]]:
     """Every check, in the order a user would fix them (see module docstring)."""
     results = [_model(server.settings), *_tool_servers(server), *_roles(server)]
@@ -125,6 +146,7 @@ def run_checks(server: "AssistantServer") -> list[dict[str, Any]]:
                           f"applet {applet or 'not installed'}, assistant {__version__}",
                           "Run the installer again, then restart the panel (log out and in)."))
     results.append(_routines(server))
+    results.extend(_wikipedia(server))
     missing = [f"{program} ({purpose})" for program, purpose in HELPERS.items() if not shutil.which(program)]
     results.append(_check("Helper programs", not missing, "all installed" if not missing else "missing: " + ", ".join(missing),
                           "Install the missing programs with the system's package manager."))

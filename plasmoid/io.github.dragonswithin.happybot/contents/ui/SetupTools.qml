@@ -24,7 +24,8 @@ import org.kde.kirigami as Kirigami
  * details button that opens ToolServerDetails.qml (running, read-only, start
  * command, environment, allowed tools). "Connect by hand…" opens
  * AddToolServer.qml. Editors are created only when opened, because listing a
- * server's tools starts it.
+ * server's tools starts it. The "Wikipedia:" row is WikipediaSetup.qml:
+ * offline Wikipedia, found on this computer or downloaded, and kept up to date.
  *
  * A Kirigami.FormLayout. Tool and server names are shown with underscores as
  * spaces; the stored names are unchanged.
@@ -206,6 +207,12 @@ Kirigami.FormLayout {
         font: Kirigami.Theme.smallFont
         opacity: 0.7
         text: i18n("File search shows matching files while you type. Web search lets the assistant answer with current information.")
+    }
+
+    WikipediaSetup {
+        Kirigami.FormData.label: i18n("Wikipedia:")
+        Kirigami.FormData.labelAlignment: Qt.AlignTop
+        page: section.page
     }
 
     Item {

@@ -58,6 +58,7 @@ Item {
     readonly property bool hasHits: session.hits.length > 0
     readonly property bool chips: session.showingRecent
     readonly property bool web: session.finder === "web"
+    readonly property bool wiki: session.finder === "wiki"
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property real naturalHeight: filesColumn.implicitHeight + (askRow.visible ? askRow.implicitHeight : 0)
 
@@ -314,7 +315,7 @@ Item {
                                         PlasmaComponents3.Label {
                                             Layout.fillWidth: true
                                             text: Look.hitWhere(entry.modelData)
-                                            elide: entry.group === "web" ? Text.ElideRight : Text.ElideMiddle
+                                            elide: entry.group === "web" || entry.group === "wikipedia" ? Text.ElideRight : Text.ElideMiddle
                                             textFormat: Text.PlainText
                                             font: Kirigami.Theme.smallFont
                                             opacity: 0.65
@@ -334,6 +335,8 @@ Item {
                         opacity: 0.7
                         text: results.session.searching ? i18n("Searching…")
                             : results.web && results.session.searchedText.length > 0 ? i18n("Nothing found on the web. Ask Happy Bot below.")
+                            : results.wiki && results.session.searchedText.length > 0 ? i18n("No article matches. Ask Happy Bot below.")
+                            : results.wiki ? i18n("Type what to look up; articles from your offline Wikipedia show here. Enter opens the top one.")
                             : results.session.searchedText.length > 0 ? i18n("Nothing on this computer matches. Ask Happy Bot below.")
                             : results.web ? i18n("Type what to look up; pages from the web show here. Enter opens the top one.")
                             : i18n("Type the name of an application, a setting or a file; what matches shows here. Enter opens the top one.")
@@ -354,7 +357,9 @@ Item {
                         PlasmaComponents3.Label {
                             Layout.fillWidth: true
                             text: results.session.searchErrorCode === "not_configured"
-                                ? (results.web ? i18n("Web search is not set up yet.") : i18n("File search is not set up yet."))
+                                ? (results.wiki ? i18n("Offline Wikipedia is not set up yet.")
+                                   : results.web ? i18n("Web search is not set up yet.") : i18n("File search is not set up yet."))
+                                : results.wiki ? i18n("Offline Wikipedia is not responding. Try again in a moment.")
                                 : results.web ? i18n("Web search is not responding. Try again in a moment.")
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
@@ -396,6 +401,7 @@ Item {
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
                     text: results.web ? i18n("Ask Happy Bot to search the web for “%1”", results.query)
+                        : results.wiki ? i18n("Ask Happy Bot to look up “%1” in Wikipedia", results.query)
                         : results.session.finding ? i18n("Ask Happy Bot to find “%1”", results.query)
                         : i18n("Ask Happy Bot about “%1”", results.query)
                     elide: Text.ElideRight

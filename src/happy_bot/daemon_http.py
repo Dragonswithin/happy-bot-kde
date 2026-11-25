@@ -22,15 +22,18 @@ clients can find the base URL), the current settings, the conversations, the
 ``IconActivity`` the mascot's cues come from (``GET /icon/activity``), the
 ``voice.Listener`` that records a spoken request, the
 ``selection_fix.SelectionNote`` holding the text noted by the "Fix selected
-text" shortcut, and the
+text" shortcut, the ``wikipedia_setup.DownloadJob`` of an offline Wikipedia
+download, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
-manager and brings the routines' systemd units in step (``routines.sync``),
+manager and brings the routines' systemd units, and the offline Wikipedia
+update timer, in step (``routines.sync``, ``wikipedia_library.sync_timer``),
 under one lock. Unreadable settings at start do not stop the daemon;
 it runs with defaults and reports ``settings_error`` in ``/health``.
 
 Requests are served on one thread each (``ThreadingHTTPServer``). What each
-endpoint does lives in ``daemon_routes``; this module only authenticates,
+endpoint does lives in ``daemon_routes`` (offline Wikipedia's in
+``wikipedia_routes``, merged into ``ROUTES``); this module only authenticates,
 parses and dispatches. The one exception in shape is ``POST /ask``, which
 answers with a server-sent event stream (``text/event-stream``, one
 ``data: <json>`` block per event, connection closed at the end) produced by
@@ -58,14 +61,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import desktop_context, routines, selection_fix, user_timers, voice
+from . import desktop_context, routines, selection_fix, user_timers, voice, wikipedia_library, wikipedia_setup
 from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
 from .ask_stream import ClientGone, stream_ask
 from .conversation_archive import ConversationArchive
 from .conversations import ConversationStore
-from .daemon_routes import ROUTES
+from .daemon_routes import ROUTES as CORE_ROUTES
+from .wikipedia_routes import ROUTES as WIKIPEDIA_ROUTES
 from .mcp_client import McpManager
 from .krunner_bridge import KRunnerBridge
 from .permissions import ApprovalBroker
@@ -79,6 +83,7 @@ from .runtime_paths import (
 )
 
 SCHEMA = "happy_bot_daemon.v1"
+ROUTES = {**CORE_ROUTES, **WIKIPEDIA_ROUTES}
 MAX_BODY_BYTES = 2_000_000
 
 
@@ -191,6 +196,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.approvals = ApprovalBroker()
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
+        self.wikipedia_download = wikipedia_setup.DownloadJob()  # offline Wikipedia's background download
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:
@@ -223,6 +229,10 @@ class AssistantServer(ThreadingHTTPServer):
             problems = routines.sync(self.settings.get("routines", {}), self.unit_dir, self.manage_units)
         except OSError as error:
             problems = [f"routine units could not be written: {error}"]
+        try:
+            wikipedia_library.sync_timer(self.settings["wikipedia"], self.unit_dir, self.manage_units)
+        except OSError as error:
+            problems.append(f"the offline Wikipedia update timer could not be written: {error}")
         if problems:
             self.state.last_error = "; ".join(problems)
 

@@ -10,7 +10,8 @@ Endpoints:
 
 - ``GET /health``: daemon status, which parts of setup are complete, the
   user's AIs in order (name and whether online) for the popup's per-chat
-  picker, and the shared look-and-feel settings (``ui``).
+  picker, the shared look-and-feel settings (``ui``), and whether offline
+  Wikipedia is set up (``wikipedia``).
 - ``POST /ui``: change some of those shared settings (``ui_settings``); the
   panel widget and the app both read them, so they stay the same.
 - ``GET /context``: desktop context capture (``desktop_context``).
@@ -191,6 +192,8 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     voice_settings = server.settings.get("voice") or {}
     payload["voice"] = {"enabled": bool(voice_settings.get("enabled") and voice_settings.get("base_url")),
                         "listening": server.voice.active}
+    wikipedia = server.settings.get("wikipedia") or {}
+    payload["wikipedia"] = bool(wikipedia.get("server") and wikipedia.get("folder"))  # its finder can be offered
     payload["settings_error"] = server.settings_error
     return 200, payload
 

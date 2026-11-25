@@ -14,8 +14,10 @@ import org.kde.plasma.components as PlasmaComponents3
  * (ResultsView.qml shows it while the conversation is open and empty): a
  * greeting with Happy Bot's picture (`assistantIcon`, tinted with `accent`),
  * a line on what it can do, and a few starting points (find a file, search
- * the web, desktop help). "Find a file" emits `findFilesChosen` and
- * "Search the web" `webSearchChosen`, which ResultsView.qml turns into its
+ * the web, Wikipedia, desktop help). "Find a file" emits `findFilesChosen`,
+ * "Search the web" `webSearchChosen` and "Wikipedia" `wikipediaChosen`
+ * (offline Wikipedia; ResultsView.qml opens its setup when it is not set
+ * up), which ResultsView.qml turns into its
  * finders (`AssistantSession.finder`: matching applications, settings and
  * files, or bookmarks, visited websites and web pages, show as the user
  * types). The others emit `promptChosen`
@@ -41,6 +43,7 @@ ColumnLayout {
     signal promptChosen(string prompt)
     signal findFilesChosen()
     signal webSearchChosen()
+    signal wikipediaChosen()
     // "Help with …": like promptChosen, and the chat it starts carries the application's full context.
     signal helpChosen(string prompt)
 
@@ -130,7 +133,7 @@ ColumnLayout {
     GridLayout {
         id: shortcuts
         Layout.fillWidth: true
-        columns: width >= Kirigami.Units.gridUnit * 25 ? 3 : 1
+        columns: width >= Kirigami.Units.gridUnit * 25 ? 2 : 1
         rowSpacing: Kirigami.Units.smallSpacing
         columnSpacing: Kirigami.Units.largeSpacing
         uniformCellWidths: true
@@ -143,6 +146,8 @@ ColumnLayout {
                     ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
                         appIcon: true, help: true, prompt: i18n("In %1, help me", welcome.appName) }
                     : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
+                // In two columns this comes under "Search the web", as the maintainer asked.
+                , { label: i18n("Wikipedia"), icon: "documentation", prompt: "", wiki: true }
             ]
 
             PlasmaComponents3.ItemDelegate {
@@ -155,6 +160,7 @@ ColumnLayout {
                 text: modelData.label
                 onClicked: modelData.help ? welcome.helpChosen(modelData.prompt + " ")
                     : modelData.web ? welcome.webSearchChosen()
+                    : modelData.wiki ? welcome.wikipediaChosen()
                     : modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
 
                 background: Rectangle {

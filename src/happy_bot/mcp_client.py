@@ -21,8 +21,9 @@ drops the cached tool list.
 
 ``McpManager`` owns the sessions for the daemon's lifetime: it starts a
 server on first use, replaces a session whose process has died (no more often
-than ``RESTART_INTERVAL_SECONDS``), and terminates every child on
-``close_all``. Children run in their own process group so a server's own
+than ``RESTART_INTERVAL_SECONDS``), stops one on ``restart`` so its next use
+starts it afresh (the offline Wikipedia reader, after its archive was
+replaced), and terminates every child on ``close_all``. Children run in their own process group so a server's own
 subprocesses die with it.
 
 Failures surface as ``McpError`` with a message meant for the user; the last
@@ -304,6 +305,14 @@ class McpManager:
                 self._last_start.pop(name, None)
             self._specs = wanted
         for session in closing:
+            session.close()
+
+    def restart(self, name: str) -> None:
+        """Stop ``name``'s running session, if any; the next call starts it afresh (to reopen changed files)."""
+        with self._lock:
+            session = self._sessions.pop(name, None)
+            self._last_start.pop(name, None)
+        if session is not None:
             session.close()
 
     def server_names(self) -> list[str]:

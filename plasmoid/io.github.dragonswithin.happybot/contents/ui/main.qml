@@ -243,7 +243,8 @@ PlasmoidItem {
 
     Timer {
         id: searchDelay
-        interval: session.finder === "web" ? 600 : 200  // ms of no typing before searching (the web: a longer pause)
+        // ms of no typing before searching: the web and Wikipedia search take a second, so they wait longer
+        interval: session.finder === "web" ? 600 : session.finder === "wiki" ? 400 : 200
         onTriggered: session.search(root.pendingQuery)
     }
 
@@ -786,6 +787,9 @@ PlasmoidItem {
 
     function handleEdited(text) {
         root.pendingQuery = String(text || "").trim();
+        if (session.article && root.pendingQuery.length > 0) {
+            session.closeArticle();  // typing while reading an article searches again
+        }
         root.acceptAfterSearch = "";
         if (root.pendingQuery.length > 0 && root.searchable(root.pendingQuery)) {
             searchDelay.restart();
@@ -823,6 +827,10 @@ PlasmoidItem {
     /** A file opens; a quick result does its action (an application starts, a window comes forward...).
      *  A saved conversation opens in Happy Bot, which stays open. */
     function openHit(hit) {
+        if (hit.source === "wikipedia") {
+            session.openArticle(hit.location, hit.title);  // shown in Happy Bot itself, which stays open
+            return;
+        }
         if (hit.kind === "quick") {
             // An instant command that fails is shown in the popup, since nothing else would show it.
             session.activateQuick(hit, hit.action.type === "command" ? () => root.openPopup() : null);
@@ -897,10 +905,11 @@ PlasmoidItem {
         root.acceptAfterSearch = "";
         if (session.finding && text.length > 0) {
             // No match chosen: the assistant searches harder (other words, the whole index, the web's pages).
-            const web = session.finder === "web";
+            const finder = session.finder;
             searchDelay.stop();
             session.stopFinding();
-            text = (web ? "Search the web for: " : "Find the file: ") + text;
+            text = (finder === "web" ? "Search the web for: " : finder === "wiki" ? "Look this up in Wikipedia: "
+                    : "Find the file: ") + text;
         }
         if (text.length === 0 && session.needsSetup) {
             root.openSettings();

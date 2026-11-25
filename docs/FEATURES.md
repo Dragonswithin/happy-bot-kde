@@ -94,6 +94,15 @@ Fix the selected text:
   selection and restores the clipboard. Rewrites checked live on the local
   model; Replace not yet tried in a real application.)
 
+Offline Wikipedia (requested 2026-11-25, Phase 10):
+
+- ◐ A Wikipedia finder under "Search the web", articles read cleanly inside
+  Happy Bot with their links, the AI able to look things up offline, setup
+  that finds archives already on the computer or downloads one of Kiwix's
+  three sizes, and an optional monthly update. (Checked live on the
+  maintainer's archive through a throwaway daemon; a real download and the
+  settings page by a person not yet.)
+
 Mascot nudges and a morning card:
 
 - Nudges with a fix button: a calm pose when the battery is low, updates

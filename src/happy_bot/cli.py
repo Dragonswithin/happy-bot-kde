@@ -16,7 +16,10 @@ notification (with the mascot as its icon when that is chosen), which is how rou
 (``routines.py``). Every other command prints one JSON reply.
 
 ``routine-check`` is what a network or battery routine's timer runs
-(``routine_conditions.py``).
+(``routine_conditions.py``). ``wikipedia update`` is what the monthly offline
+Wikipedia timer runs (``wikipedia_setup.scheduled_update``): it works without
+the daemon, from the settings file, and afterwards asks a running daemon to
+reopen the archive.
 ``app`` talks to the Happy Bot app through the daemon (``app_control.py``):
 ``show`` opens the floating Happy Bot of a running app (``happy-bot-app``
 calls it when the app is already running), ``settings`` opens its settings
@@ -251,6 +254,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluate = sub.add_parser("eval", help="Try a model on everyday requests as dry runs (nothing changes) and "
                               "report which pass and how long they take.")
     evaluate.add_argument("--model", default="", help="A configured model; default is the active one.")
+    wikipedia = sub.add_parser("wikipedia", help="Offline Wikipedia: download a newer build now if Happy Bot keeps "
+                               "it up to date (run monthly by its timer).")
+    wikipedia.add_argument("action", choices=("update",))
     routine_check = sub.add_parser("routine-check", help="Run a routine if its network or battery condition has just "
                                    "become true (started by the routine's timer).")
     routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
@@ -463,6 +469,19 @@ def main(argv: list[str] | None = None) -> int:
         from .file_index_server import serve as serve_index
 
         return serve_index(args.index)
+    if args.command == "wikipedia":
+        # The timer's job: it must not need the daemon, which runs only in a desktop session.
+        from .settings import load_settings
+        from .wikipedia_setup import scheduled_update
+
+        result = scheduled_update(load_settings())
+        if result.get("action") == "downloaded":
+            try:
+                request_json("POST", "/wikipedia/reload", {})
+            except Exception:  # noqa: BLE001 - no daemon running: it opens the new archive when it starts
+                pass
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
     try:
         ensure_daemon()
         if args.command == "endpoint":

@@ -119,6 +119,13 @@ used.
   web" work the same way: recent items first, then matches as you type;
   "Search the web" lists your bookmarks, visited websites and pages from
   your web search tool, and Enter opens one.
+- **Offline Wikipedia**: on the Search & Tools page, "Set up…" next to
+  Wikipedia uses a Wikipedia archive already on your computer or downloads
+  one from Kiwix (introductions only, every article without pictures, or
+  everything), and can keep it up to date monthly. Then "Wikipedia" on
+  Happy Bot's start screen finds articles as you type and shows them inside
+  Happy Bot, with links to other articles; the AI can look things up in it
+  too, without the internet.
 - **Fix selected text**: give the "Fix selected text" shortcut a key
   (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any
   application and press it. Happy Bot shows the text with Fix grammar,

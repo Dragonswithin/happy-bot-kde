@@ -416,6 +416,18 @@ the application's Undo brings the old text back, and the clipboard holds
 what it held before.
 Status: built, exit check not yet passed (see Phase 9 findings).
 
+**Phase 10: Offline Wikipedia** (requested by the maintainer on
+2026-11-25: "a clearly supported thing in Happy Bot that the setup should
+help you set up and keep updated if users turn it on"). A Wikipedia finder
+under "Search the web", articles shown inside Happy Bot, the AI able to
+look things up offline, setup that finds archives already on the computer
+or downloads one of Kiwix's sizes, and an optional monthly update.
+*Exit:* on the maintainer's account, Set up finds the existing archive and
+the finder opens articles and follows their links; on a fresh account
+with only a model chosen, Set up downloads the introductions-only archive,
+the finder works, and the monthly timer is on.
+Status: built, exit check not yet passed (see Phase 10 findings).
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
 priority order the maintainer chose for after the first release, is in
@@ -1275,6 +1287,36 @@ Findings:
   later. Happy Bot closes first so the application takes the paste. Not
   yet tried in a real application.
 
+**Phase 10 (built 2026-11-25).**
+
+- The maintainer's computer already kept English Wikipedia (maxi, 119 GB)
+  for another AI program's openzim reader, updated by a monthly system
+  timer of their own. Setup finds such folders through the readers other
+  AI programs were given (`wikipedia_library.find_folders`), besides Happy
+  Bot's own folder, Kiwix desktop's and Downloads/Documents, and leaves a
+  folder alone when another updater's lock file is there.
+- Reader: openzim-mcp (PyPI, pinned at 3.5.2 after starting it against the
+  real archive; an installed `openzim-mcp` is used as is), read-only, lending
+  the AI three of its eight tools. Its title search is fast (0.2 to 0.5 s)
+  but its prefix suggestions ranked "PYTH" and "PYTHIA" over Python, so the
+  finder uses the exact title plus full-text search (0.5 to 1.8 s).
+- Articles: the reader's own text conversion turned the infobox into a heap
+  of table cells, so the article's HTML is fetched raw (0.1 s) and cleaned by
+  `wikipedia_reader.ArticleCleaner` (Python's `html.parser`, no new
+  dependency). Matching classes by substring emptied the page (its body
+  class contains "toc"); whole class names fixed it. Qt draws `_italic_` as
+  underline, so italics use `*`. Links keep the article path, which the
+  archive stores unencoded ("Windsor,_Ontario"), so paths are decoded.
+- Downloads (`wikipedia_catalog`) follow the maintainer's own updater:
+  Kiwix's listing, a resumable `.partial` file, SHA-256 from Kiwix, an
+  atomic rename, older builds removed; tested with a fake Kiwix, not with
+  a real multi-gigabyte download. The monthly user timer runs `happy-bot
+  wikipedia update`, which needs no daemon.
+- Checked live against a throwaway daemon with the maintainer's settings:
+  setup found /srv/services/zim and kept updating off, the finder and
+  articles worked, the self-check reported it, and turning it off kept
+  the archive.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
@@ -1315,3 +1357,7 @@ Findings:
   `danger` is refused there. Uninstalling, a deletion, runs only in a
   terminal where the package manager asks the user to confirm (made while
   building Phase 8 and kept by the maintainer, 2026-11-25).
+- Offline Wikipedia articles open inside Happy Bot, not in a browser
+  through kiwix-serve, so nothing extra is installed or kept running; an
+  archive another program keeps up to date is used as is and never
+  updated by Happy Bot (the maintainer, 2026-11-25).

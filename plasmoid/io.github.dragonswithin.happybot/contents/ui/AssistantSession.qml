@@ -100,7 +100,14 @@ import QtQuick
  * same way as the panel bar, and "Search the web" ("web") shows matching
  * bookmarks and visited websites (`/quick`, only those kinds) and web pages
  * from the user's web search tool (`/search/web`, from `WEB_MIN_CHARS`
- * characters; hits marked `source: "web"`) instead of files. `searching` is true until
+ * characters; hits marked `source: "web"`) instead of files. "Wikipedia"
+ * ("wiki", offered when `wikipediaReady`, from `/health`) shows only
+ * articles from the user's offline Wikipedia (`/wikipedia/search`; hits
+ * marked `source: "wikipedia"`, their `location` the article's path).
+ * `openArticle(path)` reads one (`/wikipedia/article`) into `article`
+ * (`{title, path, text, cut}` with `loading` and `error`), which the view
+ * shows instead of the matches until `closeArticle`; leaving the finder
+ * closes it too. `searching` is true until
  * both replies are in and `searchedText` is the text they are for, so Enter
  * typed before the results can wait for them. A quick hit has `kind`
  * "quick" and an `action`; `activateQuick` carries it out (an instant
@@ -192,7 +199,9 @@ Item {
     signal selectionReplaceFailed()
 
     property int searchLimit: 20
-    property string finder: ""  // the open finder: "files", "web", or "" for none
+    property string finder: ""  // the open finder: "files", "web", "wiki", or "" for none
+    property bool wikipediaReady: false  // offline Wikipedia is set up (from /health)
+    property var article: null  // the Wikipedia article shown (see the header), or null
     readonly property bool finding: finder.length > 0
     readonly property int webMinChars: 3  // WEB_MIN_CHARS: shorter text is not sent to the web search
     property var quickHits: []
@@ -287,6 +296,7 @@ Item {
             }
             session.uiLoaded = true;
             session.voiceEnabled = !!(data.voice && data.voice.enabled);
+            session.wikipediaReady = data.wikipedia === true;
             if (session.chatModel && !session.models.some(item => item.name === session.chatModel)) {
                 session.chatModel = "";
             }
@@ -314,8 +324,9 @@ Item {
         const sequence = session.searchSequence;
         request("GET", "/quick/recent", null, function(data) {
             if (sequence === session.searchSequence) {
-                session.recentHits = (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
-                session.showingRecent = true;
+                session.recentHits = session.finder === "wiki" ? []
+                    : (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
+                session.showingRecent = session.recentHits.length > 0;
             }
         }, function(data) {});
     }
@@ -422,7 +433,30 @@ Item {
 
     function stopFinding() {
         session.finder = "";
+        session.article = null;
         clearSearch();
+    }
+
+    /** Shows the offline Wikipedia article at `path` (a hit's location, or a link in another article). */
+    function openArticle(path, title) {
+        const wanted = decodeURIComponent(String(path || "")).replace(/ /g, "_");
+        session.article = { loading: true, title: title || wanted.replace(/_/g, " "), path: wanted, text: "", cut: false,
+                            error: "" };
+        request("GET", "/wikipedia/article?path=" + encodeURIComponent(wanted), null, function(data) {
+            if (session.article && session.article.path === wanted) {
+                session.article = { loading: false, title: data.title, path: data.path, text: data.text, cut: data.cut,
+                                    error: "" };
+            }
+        }, function(data) {
+            if (session.article && session.article.path === wanted) {
+                session.article = Object.assign({}, session.article, { loading: false,
+                                                 error: data.error || i18n("The article could not be read.") });
+            }
+        });
+    }
+
+    function closeArticle() {
+        session.article = null;
     }
 
     /** Whether a hit belongs in the web finder: a bookmark, a visited website or a web page. */
@@ -443,7 +477,8 @@ Item {
         const sequence = session.searchSequence;
         const inFinder = session.finding;
         const web = session.finder === "web";
-        let pending = 2;
+        const wiki = session.finder === "wiki";
+        let pending = wiki ? 1 : 2;
         session.searchedText = query;
         session.searching = true;
         function finished() {
@@ -452,7 +487,9 @@ Item {
                 session.searching = false;
             }
         }
-        request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
+        if (wiki) {
+            session.quickHits = [];  // the Wikipedia finder shows articles only
+        } else request("GET", "/quick?q=" + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.quickHits = (data.results || []).filter(hit => !web || session.webHit(hit));
             }
@@ -468,7 +505,8 @@ Item {
             finished();
             return;
         }
-        const path = web ? "/search/web?q=" : "/search?limit=" + session.searchLimit + "&q=";
+        const path = wiki ? "/wikipedia/search?q=" : web ? "/search/web?q="
+            : "/search?limit=" + session.searchLimit + "&q=";
         request("GET", path + encodeURIComponent(query), null, function(data) {
             if (sequence === session.searchSequence) {
                 session.searchError = "";
