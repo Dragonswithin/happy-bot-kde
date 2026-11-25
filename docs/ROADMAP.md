@@ -398,10 +398,10 @@ item passes its own check recorded under Phase 7 findings.
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
 priority order the maintainer chose for after the first release, is in
 `docs/FEATURES.md`; an item there is planned only once it is placed in a
-phase here. Image and voice input, with a local model that can test them,
-were requested by the maintainer on 2026-11-23 for a later phase (see the backlog's
-"Image And Voice Input"); which model to add to the GPU or NPU service is
-his decision.
+phase here. Image and voice input, first deferred on 2026-11-23, were built
+on 2026-11-25 once the maintainer gave the GPU service a vision projector
+and the NPU service Whisper (see the findings below and the backlog's "Image
+And Voice Input"); spoken answers are still to come.
 
 ## Phase Findings
 
@@ -1122,6 +1122,60 @@ Findings:
   exception to "no command output in the repo". With the Gemini fix
   reverted, the replay fails on Gemini's parallel calls.
 
+**From the maintainer's use (2026-11-25).**
+
+- Search, after three rounds of the maintainer's use: the panel's search
+  bar is a launcher-style search. As the user types, applications, settings
+  pages, answers, saved chats and files show right above the bar
+  (`PanelResults.qml`, a Plasma dialog that never takes the keyboard, so
+  typing stays in the bar), under headings with applications first
+  (`Look.groupHits`); Enter opens the top one, waiting for results if typed
+  before them, and the AI is asked only from the "Ask Happy Bot about …"
+  row. Typing "minecraft" had given an AI conversation instead of the
+  installed Prism Launcher. The popup and the floating Happy Bot are the
+  assistant again (typing there is a request); "Find a file" searches the
+  same way as the bar. Open windows were dropped from results as odd. The
+  bar clears after a result is opened, a request asked, or a click away.
+- Browser bookmarks and recently visited websites can join those results,
+  each switched on under Appearance → Search (`browsers.py`: Firefox and
+  Chromium families, native and Flatpak, from private copies of their
+  databases, kept in memory and never sent anywhere).
+- Software: the search marks what is already installed (the model had
+  offered to install Prism Launcher, which was installed), and with Shelly
+  present the model installs through `shelly install` in a terminal, which
+  `shell_risk` treats like `pacman -S`.
+- Pictures: whether a model on this computer takes images is asked of its
+  service when it is added (`model_discovery.sees_pictures`: llama.cpp's
+  model list, or an Ollama-style `/api/show`); the GPU model passed the full
+  check, naming the test picture. The NPU model also reports vision, but its
+  runbook keeps picture work on the GPU, so it is left unmarked.
+- Voice (`voice.py`): a microphone in the bar, the popup and the floating
+  Happy Bot, and a "Talk to Happy Bot" shortcut. PipeWire records until a
+  pause; only audio with speech is sent (Whisper "hears" "you" in silence),
+  loudness-normalized 16 kHz mono with the language set, as the
+  maintainer's Whisper needs; the text goes to the AI at once. The
+  maintainer's first try with a weak microphone worked but missed words;
+  judging that waits for a better microphone.
+- Answer buttons (`tools/choices.py`): the AI can ask one short question
+  with answer buttons or offer next steps to click; the turn ends there
+  (`Tool.ends_turn`). Offered only to Happy Bot's own window. Live on the GPU
+  model, "minecraft" offered "Open Prism Launcher" and two installs; a plain
+  question got none. Thinking was left as it is: the GPU model's template
+  only switches it on or off.
+- The mascot gets live readings once a second (`system_sensors.py`: the CPU
+  sensor with its own limit, PSI memory stalls, the default route's byte
+  counters, reset on interface change, counter reset and resume). Checked
+  live: a real download raised the download pose, a microphone capture
+  during it took over, and the download pose came back after it.
+- Fixes from use: the Behaviour page's two sets of choices acted as one
+  (radio buttons sharing a parent; now `ButtonGroup`s); long instructions
+  drew over the buttons (a fixed-height `ScrollView`); scrolling a settings
+  page over a number box changed it (the popup width went from 30 to 22;
+  number boxes now ignore the wheel); the floating view showed only its
+  field when opening downward (anchors switched at run time; now placed by
+  `y`); the finished-request notification can be switched off and shows the
+  mascot when that is chosen.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
@@ -1148,3 +1202,11 @@ Findings:
   tool takes seconds and is for the model to call.
 - Existing projects were surveyed on 2026-11-22 (PlasmaLLM, KDE Assistant,
   kde-ai, computer-use-linux, kwin-mcp). None is this product.
+- The panel's search bar is where things are found and launched; the popup
+  and the floating Happy Bot are the assistant (the maintainer, 2026-11-25:
+  "the panel search box should act as a file/application search first and
+  only engage the AI if the user clicks to start it").
+- Browser history and bookmarks appear in search only when the user
+  switches each on, and are read on this computer only (2026-11-25).
+- What is said into the microphone goes to the AI at once, without a
+  review step (the maintainer's choice, 2026-11-25).
