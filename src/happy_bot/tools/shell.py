@@ -26,9 +26,11 @@ told to use ``run_in_terminal`` instead.
 Both tools are built by ``shell_tools`` with two of the user's settings
 (``agent`` in ``settings.py``): ``run_command``'s default time limit when the
 model names none, and the terminal ``run_in_terminal`` opens. The terminal is
-one of ``SUPPORTED_TERMINALS``, whose command lines ``terminal_command`` knows;
-when none is chosen it is KDE's ``TerminalApplication`` setting if that is a
-supported one, else the first supported terminal installed.
+one of ``SUPPORTED_TERMINALS``, whose command lines ``terminal_command`` knows,
+installed natively or as a Flatpak (``FLATPAK_TERMINALS``: Kwi and Konsole, whose
+Flatpaks run commands on the host); when none is chosen it is KDE's default
+terminal (``TerminalService`` or ``TerminalApplication`` in kdeglobals) if that
+is a supported one, else the first supported terminal installed.
 
 ``run_in_terminal`` opens that terminal running the command, and waits until it finishes:
 installs, builds, and anything that asks for a password or wants the user to
@@ -56,6 +58,7 @@ from __future__ import annotations
 import os
 import secrets
 import shlex
+from pathlib import Path
 import shutil
 import signal
 import subprocess
@@ -76,7 +79,11 @@ OUTPUT_TAIL_CHARS = 4500
 POLL_SECONDS = 0.2
 # Terminals whose way of running a command is known (see terminal_command), in
 # the order tried when the user chose none and KDE's own choice is not usable.
-SUPPORTED_TERMINALS = ("konsole", "kitty", "alacritty", "foot", "wezterm", "kgx", "gnome-terminal", "xterm")
+SUPPORTED_TERMINALS = ("konsole", "kwi", "kitty", "alacritty", "foot", "wezterm", "kgx", "gnome-terminal", "xterm")
+# Terminals also found as Flatpaks: Flatpak exports a launcher named after the app id (on PATH in a
+# Plasma session, else in these folders), and the command still runs on the host (checked for Kwi).
+FLATPAK_TERMINALS = {"kwi": "org.kde.kwi", "konsole": "org.kde.konsole"}
+FLATPAK_EXPORTS = (Path.home() / ".local/share/flatpak/exports/bin", Path("/var/lib/flatpak/exports/bin"))
 TERMINAL_WAIT_SECONDS = 4 * 3600
 TERMINAL_HEAD_CHARS = 1500
 TERMINAL_TAIL_CHARS = 3500
@@ -177,29 +184,66 @@ def run_command(arguments: dict[str, Any], default_timeout: int = DEFAULT_TIMEOU
     return result
 
 
+def find_terminal(name: str) -> str | None:
+    """Path of a supported terminal: its program on ``PATH``, else its Flatpak launcher, else None."""
+    found = shutil.which(name)
+    app = FLATPAK_TERMINALS.get(name)
+    if found or not app:
+        return found
+    exported = shutil.which(app) or next((str(folder / app) for folder in FLATPAK_EXPORTS
+                                          if (folder / app).is_file()), None)
+    return exported
+
+
+def terminal_name(path: str) -> str:
+    """The supported name for a terminal's path ("/…/exports/bin/org.kde.kwi" is "kwi")."""
+    base = os.path.basename(path)
+    return next((name for name, app in FLATPAK_TERMINALS.items() if app == base), base)
+
+
 def installed_terminals() -> list[str]:
-    """The supported terminals found on ``PATH``, for the settings page to offer."""
-    return [name for name in SUPPORTED_TERMINALS if shutil.which(name)]
+    """The supported terminals installed (natively or as Flatpaks), for the settings page to offer."""
+    return [name for name in SUPPORTED_TERMINALS if find_terminal(name)]
+
+
+def _kde_terminal() -> str:
+    """KDE's default terminal (System Settings, Default Applications) as a supported name, or "".
+
+    ``TerminalService`` names its launcher ("org.kde.kwi.desktop"); ``TerminalApplication`` its
+    command, which for a Flatpak is "flatpak run … org.kde.kwi".
+    """
+    for key in ("TerminalService", "TerminalApplication"):
+        configured = run_program(["kreadconfig6", "--file", "kdeglobals", "--group", "General",
+                                  "--key", key], timeout=3)["stdout"].strip()
+        try:
+            words = shlex.split(configured)
+        except ValueError:
+            continue
+        if not words:
+            continue
+        if os.path.basename(words[0]) == "flatpak":
+            words = [word for word in words if word in FLATPAK_TERMINALS.values()] or words
+        name = terminal_name(words[0].removesuffix(".desktop"))
+        if name in SUPPORTED_TERMINALS:
+            return name
+    return ""
 
 
 def terminal_program(preferred: str = "") -> str:
     """Path of the terminal to open: ``preferred`` (the user's setting) if given, else automatic.
 
-    Automatic is KDE's TerminalApplication setting when it names a supported
-    terminal, else the first supported one installed.
+    Automatic is KDE's default terminal when it is a supported one (``_kde_terminal``), else the
+    first supported one installed; Flatpak installs count (``find_terminal``).
     """
     if preferred:
-        found = shutil.which(preferred)
+        found = find_terminal(preferred)
         if not found:
             raise ToolFailure(f"the terminal chosen in the assistant's settings ({preferred}) is not installed; "
                               "tell the user to choose another under Behaviour in the assistant's settings")
         return found
-    configured = run_program(["kreadconfig6", "--file", "kdeglobals", "--group", "General",
-                              "--key", "TerminalApplication"], timeout=3)["stdout"].strip()
-    kde_choice = os.path.basename(shlex.split(configured)[0]) if configured else ""
-    candidates = ([kde_choice] if kde_choice in SUPPORTED_TERMINALS else []) + list(SUPPORTED_TERMINALS)
-    for candidate in candidates:
-        found = shutil.which(candidate)
+    kde_choice = _kde_terminal()
+    for candidate in ([kde_choice] if kde_choice else []) + list(SUPPORTED_TERMINALS):
+        found = find_terminal(candidate)
         if found:
             return found
     raise ToolFailure("no supported terminal program is installed")
@@ -221,9 +265,11 @@ def terminal_command(terminal: str, command: str, directory: str, log: str = "",
         "echo; echo \"Finished with exit status $status.\"; "
         "read -r -n 1 -s -p 'Press any key to close this window.'; exit $status"
     )
-    name = os.path.basename(terminal)
+    name = terminal_name(terminal)
     if name == "konsole":
         return [terminal, "--separate", "-e", "bash", "-c", script]
+    if name == "kwi":  # kwi [options] -e program [arguments]
+        return [terminal, "-e", "bash", "-c", script]
     if name in ("gnome-terminal", "kgx"):
         return [terminal, "--", "bash", "-c", script]
     if name in ("kitty", "foot"):

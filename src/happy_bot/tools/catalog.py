@@ -115,7 +115,7 @@ def _group_builders(
                             *([] if agent.get("local_only") else weather_tools())],
         "windows": lambda: [*window_tools(), *workspace_tools(), *layouts()],
         "gui": lambda: [*gui_tools(), *[tool for tool in screen_tools() if tool.risk != "read"]],
-        "apps": lambda: [*app_tools(), *app_visibility_tools(), *defaults_tools(), *software_tools()],
+        "apps": lambda: [*app_tools(terminal), *app_visibility_tools(), *defaults_tools(), *software_tools()],
         "system": lambda: [*system_tools(), *media_tools(), *power_tools(), *appearance_tools(), *device_tools()],
         "files": lambda: [*file_tools(), *document_tools()],
         "shell": lambda: [*shell_tools(timeout, terminal), *developer_tools()],

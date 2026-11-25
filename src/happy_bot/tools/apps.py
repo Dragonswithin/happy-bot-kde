@@ -11,8 +11,10 @@ keywords is used; several plausible matches fail with the list so the model
 can pick. Launching goes through ``gio launch``, detached so the application
 outlives the daemon. ``open_folder`` asks the file manager over the
 freedesktop ``FileManager1`` DBus interface to show a folder, or a file
-selected in its folder; ``open_terminal`` opens the user's terminal
-(``tools/shell.terminal_program``) in a folder.
+selected in its folder; ``open_terminal`` opens the user's terminal in a
+folder: the one chosen under Behaviour (``agent.terminal``, which
+``app_tools`` is given), else the automatic choice
+(``tools/shell.terminal_program``: KDE's default terminal when supported).
 """
 
 from __future__ import annotations
@@ -151,16 +153,16 @@ def open_folder(arguments: dict[str, Any]) -> str:
     return f"Showing {path} in the file manager."
 
 
-def open_terminal(arguments: dict[str, Any]) -> str:
-    """Open the user's terminal in a folder, optionally running a command they will see."""
-    from .shell import terminal_program
+def open_terminal(arguments: dict[str, Any], preferred: str = "") -> str:
+    """Open the user's terminal (``preferred``, the Behaviour setting, else automatic) in a folder."""
+    from .shell import terminal_name, terminal_program
 
     folder = os.path.abspath(os.path.expanduser(str(arguments.get("folder") or "~")))
     if not os.path.isdir(folder):
         raise ToolFailure(f"{folder} is not a folder")
-    terminal = terminal_program()
-    name = os.path.basename(terminal)
-    if name == "konsole":
+    terminal = terminal_program(preferred)
+    name = terminal_name(terminal)
+    if name in ("konsole", "kwi"):
         command = [terminal, "--workdir", folder]
     elif name in ("gnome-terminal", "kgx"):
         command = [terminal, f"--working-directory={folder}"]
@@ -171,7 +173,8 @@ def open_terminal(arguments: dict[str, Any]) -> str:
     return f"Opened a terminal in {folder}."
 
 
-def app_tools() -> list[Tool]:
+def app_tools(terminal: str = "") -> list[Tool]:
+    """The application tools; ``terminal`` is the user's ``agent.terminal`` setting ("" for automatic)."""
     return [
         Tool("list_applications", "List installed applications, optionally filtered by a query.",
              object_schema({"query": {"type": "string"}}), RISK_READ, list_applications),
@@ -182,7 +185,8 @@ def app_tools() -> list[Tool]:
              object_schema({"path": {"type": "string"}}, ["path"]), RISK_CHANGE, open_folder,
              summarize=lambda arguments: f"Show {arguments.get('path', '')} in the file manager"),
         Tool("open_terminal", "Open a terminal window in a folder for the user to work in.",
-             object_schema({"folder": {"type": "string"}}), RISK_CHANGE, open_terminal,
+             object_schema({"folder": {"type": "string"}}), RISK_CHANGE,
+             lambda arguments: open_terminal(arguments, terminal),
              summarize=lambda arguments: f"Open a terminal in {arguments.get('folder') or 'the home folder'}"),
         Tool("open_location", "Open a file or folder with its default application, or a web link in the browser.",
              object_schema({"location": {"type": "string", "description": "Absolute path, ~ path, or http(s) URL"}},

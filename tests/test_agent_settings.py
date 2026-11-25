@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -109,7 +110,8 @@ class ShellSettingTests(unittest.TestCase):
             tool.handler({"command": "sleep 5"})
 
     def test_chosen_terminal_is_used_or_reported_missing(self) -> None:
-        with mock.patch.object(shell.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}" if name == "foot" else None):
+        with mock.patch.object(shell.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}" if name == "foot" else None), \
+                mock.patch.object(shell, "FLATPAK_EXPORTS", ()):
             self.assertEqual(shell.terminal_program("foot"), "/usr/bin/foot")
             with self.assertRaisesRegex(ToolFailure, "choose another under Behaviour"):
                 shell.terminal_program("kitty")
@@ -122,6 +124,26 @@ class ShellSettingTests(unittest.TestCase):
             reply = {"stdout": configured + "\n", "stderr": "", "returncode": 0}
             with self.subTest(configured=configured), which, mock.patch.object(shell, "run_program", return_value=reply):
                 self.assertEqual(shell.terminal_program(), expected)
+
+    def test_a_flatpak_terminal_is_found_and_kdes_choice_of_it_followed(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            launcher = Path(folder, "org.kde.kwi")
+            launcher.write_text("#!/bin/sh\n")
+            installed = {"konsole"}
+            which = mock.patch.object(shell.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}" if name in installed else None)
+            with which, mock.patch.object(shell, "FLATPAK_EXPORTS", (Path(folder),)):
+                self.assertEqual(shell.installed_terminals(), ["konsole", "kwi"])
+                self.assertEqual(shell.terminal_program("kwi"), str(launcher))
+                self.assertEqual(shell.terminal_name(str(launcher)), "kwi")
+                # Plasma names it by its launcher entry, or by the Flatpak command line.
+                for service, application in (("org.kde.kwi.desktop", ""),
+                                             ("", "/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=kwi org.kde.kwi")):
+                    replies = iter([{"stdout": service, "stderr": "", "returncode": 0},
+                                    {"stdout": application, "stderr": "", "returncode": 0}])
+                    with self.subTest(service=service), mock.patch.object(shell, "run_program", side_effect=lambda *a, **k: next(replies)):
+                        self.assertEqual(shell.terminal_program(), str(launcher))
+        command = shell.terminal_command("/home/u/.local/share/flatpak/exports/bin/org.kde.kwi", "true", "/tmp")
+        self.assertEqual(command[1:4], ["-e", "bash", "-c"])
 
     def test_every_supported_terminal_has_a_command_line(self) -> None:
         for name in shell.SUPPORTED_TERMINALS:

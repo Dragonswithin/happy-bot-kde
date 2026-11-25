@@ -50,8 +50,11 @@ DANGER_LABEL = re.compile(
     r"\b(delete|remove|erase|discard|empty (the )?(trash|wastebin|bin)|format|uninstall|wipe|purge|overwrite|replace|"
     r"shut ?down|restart|reboot|log ?out|sign out|don'?t save|close without saving|reset|clear (all|history)|"
     r"move to (trash|wastebin))\b", re.IGNORECASE)
-TERMINAL_APPLICATIONS = ("konsole", "yakuake", "kitty", "alacritty", "foot", "wezterm", "gnome-terminal", "xterm",
+TERMINAL_APPLICATIONS = ("konsole", "yakuake", "kwi", "kitty", "alacritty", "foot", "wezterm", "gnome-terminal", "xterm",
                          "terminator", "tilix", "ghostty", "ptyxis", "kgx")
+# A name counts only as a whole part of the window's application id ("org.kde.kwi", "gnome-terminal-server"),
+# so "kwi" (KDE's Kwi terminal) does not also match KWin's own windows ("org.kde.kwin...", "kwin_wayland").
+_TERMINAL_APP = re.compile(r"(^|[./_-])(" + "|".join(map(re.escape, TERMINAL_APPLICATIONS)) + r")($|[./_-])")
 FOCUS_SETTLE_SECONDS = 0.25
 PRESS_SETTLE_SECONDS = 0.6
 
@@ -62,7 +65,7 @@ def _target(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_terminal(window: dict[str, Any]) -> bool:
-    return any(name in str(window.get("app", "")).lower() for name in TERMINAL_APPLICATIONS)
+    return bool(_TERMINAL_APP.search(str(window.get("app", "")).lower()))
 
 
 def _snapshot(window: dict[str, Any]) -> accessibility.Snapshot:

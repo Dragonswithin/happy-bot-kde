@@ -173,6 +173,16 @@ class FolderAndTerminalTests(unittest.TestCase):
                     mock.patch.object(apps.subprocess, "Popen") as popen:
                 apps.open_terminal({"folder": tmp})
             self.assertEqual(popen.call_args[0][0], ["/usr/bin/konsole", "--workdir", tmp])
+            kwi = "/home/u/.local/share/flatpak/exports/bin/org.kde.kwi"
+            with mock.patch("happy_bot.tools.shell.terminal_program", return_value=kwi) as chosen, \
+                    mock.patch.object(apps.subprocess, "Popen") as popen:
+                apps.open_terminal({"folder": tmp}, "kwi")
+            self.assertEqual(popen.call_args[0][0], [kwi, "--workdir", tmp])
+            chosen.assert_called_once_with("kwi")             # the Behaviour setting is followed
+            from happy_bot.tools import gui
+            for app, terminal in (("org.kde.kwi", True), ("kwin_wayland", False), ("org.kde.kwin.killer", False),
+                                  ("gnome-terminal-server", True)):
+                self.assertIs(gui._is_terminal({"app": app}), terminal, app)
 
 
 
