@@ -53,6 +53,7 @@ import threading
 import time
 import uuid
 import wave
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -208,7 +209,8 @@ def find_service(base_urls: list[str]) -> str:
 class Listener:
     """Records one request at a time; ``stop`` ends it early (see the module docstring)."""
 
-    def __init__(self, runtime_dir: Path) -> None:
+    def __init__(self, runtime_dir: Path, capture_changed: Callable[[bool], None] | None = None) -> None:
+        self._capture_changed = capture_changed
         self._folder = runtime_dir / "voice"
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -263,6 +265,9 @@ class Listener:
                 chunk = process.stdout.read(chunk_bytes) if process.stdout else b""
                 if not chunk:
                     break
+                # First audio confirms that the device opened, even in a silent room.
+                if not frames and self._capture_changed:
+                    self._capture_changed(True)
                 frames += chunk
                 level = _loudness(chunk)
                 quietest = min(quietest, level)
@@ -277,11 +282,18 @@ class Listener:
                         or (not heard and elapsed >= WAIT_FOR_SPEECH_SECONDS):
                     break
         finally:
-            process.terminate()
             try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                process.kill()
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            finally:
+                if self._capture_changed and frames:
+                    self._capture_changed(False)
+                if process.stdout:
+                    process.stdout.close()
         if not frames and not self._discard:
             raise VoiceError("no_microphone", "No sound came from the microphone.")
         if spoken * CHUNK_SECONDS < MIN_SPEECH_SECONDS and not self._discard:

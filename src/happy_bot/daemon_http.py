@@ -182,7 +182,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.mcp = McpManager()
         self.activity = IconActivity()
         self.approvals = ApprovalBroker()
-        self.voice = voice.Listener(self.runtime_dir)
+        self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:
