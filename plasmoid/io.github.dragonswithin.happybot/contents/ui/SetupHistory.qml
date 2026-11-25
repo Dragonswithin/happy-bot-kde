@@ -76,6 +76,7 @@ Kirigami.FormLayout {
     }
 
     QQC2.SpinBox {
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         Kirigami.FormData.label: i18n("Keep for:")
         from: 0
         to: 3650

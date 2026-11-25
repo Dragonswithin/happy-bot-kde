@@ -108,6 +108,7 @@ Kirigami.FormLayout {
     }
 
     QQC2.SpinBox {
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         Kirigami.FormData.label: i18n("Context window:")
         Layout.minimumWidth: Kirigami.Units.gridUnit * 9
         editable: true

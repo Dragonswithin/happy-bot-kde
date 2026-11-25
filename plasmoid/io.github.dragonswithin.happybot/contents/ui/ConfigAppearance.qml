@@ -206,6 +206,7 @@ KCM.SimpleKCM {
         }
 
         QQC2.SpinBox {
+            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
             Kirigami.FormData.label: i18n("Width:")
             from: 20
             to: 70
@@ -214,6 +215,7 @@ KCM.SimpleKCM {
         }
 
         QQC2.SpinBox {
+            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
             Kirigami.FormData.label: i18n("Height:")
             from: 12
             to: 50
@@ -250,6 +252,7 @@ KCM.SimpleKCM {
         }
 
         QQC2.SpinBox {
+            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
             Kirigami.FormData.label: i18n("Search bar width:")
             enabled: page.searchBar
             from: 8

@@ -339,6 +339,7 @@ Kirigami.FormLayout {
     }
 
     QQC2.SpinBox {
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         Kirigami.FormData.label: i18n("Steps per request:")
         from: 5
         to: 200
@@ -351,6 +352,7 @@ Kirigami.FormLayout {
     }
 
     QQC2.SpinBox {
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         Kirigami.FormData.label: i18n("Commands may run for:")
         from: 5
         to: 1800
@@ -379,6 +381,7 @@ Kirigami.FormLayout {
     }
 
     QQC2.SpinBox {
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         Kirigami.FormData.label: i18n("When it took longer than:")
         visible: notifyWhenDone.checked
         from: 1

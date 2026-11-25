@@ -155,6 +155,7 @@ GridLayout {
 
     QQC2.SpinBox {
         id: limit
+        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
         visible: editor.limitArgument.length > 0
         from: 1
         to: 50
