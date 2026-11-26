@@ -40,10 +40,10 @@
       <default>false</default>
     </entry>
     <!-- Width of the panel search bar, in Plasma grid units (one grid unit
-         is about the height of a line of text). Default 18. Range 8 to 60.
+         is about the height of a line of text). Default 11. Range 8 to 60.
          Used only when the panel shows the search bar. -->
     <entry name="barWidth" type="Int">
-      <default>18</default>
+      <default>11</default>
       <min>8</min>
       <max>60</max>
     </entry>

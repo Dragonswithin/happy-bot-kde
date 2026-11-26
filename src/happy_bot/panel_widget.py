@@ -25,7 +25,7 @@ from typing import Any
 
 from .desktop_actions import APPLET_ID
 
-DEFAULT_BAR_WIDTH = 18
+DEFAULT_BAR_WIDTH = 11
 BAR_WIDTH_RANGE = (8, 60)  # grid units, as main.xml's barWidth
 
 _READ = ("var out = [];\n"

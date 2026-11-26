@@ -274,7 +274,7 @@ KCM.SimpleKCM {
                     Kirigami.FormData.label: i18n("Width in font units:")
                     from: 8
                     to: 60
-                    value: page.onPanel ? page.panelWidgets[0].bar_width : 18
+                    value: page.onPanel ? page.panelWidgets[0].bar_width : 11
                     onValueModified: page.changePanel({ bar_width: value })
                 }
             }
