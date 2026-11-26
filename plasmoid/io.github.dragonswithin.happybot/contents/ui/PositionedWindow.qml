@@ -33,9 +33,9 @@ Window {
         const next = Qt.point(
             Math.round(Math.max(0, Math.min(left, screenWidth - width))),
             Math.round(Math.max(0, Math.min(top, screenHeight - height))));
-        if (Qt.platform.pluginName.startsWith("wayland")) {
-            LayerShell.Window.margins = ({ left: next.x, top: next.y, right: 0, bottom: 0 });
-        } else {
+        LayerShell.Window.margins = ({ left: next.x, top: next.y, right: 0, bottom: 0 });
+        // On Wayland, the compositor positions this surface using the margins.
+        if (Qt.platform.pluginName === "xcb") {
             x = contentItem.Screen.virtualX + next.x;
             y = contentItem.Screen.virtualY + next.y;
         }
