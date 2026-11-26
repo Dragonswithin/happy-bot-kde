@@ -31,7 +31,9 @@ ColumnLayout {
     required property var session
     property var info: null
     property var programs: []
+    signal revealCardRequested(Item card)
     property string detailSection: ""
+    readonly property bool overviewDetail: ["storage", "hardware", "os", "uptime"].includes(detailSection)
     readonly property bool programsVisible: detailSection === "cpu" || detailSection === "memory"
     property string sort: "cpu"
     property int confirmPid: -1
@@ -44,6 +46,7 @@ ColumnLayout {
     function openDetails(section) {
         if (section === "cpu" || section === "memory")
             view.sort = section;
+        view.forceActiveFocus();
         view.detailSection = section;
     }
 
@@ -195,6 +198,7 @@ ColumnLayout {
                         hover.hovered && !expanded ? 0.14 : 0.04)
         border.color: activeFocus ? view.accent : Qt.alpha(Kirigami.Theme.textColor, 0.12)
         activeFocusOnTab: !expanded
+        onActiveFocusChanged: if (activeFocus && !expanded) view.revealCardRequested(card)
         Accessible.role: expanded ? Accessible.Grouping : Accessible.Button
         Accessible.name: card.title
         Accessible.description: card.value
@@ -232,7 +236,8 @@ ColumnLayout {
                 text: card.value
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.3
                 font.weight: Font.DemiBold
-                elide: Text.ElideRight
+                elide: card.expanded ? Text.ElideNone : Text.ElideRight
+                wrapMode: card.expanded ? Text.Wrap : Text.NoWrap
             }
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
@@ -289,14 +294,23 @@ ColumnLayout {
         opacity: 0.7
     }
 
-    GridLayout {
+    component CardGrid: GridLayout {
         Layout.fillWidth: true
-        visible: view.info !== null
         columns: view.detailSection ? 1 : Math.max(1, Math.min(4,
             Math.floor((width + columnSpacing) / (Kirigami.Units.gridUnit * 6.5 + columnSpacing))))
         uniformCellWidths: true
         columnSpacing: Kirigami.Units.smallSpacing
         rowSpacing: Kirigami.Units.smallSpacing
+    }
+
+    Kirigami.Heading {
+        visible: view.info !== null && !view.detailSection
+        level: 4
+        text: i18n("Live activity")
+    }
+
+    CardGrid {
+        visible: view.info !== null && !view.overviewDetail
 
         Card {
             section: "cpu"
@@ -355,13 +369,64 @@ ColumnLayout {
             bar: view.info && view.info.battery ? view.info.battery.percent / 100 : -1
         }
         Card {
+            section: "disk-activity"
+            title: i18n("Disk activity")
+            value: view.rate(graph?.length ? graph[graph.length - 1] : null)
+            graph: view.info?.history?.disk ?? null
+            graphMaximum: 0
+            detail: i18n("Read and write throughput")
+        }
+
+        Card {
+            section: "temperatures"
+            title: i18n("Temperatures")
+            available: view.info?.cpu?.temp_c != null || !!view.info?.gpus?.some(gpu => gpu.temp_c != null)
+            value: view.degrees(view.info?.cpu?.temp_c)
+                || view.degrees(view.info?.gpus?.find(gpu => gpu.temp_c != null)?.temp_c)
+            detail: view.info ? [view.info.cpu.temp_c != null ? i18n("Processor: %1", view.degrees(view.info.cpu.temp_c)) : "",
+                                 ...view.info.gpus.filter(gpu => gpu.temp_c != null)
+                                      .map(gpu => i18n("%1: %2", gpu.name, view.degrees(gpu.temp_c)))]
+                               .filter(label => label.length > 0).join("\n") : ""
+            graph: view.info?.cpu?.temp_c != null ? view.info.history.temp ?? null : null
+        }
+    }
+
+    Kirigami.Heading {
+        visible: view.info !== null && !view.detailSection
+        level: 4
+        text: i18n("System overview")
+    }
+
+    CardGrid {
+        visible: view.info !== null && (!view.detailSection || view.overviewDetail)
+
+        Card {
             section: "storage"
             title: i18n("Storage")
             value: view.info ? i18np("%1 disk", "%1 disks", view.info.disks.length) : ""
-            graph: view.info?.history?.disk ?? null
-            graphMaximum: 0
-            detail: graph?.length && graph[graph.length - 1] !== null
-                ? i18n("Disk activity: %1 read and written", view.rate(graph[graph.length - 1])) : ""
+            detail: i18n("Capacity and free space")
+        }
+
+        Card {
+            section: "hardware"
+            title: i18n("Hardware")
+            value: view.info ? i18np("%1 core", "%1 cores", view.info.cpu.cores) : ""
+            detail: view.info ? [view.info.cpu.model || "",
+                                 i18n("Installed memory: %1", view.size(view.info.memory.total)),
+                                 ...view.info.gpus.map(gpu => gpu.name)].filter(label => label.length > 0).join("\n") : ""
+        }
+
+        Card {
+            section: "os"
+            title: i18n("Operating system")
+            available: !!view.info?.os
+            value: view.info?.os?.name ?? ""
+            detail: view.info?.os ? [view.info.os.version ? i18n("Version: %1", view.info.os.version) : "",
+                                     i18n("Kernel: %1", view.info.os.kernel),
+                                     i18n("Architecture: %1", view.info.os.architecture),
+                                     view.info.os.desktop ? i18n("Desktop: %1", view.info.os.desktop) : "",
+                                     view.info.os.session ? i18n("Session: %1", view.info.os.session) : ""]
+                                   .filter(label => label.length > 0).join("\n") : ""
         }
 
         Card {
@@ -376,14 +441,14 @@ ColumnLayout {
     }
 
     Kirigami.Heading {
-        visible: view.detailSection === "storage"
+        visible: view.detailSection === "storage" || view.detailSection === "disk-activity"
         level: 5
-        text: i18n("Disks")
+        text: view.detailSection === "storage" ? i18n("Disk capacity") : i18n("Activity by device")
         opacity: 0.7
     }
 
     Repeater {
-        model: view.detailSection === "storage" ? view.info.disks : []
+        model: view.detailSection === "storage" || view.detailSection === "disk-activity" ? view.info?.disks ?? [] : []
 
         ColumnLayout {
             id: disk
@@ -399,19 +464,22 @@ ColumnLayout {
                     elide: Text.ElideMiddle
                 }
                 PlasmaComponents3.Label {
-                    text: i18n("%1 free of %2", view.size(modelData.total - modelData.used), view.size(modelData.total))
+                    text: view.detailSection === "storage"
+                        ? i18n("%1 free of %2", view.size(modelData.total - modelData.used), view.size(modelData.total))
+                        : view.rate(disk.activity?.length ? disk.activity[disk.activity.length - 1] : null)
                     font: Kirigami.Theme.smallFont
                     opacity: 0.75
                 }
             }
             QQC2.ProgressBar {
                 Layout.fillWidth: true
+                visible: view.detailSection === "storage"
                 from: 0
                 to: Math.max(1, modelData.total)
                 value: modelData.used
             }
             Sparkline {
-                visible: disk.activity !== null
+                visible: view.detailSection === "disk-activity" && disk.activity !== null
                 values: disk.activity || []
                 maximum: 0
             }

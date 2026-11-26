@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import collections
 import os
+import platform
 import pwd
 import re
 import shutil
@@ -232,6 +233,21 @@ def _network() -> dict[str, Any]:
     return {"interface": interface or ""}
 
 
+def _operating_system() -> dict[str, str]:
+    try:
+        release = platform.freedesktop_os_release()
+    except OSError:
+        release = {}
+    return {
+        "name": release.get("PRETTY_NAME") or release.get("NAME") or platform.system(),
+        "version": release.get("VERSION") or release.get("VERSION_ID", ""),
+        "kernel": platform.release(),
+        "architecture": platform.machine(),
+        "desktop": os.environ.get("XDG_CURRENT_DESKTOP", "").replace(":", " · "),
+        "session": os.environ.get("XDG_SESSION_TYPE", ""),
+    }
+
+
 def overview(history: History) -> dict[str, Any]:
     """Everything the System info view shows at the top (see the module docstring)."""
     samples = history.samples()
@@ -248,6 +264,7 @@ def overview(history: History) -> dict[str, Any]:
                 "load": [float(value) for value in load] if len(load) == 3 else []},
         "memory": {"total": total, "used": total - available, "swap_total": memory.get("SwapTotal", 0),
                    "swap_used": memory.get("SwapTotal", 0) - memory.get("SwapFree", 0)},
+        "os": _operating_system(),
         "gpus": gpus,
         "disks": disks,
         "network": {**_network(), "receive_bps": latest.get("receive_bytes_per_second"),

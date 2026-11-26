@@ -792,6 +792,13 @@ AssistantSurface {
                         accent: view.accent
                         id: systemInfo
                         onDetailSectionChanged: systemFlick.contentY = 0
+                        onRevealCardRequested: card => {
+                            const y = card.mapToItem(systemFlick.contentItem, 0, 0).y;
+                            if (y < systemFlick.contentY)
+                                systemFlick.contentY = y;
+                            else if (y + card.height > systemFlick.contentY + systemFlick.height)
+                                systemFlick.contentY = y + card.height - systemFlick.height;
+                        }
                         x: view.inset
                         y: view.inset
                         width: parent.width - view.inset * 2

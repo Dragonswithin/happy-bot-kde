@@ -88,13 +88,15 @@ class OverviewTests(unittest.TestCase):
             history.add({"cpu_percent": load, "available_memory_percent": 75, "receive_bytes_per_second": 5})
         self.assertEqual([sample["cpu_percent"] for sample in history.samples()], [20, 30, 40])
         overview = system_monitor.overview(history)
-        self.assertEqual(set(overview), {"cpu", "memory", "gpus", "disks", "network", "battery", "uptime_seconds", "history"})
+        self.assertEqual(set(overview), {"cpu", "memory", "os", "gpus", "disks", "network", "battery", "uptime_seconds", "history"})
         self.assertEqual((overview["cpu"]["percent"], overview["history"]["memory"]), (40, [25, 25, 25]))
         history.clear()
         self.assertEqual(history.samples(), [])
         history.add({"cpu_percent": 11})
         self.assertEqual([sample["cpu_percent"] for sample in history.samples()], [11])
         self.assertGreater(overview["memory"]["total"], 0)
+        self.assertTrue(overview["os"]["name"])
+        self.assertTrue(overview["os"]["kernel"])
 
 
 class RouteTests(unittest.TestCase):

@@ -22,6 +22,7 @@ Item {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
                         memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
                         gpus: [{id: "test", name: "Test GPU", busy_percent: 7}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
+                        os: {name: "Test Linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
                         uptime_seconds: 4500});
                 } else if (path.startsWith("/system/programs?")) {
                     programRequests++;
@@ -165,18 +166,30 @@ Item {
             const storage = findChild(view, "systemCard-storage");
             tryVerify(() => processor.visible && storage.visible);
             compare(processor.expanded, false);
-            for (const section of ["cpu", "memory", "network", "gpu-0", "storage"]) {
+            for (const section of ["cpu", "memory", "network", "gpu-0", "disk-activity"]) {
                 const chart = findChild(view, "systemGraph-" + section);
                 verify(chart && chart.visible);
             }
             tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
+            const activity = findChild(view, "systemCard-disk-activity");
+            verify(activity && activity.visible && activity !== storage);
+            verify(!findChild(view, "systemGraph-storage").visible);
             compare(session.programRequests, 0);
             compare(findChild(view, "systemCard-uptime").uptimeFraction, 4500 / 86400);
             waitForRendering(view);
-            mouseClick(storage);
+            storage.forceActiveFocus(Qt.TabFocusReason);
+            keyClick(Qt.Key_Return);
             tryCompare(storage, "expanded", true);
             compare(processor.visible, false);
             compare(session.programRequests, 0);
+            mouseClick(button(view, "Back"));
+            tryCompare(processor, "visible", true);
+            const os = findChild(view, "systemCard-os");
+            verify(os && os.visible);
+            os.forceActiveFocus(Qt.TabFocusReason);
+            keyClick(Qt.Key_Return);
+            tryCompare(os, "expanded", true);
+            verify(os.detail.includes("6.0"));
             mouseClick(button(view, "Back"));
             tryCompare(processor, "visible", true);
             waitForRendering(view);
