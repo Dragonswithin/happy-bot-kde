@@ -57,6 +57,7 @@ PositionedWindow {
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
     property bool expanded: false
+    property bool toolOpened: false
     property bool menuOpen: false
     readonly property alias inputText: view.inputText
 
@@ -123,15 +124,26 @@ PositionedWindow {
         if (mouse.dragging) {
             return;
         }
-        if (expanded && popupPosition.x >= 0) {
-            place(popupPosition.x, popupPosition.y);
+        if (expanded) {
+            placeResizedPopup(openHeight, growLeft && reveal < 1 ? openWidth - width : 0);
             return;
         }
         const top = placedY + Math.round((size - closedHeight) / 2);
         place(growLeft ? shortcutX + size - width : shortcutX, growUp ? top + closedHeight - height : top);
     }
 
+    function anchorOnOpen() {
+        const left = growLeft ? shortcutX + size - openWidth : shortcutX;
+        const top = growUp ? placedY + size - openHeight : placedY;
+        anchorPopup(popupPosition.x >= 0 ? popupPosition.x : left,
+                    popupPosition.y >= 0 ? popupPosition.y : top, openHeight);
+    }
+
     function open() {
+        if (expanded)
+            return;
+        toolOpened = view.fullSizeTool;
+        anchorOnOpen();
         floating.expanded = true;
         layout();
         // Ask for keyboard focus once the "may take the keyboard" change has reached the compositor.
@@ -178,6 +190,15 @@ PositionedWindow {
     onSizeChanged: layout()
     onWidthChanged: layout()
     onHeightChanged: layout()
+    onOpenHeightChanged: {
+        if (!expanded)
+            return;
+        if (view.fullSizeTool)
+            toolOpened = true;
+        else if (!toolOpened && !session.hasTranscript)
+            anchorOnOpen();
+        layout();
+    }
     onShortcutXChanged: layout()
     onGrowLeftChanged: layout()
     onGrowUpChanged: layout()
@@ -204,8 +225,8 @@ PositionedWindow {
             id: view
 
             // Pinned to the button's corner, so it slides out of the button.
-            x: floating.growLeft ? parent.width - width : 0
-            y: floating.growUp ? parent.height - height : 0
+            x: floating.growLeft && floating.reveal < 1 ? parent.width - width : 0
+            y: (floating.expanded ? floating.popupGrowsUp : floating.growUp) ? parent.height - height : 0
             session: floating.session
             width: Math.min(implicitWidth, floating.screenWidth)
             height: Math.min(implicitHeight, floating.screenHeight)

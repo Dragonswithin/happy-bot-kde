@@ -45,6 +45,9 @@ Item {
 
         function init() {
             shortcut.close();
+            shortcut.session.showingSystem = false;
+            shortcut.popupPosition = Qt.point(-1, -1);
+            shortcut.heightInGridUnits = 26;
             shortcut.menuOpen = false;
             leave();
             setMode(false, 100);
@@ -52,6 +55,31 @@ Item {
             clicks.clear();
             menus.clear();
             moves.clear();
+        }
+
+        function test_expandsFromOneEdge_data() {
+            return [{tag: "room-above", top: 160, up: true},
+                    {tag: "near-screen-top", top: 10, up: false}];
+        }
+
+        function test_expandsFromOneEdge(data) {
+            shortcut.heightInGridUnits = 22;
+            shortcut.popupPosition = Qt.point(20, data.top);
+            shortcut.open();
+            tryCompare(shortcut, "height", shortcut.openHeight);
+            const initialHeight = shortcut.height;
+            compare(shortcut.screenPosition.y, data.top);
+
+            shortcut.session.showingSystem = true;
+            tryVerify(() => shortcut.height > initialHeight);
+            if (data.up)
+                tryVerify(() => shortcut.screenPosition.y + shortcut.height === data.top + initialHeight);
+            else
+                compare(shortcut.screenPosition.y, data.top);
+
+            shortcut.session.showingSystem = false;
+            tryCompare(shortcut, "height", initialHeight);
+            tryVerify(() => shortcut.screenPosition.y === data.top);
         }
 
         function test_hoverAndRetract_data() {

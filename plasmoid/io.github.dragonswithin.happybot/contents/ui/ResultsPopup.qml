@@ -34,15 +34,27 @@ PositionedWindow {
     property int heightInGridUnits: 26
     property real hiddenAt: 0
     property Item anchorItem
+    property bool toolOpened: false
     property int location: PlasmaCore.Types.Floating
     popupPosition: Qt.point(session.ui.panel_popup_x ?? -1, session.ui.panel_popup_y ?? -1)
     screen: anchorItem?.Window.window?.screen ?? null
 
-    function restorePosition() {
+    function layoutPopup() {
+        if (!visible)
+            return;
+        if (resultsView.fullSizeTool)
+            toolOpened = true;
+        else if (!toolOpened && !session.hasTranscript)
+            anchorOnOpen();
+        if (resizeOriginHeight > 0)
+            placeResizedPopup(height);
+    }
+
+    function anchorOnOpen() {
         if (!screen || !anchorItem?.Window.window)
             return;
         if (popupPosition.x >= 0 && popupPosition.y >= 0) {
-            place(popupPosition.x, popupPosition.y);
+            anchorPopup(popupPosition.x, popupPosition.y, height);
             return;
         }
         const topLeft = anchorItem.mapToGlobal(0, 0);
@@ -59,13 +71,13 @@ PositionedWindow {
             top = screen.height - panel.height - height;
         else
             top += anchorItem.height;
-        place(left, top);
+        anchorPopup(left, top, height);
     }
 
     onPopupMoved: (x, y) => session.saveUi({ panel_popup_x: x, panel_popup_y: y })
-    onWidthChanged: Qt.callLater(restorePosition)
-    onHeightChanged: Qt.callLater(restorePosition)
-    onScreenChanged: Qt.callLater(restorePosition)
+    onWidthChanged: Qt.callLater(layoutPopup)
+    onHeightChanged: Qt.callLater(layoutPopup)
+    onScreenChanged: Qt.callLater(layoutPopup)
 
     signal queryEdited(string text)
     signal accepted(string text)
@@ -101,7 +113,9 @@ PositionedWindow {
 
     onVisibleChanged: {
         if (visible) {
-            restorePosition();
+            toolOpened = false;
+            anchorOnOpen();
+            layoutPopup();
             Qt.callLater(refocus);
         } else {
             popup.hiddenAt = Date.now();

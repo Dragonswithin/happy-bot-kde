@@ -13,6 +13,9 @@ Window {
     readonly property int screenHeight: screen?.height ?? 720
     property point screenPosition
     property point popupPosition: Qt.point(-1, -1)
+    property point resizeOrigin
+    property int resizeOriginHeight: 0
+    property bool popupGrowsUp: false
     signal popupMoved(int x, int y)
 
     color: "transparent"
@@ -25,8 +28,21 @@ Window {
     function movePopup(position, finished) {
         place(position.x, position.y);
         popupPosition = screenPosition;
+        anchorPopup(screenPosition.x, screenPosition.y, height);
         if (finished)
             popupMoved(popupPosition.x, popupPosition.y);
+    }
+
+    // Keep the original edge across the whole resize, including animated frames.
+    function anchorPopup(left, top, openingHeight) {
+        resizeOrigin = Qt.point(left, Math.max(0, Math.min(top, screenHeight - openingHeight)));
+        resizeOriginHeight = openingHeight;
+    }
+
+    function placeResizedPopup(targetHeight, horizontalOffset = 0) {
+        const bottom = resizeOrigin.y + resizeOriginHeight;
+        popupGrowsUp = targetHeight <= bottom;
+        place(resizeOrigin.x + horizontalOffset, popupGrowsUp ? bottom - height : resizeOrigin.y);
     }
 
     function place(left, top) {
