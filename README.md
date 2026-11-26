@@ -10,9 +10,7 @@ tool, or “Put Firefox on the left half of my screen” to arrange a window.
 You choose the model, either one running on your computer or a compatible
 hosted service. You can also open Happy Bot as a floating desktop button.
 
-![Happy Bot open above its search bar on a Plasma panel](docs/images/happy-bot.webp)
-
-*Happy Bot in search-bar mode, shown in the November 24, 2026 build.*
+![Happy Bot’s start screen above the Plasma panel, with shortcuts for file search, web search, desktop help and system info](docs/images/happy-bot.webp)
 
 ## Get started
 
