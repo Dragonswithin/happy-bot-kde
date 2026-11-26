@@ -108,7 +108,7 @@ used.
   saved chats and files (through a search tool you already have), with no
   AI model involved, in a list that scrolls. Under Search & Tools → Browser results you
   can add your browsers' bookmarks and recently visited websites (Firefox,
-  Chrome, Chromium, Brave, Vivaldi, Edge, Opera and others), read on this
+  Chrome, Chromium, Brave, Vivaldi, Edge, Opera, Ladybird and others), read on this
   computer only. The top result is selected and
   Enter opens it, so "minecraft" and Enter starts your Minecraft launcher.
   The AI is asked only from the "Ask Happy Bot about …" row under the

@@ -83,6 +83,37 @@ class BrowserTests(unittest.TestCase):
         found = [(profile.browser, profile.folder.name) for profile in browsers.profiles(self.home, self.home / ".config")]
         self.assertEqual(found, [("Firefox", "abc.default-release"), ("Firefox", "xyz.default"), ("Chromium", "Default")])
 
+    def test_ladybird_profile_supplies_bookmarks_history_and_favicons(self) -> None:
+        data = self.home / "custom-data"
+        profile = data / "Ladybird/Profiles/default"
+        profile.mkdir(parents=True)
+        config = self.home / ".config/Ladybird/Profiles/default"
+        config.mkdir(parents=True)
+        (config / "Bookmarks.json").write_text(json.dumps({"version": 2, "items": [
+            {"type": "folder", "children": [
+                {"type": "bookmark", "url": "https://docs.example/", "title": "Ladybird docs"}]}
+        ]}), encoding="utf-8")
+        with closing(sqlite3.connect(profile / "History.db")) as db, db:
+            db.executescript("""
+                CREATE TABLE History (url, title, visit_count, last_visited_time, favicon_hash);
+                CREATE TABLE Favicons (hash, png_data);
+            """)
+            db.execute("INSERT INTO History VALUES ('https://bird.example/page', 'Ladybird page', 7, ?, 'icon')",
+                       (int(NOW - DAY),))
+            db.execute("INSERT INTO Favicons VALUES ('icon', ?)", (b"\x89PNG\r\n\x1a\n",))
+        with mock.patch.dict("os.environ", {"XDG_DATA_HOME": str(data)}):
+            self.index.build(history=False)
+            bookmarked, visited = self.index.search("Ladybird", bookmarks=True, history=False)
+            self.assertEqual([page.title for page in bookmarked], ["Ladybird docs"])
+            self.assertEqual(visited, [])
+            self.index.build(history=True)
+            _, visited = self.index.search("Ladybird", bookmarks=False, history=True)
+            self.assertEqual([(page.browser, page.visits) for page in visited], [("Ladybird", 7)])
+            site = next(row for row in self.index.frequent_sites() if row["host"] == "bird.example")
+            self.assertEqual(self.index.favicons([site])["bird.example"], "data:image/png;base64,iVBORw0KGgo=")
+            cleared = browsers.BrowserIndex(self.home, self.home / ".config", history_since=NOW - DAY / 2)
+            self.assertFalse(any(row["host"] == "bird.example" for row in cleared.frequent_sites()))
+
     def test_website_icons_come_from_the_local_browser_caches(self) -> None:
         firefox = self.home / ".mozilla/firefox/abc.default-release/favicons.sqlite"
         chromium = self.home / ".config/chromium/Default/Favicons"

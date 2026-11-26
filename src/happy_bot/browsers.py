@@ -13,6 +13,8 @@ Flatpaks (``~/.var/app/<id>/...``):
 - Chromium family (Chromium, Chrome, Brave, Vivaldi, Edge, Opera): each profile folder
   ("Default", "Profile 1", ...; Opera's folder itself) holding ``Bookmarks`` (JSON) and/or
   ``History`` (SQLite).
+- Ladybird: named profiles under the XDG config and data directories, with
+  ``Bookmarks.json`` in config and ``History.db`` in data.
 
 Folders whose names look like copies (``backup``, ``back-``, ``crashrecovery``) are skipped.
 Browsers keep their databases open and locked, so each is copied, with its write-ahead log when
@@ -78,6 +80,7 @@ class Profile:
     icon: str             # the browser's theme icon name
     family: str           # "firefox" or "chromium"
     folder: Path
+    bookmark_folder: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +112,17 @@ def profiles(home: Path | None = None, config: Path | None = None) -> list[Profi
                 if folder.is_dir() and not _COPY_NAME.search(folder.name) \
                         and ((folder / "Bookmarks").is_file() or (folder / "History").is_file()):
                     found.append(Profile(browser, icon, "chromium", folder))
+    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local/share")
+    flatpak = home / ".var/app/org.ladybird.Ladybird"
+    for config_home, data_home in ((config, data), (flatpak / "config", flatpak / "data")):
+        config_profiles = config_home / "Ladybird/Profiles"
+        data_profiles = data_home / "Ladybird/Profiles"
+        names = {p.parent.name for p in config_profiles.glob("*/Bookmarks.json")}
+        names.update(p.parent.name for p in data_profiles.glob("*/History.db"))
+        for name in sorted(names):
+            if not _COPY_NAME.search(name):
+                found.append(Profile("Ladybird", "org.ladybird.Ladybird", "ladybird",
+                                     data_profiles / name, config_profiles / name))
     return list(dict.fromkeys(found))
 
 
@@ -161,13 +175,13 @@ def _icon_origins(homepage: str) -> tuple[str, ...]:
 
 
 def _profile_favicons(profile: Profile, sites: dict[str, str]) -> dict[str, str]:
-    firefox = profile.family == "firefox"
-    path = profile.folder / ("favicons.sqlite" if firefox else "Favicons")
+    names = {"firefox": "favicons.sqlite", "chromium": "Favicons", "ladybird": "History.db"}
+    path = profile.folder / names[profile.family]
     if not path.is_file():
         return {}
     # Prefer an icon assigned to the homepage, then one used by another
     # page on that origin. Firefox can also store a separate root icon.
-    if firefox:
+    if profile.family == "firefox":
         candidates = """
             SELECT p.page_url AS url, i.width, i.data AS image
             FROM moz_pages_w_icons p JOIN moz_icons_to_pages link ON link.page_id = p.id
@@ -176,6 +190,12 @@ def _profile_favicons(profile: Profile, sites: dict[str, str]) -> dict[str, str]
             UNION ALL
             SELECT :origin, width, data FROM moz_icons
             WHERE root = 1 AND icon_url >= :origin AND icon_url < :end
+        """
+    elif profile.family == "ladybird":
+        candidates = """
+            SELECT h.url, 48 AS width, f.png_data AS image
+            FROM History h JOIN Favicons f ON f.hash = h.favicon_hash
+            WHERE h.url >= :origin AND h.url < :end
         """
     else:
         candidates = """
@@ -236,6 +256,13 @@ def _history(profile: Profile, since: float, after_clear: bool) -> list[Page]:
                           f"SELECT url, title, {count}, last_visit_date / 1000000.0 FROM moz_places p "
                           "WHERE hidden = 0 AND last_visit_date >= ? ORDER BY last_visit_date DESC LIMIT ?",
                           ((cutoff,) if after_clear else ()) + (cutoff, HISTORY_PER_PROFILE))
+    elif profile.family == "ladybird":  # last_visited_time: Unix seconds
+        # Ladybird stores a lifetime count per URL, with no individual visit rows.
+        count = "1" if after_clear else "visit_count"
+        rows = _with_copy(profile.folder / "History.db",
+                          f"SELECT url, title, {count}, last_visited_time FROM History "
+                          "WHERE last_visited_time >= ? ORDER BY last_visited_time DESC LIMIT ?",
+                          (since, HISTORY_PER_PROFILE))
     else:  # last_visit_time: microseconds since 1601-01-01
         offset = 11_644_473_600
         cutoff = int((since + offset) * 1_000_000)
@@ -248,9 +275,32 @@ def _history(profile: Profile, since: float, after_clear: bool) -> list[Page]:
             for url, title, visits, visited in rows if str(url).startswith(("http://", "https://"))]
 
 
+def _ladybird_bookmarks(path: Path) -> list[tuple[str, str]]:
+    def walk(items: Any):
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "folder":
+                yield from walk(item.get("children"))
+            elif item.get("type") == "bookmark" and isinstance(item.get("url"), str):
+                yield str(item.get("title") or ""), item["url"]
+
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        return list(walk(document.get("items"))) if isinstance(document, dict) else []
+    except (OSError, ValueError, RecursionError):
+        return []
+
+
 def _bookmarks(profile: Profile) -> list[Page]:
-    pairs = firefox_bookmarks(profile.folder / "places.sqlite") if profile.family == "firefox" \
-        else chromium_bookmarks(profile.folder / "Bookmarks")
+    if profile.family == "ladybird":
+        pairs = _ladybird_bookmarks((profile.bookmark_folder or profile.folder) / "Bookmarks.json")
+    elif profile.family == "firefox":
+        pairs = firefox_bookmarks(profile.folder / "places.sqlite")
+    else:
+        pairs = chromium_bookmarks(profile.folder / "Bookmarks")
     return [Page(title, url, profile.browser, profile.icon, True) for title, url in pairs
             if url.startswith(("http://", "https://"))]
 
