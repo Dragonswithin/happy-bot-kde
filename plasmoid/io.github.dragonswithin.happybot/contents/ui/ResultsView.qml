@@ -81,7 +81,7 @@ Rectangle {
     required property var session
     // A full desktop capture includes overlays. Let the desktop draw through the
     // transparent popup while keeping its window open and its draft intact.
-    opacity: session.capturing && !session.helpWindow ? 0 : 1
+    opacity: (session.capturing && !session.helpWindow) || movePreview.item?.visible ? 0 : 1
     property bool useRobotMascot: false
     readonly property string robotStyle: session.ui?.robot_style ?? "pip"
     readonly property color accent: useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
@@ -123,7 +123,35 @@ Rectangle {
         : contentHeight
 
     property var windowPosition: null
-    signal windowMoved(point position, bool finished)
+    signal windowMoved(point position)
+    readonly property bool windowMoveInProgress: movePreview.active
+
+    function previewWindowMove(position) {
+        const firstMove = !movePreview.active;
+        movePreview.active = true;
+        const preview = movePreview.item;
+        preview.place(position.x, position.y);
+        if (firstMove) {
+            view.grabToImage(result => {
+                if (preview && movePreview.item === preview)
+                    preview.snapshot = result;
+            });
+        }
+    }
+
+    function endWindowMove() {
+        movePreview.active = false;
+    }
+
+    Loader {
+        id: movePreview
+        active: false
+        sourceComponent: PopupMovePreview {
+            screen: view.Window.window?.screen ?? null
+            width: Math.round(view.width)
+            height: Math.round(view.height)
+        }
+    }
 
     signal queryEdited(string text)
     signal accepted(string text)

@@ -87,8 +87,8 @@ Item {
             closes.clear();
             verify(!button(view, "Settings"));
             mouseDrag(view, 8, view.height - 11, 45, -5);
-            verify(moves.count > 0);
-            compare(moves.signalArguments[moves.count - 1][1], true);
+            compare(moves.count, 1);
+            compare(moves.signalArguments[0][0], Qt.point(85, 75));
 
             moves.clear();
             mouseDrag(view, Math.round(view.width / 2), 55, 45, 0);

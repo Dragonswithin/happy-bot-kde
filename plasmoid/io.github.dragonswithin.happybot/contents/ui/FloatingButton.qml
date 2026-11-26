@@ -121,7 +121,7 @@ PositionedWindow {
 
     /** Where the window goes for its current size: the button's corner stays put. */
     function layout() {
-        if (mouse.dragging) {
+        if (mouse.dragging || view.windowMoveInProgress) {
             return;
         }
         if (expanded) {
@@ -237,7 +237,7 @@ PositionedWindow {
             heightInGridUnits: floating.heightInGridUnits
 
             windowPosition: () => floating.screenPosition
-            onWindowMoved: (position, finished) => floating.movePopup(position, finished)
+            onWindowMoved: position => floating.movePopup(position)
 
             onQueryEdited: text => floating.queryEdited(text)
             onAccepted: text => floating.accepted(text)

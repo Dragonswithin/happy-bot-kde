@@ -13,10 +13,12 @@ MouseArea {
     scrollGestureEnabled: false
 
     property point pressPosition
+    property point pressOrigin
     property bool dragging: false
 
     onPressed: mouse => {
         pressPosition = mapToItem(null, mouse.x, mouse.y);
+        pressOrigin = popup.windowPosition();
         dragging = false;
     }
     onPositionChanged: mouse => {
@@ -26,13 +28,20 @@ MouseArea {
         if (!dragging && Math.abs(dx) + Math.abs(dy) < Qt.styleHints.startDragDistance)
             return;
         dragging = true;
-        const origin = popup.windowPosition();
-        popup.windowMoved(Qt.point(origin.x + dx, origin.y + dy), false);
+        popup.previewWindowMove(Qt.point(pressOrigin.x + dx, pressOrigin.y + dy));
     }
-    onReleased: {
-        if (dragging)
-            popup.windowMoved(popup.windowPosition(), true);
+    onReleased: mouse => {
+        if (dragging) {
+            const point = mapToItem(null, mouse.x, mouse.y);
+            popup.windowMoved(Qt.point(pressOrigin.x + point.x - pressPosition.x,
+                                       pressOrigin.y + point.y - pressPosition.y));
+            popup.endWindowMove();
+        }
         dragging = false;
     }
-    onCanceled: dragging = false
+    onCanceled: {
+        if (dragging)
+            popup.endWindowMove();
+        dragging = false;
+    }
 }

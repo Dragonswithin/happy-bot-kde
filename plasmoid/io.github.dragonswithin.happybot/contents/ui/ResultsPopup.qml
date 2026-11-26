@@ -40,7 +40,7 @@ PositionedWindow {
     screen: anchorItem?.Window.window?.screen ?? null
 
     function layoutPopup() {
-        if (!visible)
+        if (!visible || resultsView.windowMoveInProgress)
             return;
         if (resultsView.fullSizeTool)
             toolOpened = true;
@@ -142,7 +142,7 @@ PositionedWindow {
         heightInGridUnits: popup.heightInGridUnits
 
         windowPosition: () => popup.screenPosition
-        onWindowMoved: (position, finished) => popup.movePopup(position, finished)
+        onWindowMoved: position => popup.movePopup(position)
 
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)

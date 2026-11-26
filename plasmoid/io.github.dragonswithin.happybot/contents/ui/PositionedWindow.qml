@@ -25,12 +25,11 @@ Window {
     // Coordinates are relative to the screen, including the space reserved by panels.
     LayerShell.Window.exclusionZone: -1
 
-    function movePopup(position, finished) {
+    function movePopup(position) {
         place(position.x, position.y);
         popupPosition = screenPosition;
         anchorPopup(screenPosition.x, screenPosition.y, height);
-        if (finished)
-            popupMoved(popupPosition.x, popupPosition.y);
+        popupMoved(popupPosition.x, popupPosition.y);
     }
 
     // Keep the original edge across the whole resize, including animated frames.
