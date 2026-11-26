@@ -132,6 +132,7 @@ KCM.SimpleKCM {
             iconName: "preferences-desktop-icons"
             description: i18n("Choose the picture you see in the panel, on the floating button and beside replies.")
             headerArtwork: GreetingPortrait {
+                accent: Look.assistantAccent(page.ui?.robot_mascot ?? true, robotStyle, Kirigami.Theme.highlightColor)
                 robotStyle: page.ui?.robot_style ?? "pip"
                 iconSource: Look.assistantIcon(page.ui?.robot_mascot ?? true, robotStyle)
                 animate: page.ui?.robot_mascot === true && page.ui?.mascot_animations !== false

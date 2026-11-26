@@ -107,10 +107,10 @@ ColumnLayout {
 
                 background: Rectangle {
                     radius: Kirigami.Units.cornerRadius * 2
-                    color: Qt.alpha(Kirigami.Theme.highlightColor,
+                    color: Qt.alpha(Look.robotDesign(tile.modelData.id).accent,
                                     tile.checked ? 0.14 : tile.hovered ? 0.07 : 0)
                     border.width: tile.visualFocus ? 2 : 1
-                    border.color: tile.checked || tile.visualFocus ? Kirigami.Theme.highlightColor
+                    border.color: tile.checked || tile.visualFocus ? Look.robotDesign(tile.modelData.id).accent
                                  : Qt.alpha(Kirigami.Theme.textColor, 0.16)
                 }
 
@@ -144,7 +144,7 @@ ColumnLayout {
                     visible: tile.checked
                     source: "emblem-checked"
                     isMask: true
-                    color: Kirigami.Theme.highlightColor
+                    color: Look.robotDesign(tile.modelData.id).accent
                     Accessible.ignored: true
                 }
             }

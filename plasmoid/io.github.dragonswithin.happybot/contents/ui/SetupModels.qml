@@ -152,6 +152,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         visible: section.order.length > 0
         title: i18n("Your models")
@@ -309,6 +310,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Add a model")
         iconName: "list-add"

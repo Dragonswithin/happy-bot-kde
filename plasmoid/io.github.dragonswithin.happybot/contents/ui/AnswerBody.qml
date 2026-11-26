@@ -31,6 +31,7 @@ import "answerParts.js" as AnswerParts
  */
 ColumnLayout {
     id: body
+    property color accent: Kirigami.Theme.highlightColor
 
     property string text: ""
 
@@ -98,7 +99,7 @@ ColumnLayout {
                     readOnly: true
                     selectByMouse: true
                     color: Kirigami.Theme.textColor
-                    selectionColor: Kirigami.Theme.highlightColor
+                    selectionColor: body.accent
                     selectedTextColor: Kirigami.Theme.highlightedTextColor
                     font: Kirigami.Theme.defaultFont
                     onLinkActivated: link => body.linkActivated(link)
@@ -154,7 +155,7 @@ ColumnLayout {
                             readOnly: true
                             selectByMouse: true
                             color: Kirigami.Theme.textColor
-                            selectionColor: Kirigami.Theme.highlightColor
+                            selectionColor: body.accent
                             selectedTextColor: Kirigami.Theme.highlightedTextColor
                             font: Kirigami.Theme.fixedWidthFont
                         }

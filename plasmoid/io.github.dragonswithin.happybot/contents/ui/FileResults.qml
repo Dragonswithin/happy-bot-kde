@@ -232,6 +232,7 @@ Item {
 
                                 Layout.fillWidth: true
                                 highlighted: entry.index === results.selectedIndex
+                                background: AccentSelection { control: row; accent: results.accent }
                                 Accessible.name: Look.hitWhere(entry.modelData).length > 0
                                     ? i18n("%1, in %2", entry.modelData.title, Look.hitWhere(entry.modelData)) : entry.modelData.title
                                 onClicked: results.resultActivated(entry.modelData)
@@ -456,6 +457,7 @@ Item {
         anchors.bottom: parent.bottom
         visible: results.query.length > 0
         highlighted: results.selectedIndex < 0
+        background: AccentSelection { control: askRow; accent: results.accent }
         Accessible.name: i18n("Ask the assistant: %1", results.query)
         onClicked: results.askRequested(results.query)
 

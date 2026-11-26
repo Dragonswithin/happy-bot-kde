@@ -7,6 +7,7 @@ import org.kde.plasma.components as PC3
 
 Rectangle {
     id: viewport
+    property color accent: Kirigami.Theme.highlightColor
 
     required property url source
     required property string action
@@ -139,7 +140,7 @@ Rectangle {
             height: Math.abs(bottomEdge - mouse.start.y)
             border.color: "white"
             border.width: 2
-            color: Qt.alpha(Kirigami.Theme.highlightColor, 0.25)
+            color: Qt.alpha(viewport.accent, 0.25)
         }
     }
 

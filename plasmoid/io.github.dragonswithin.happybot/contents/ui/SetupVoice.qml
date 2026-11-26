@@ -34,6 +34,7 @@ SettingsSection {
     iconName: "audio-input-microphone"
     description: i18n("Click the microphone and speak. Pausing, or clicking it again, sends your words to the AI.")
 
+    appearance: page.settings?.ui
     required property var page
     readonly property var voice: page.settings && page.settings.voice ? page.settings.voice : null
     property bool busy: false

@@ -30,6 +30,7 @@ Item {
     property alias activity: icon.activity
     property alias animateMascot: icon.animateMascot
     property alias robotStyle: icon.robotStyle
+    property color accent: Kirigami.Theme.highlightColor
     property bool busy: false
     property bool needsAttention: false
     property bool open: false
@@ -83,7 +84,7 @@ Item {
         radius: width / 2
         visible: kind.length > 0
         color: kind === "attention" ? Kirigami.Theme.neutralTextColor
-            : kind === "busy" ? Kirigami.Theme.highlightColor
+            : kind === "busy" ? compact.accent
             : Kirigami.Theme.disabledTextColor
         border.width: 1
         border.color: Kirigami.Theme.backgroundColor

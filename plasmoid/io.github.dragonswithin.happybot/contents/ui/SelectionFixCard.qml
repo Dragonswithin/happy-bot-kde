@@ -32,6 +32,7 @@ import org.kde.plasma.components as PlasmaComponents3
  */
 ColumnLayout {
     id: card
+    property color accent: Kirigami.Theme.highlightColor
 
     required property var session
     readonly property var fixing: session.fixing || ({})
@@ -164,7 +165,7 @@ ColumnLayout {
             radius: Kirigami.Units.cornerRadius
             color: "transparent"
             border.width: 1
-            border.color: Qt.alpha(Kirigami.Theme.highlightColor, 0.6)
+            border.color: Qt.alpha(card.accent, 0.6)
 
             QQC2.TextArea {
                 id: resultText
@@ -189,6 +190,7 @@ ColumnLayout {
                 icon.name: "edit-paste"
                 visible: card.session.fixReplaces && !card.fixing.terminal && (card.fixing.window || "").length > 0
                 AssistantToolTip {
+                    accent: card.accent
                     text: i18n("Put this in place of the selected text in %1", card.fixing.app || "")
                     visible: parent.hovered
                 }

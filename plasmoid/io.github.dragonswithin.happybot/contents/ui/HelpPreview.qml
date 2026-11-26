@@ -21,6 +21,7 @@ ColumnLayout {
     spacing: Kirigami.Units.smallSpacing
 
     HelpScreenshotView {
+        accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
         id: screenshot
         Layout.fillWidth: true
         Layout.fillHeight: true

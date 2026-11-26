@@ -37,6 +37,7 @@ KCM.SimpleKCM {
 
         SettingsSection {
             id: diagnostics
+            appearance: store.settings?.ui
             visible: store.ready
             title: i18n("Setup check")
             iconName: "preferences-system"

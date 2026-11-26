@@ -31,6 +31,7 @@ import org.kde.plasma.components as PlasmaComponents3
  */
 ColumnLayout {
     id: view
+    property color accent: Kirigami.Theme.highlightColor
 
     required property var session
     property var info: null
@@ -115,10 +116,11 @@ ColumnLayout {
         id: spark
         property var values: []
         property real maximum: 100  // 0 = scale to the largest value
-        property color stroke: Kirigami.Theme.highlightColor
+        property color stroke: view.accent
         Layout.fillWidth: true
         Layout.preferredHeight: Kirigami.Units.gridUnit * 1.6
         onValuesChanged: requestPaint()
+        onStrokeChanged: requestPaint()
         onWidthChanged: requestPaint()
         onPaint: {
             const context = getContext("2d");
@@ -392,6 +394,7 @@ ColumnLayout {
                     enabled: program.modelData.mine && !program.modelData.protected
                     opacity: enabled ? 1 : 0
                     AssistantToolTip {
+                        accent: view.accent
                         text: i18n("Stop %1", program.modelData.name)
                         visible: parent.hovered
                     }

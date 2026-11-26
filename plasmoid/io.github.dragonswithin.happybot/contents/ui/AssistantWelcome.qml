@@ -146,7 +146,7 @@ ColumnLayout {
                     radius: Kirigami.Units.cornerRadius * 2
                     color: Qt.alpha(shortcut.hovered || shortcut.down ? welcome.accent : Kirigami.Theme.textColor,
                                     shortcut.down ? 0.16 : shortcut.hovered ? 0.10 : 0.035)
-                    border.color: shortcut.visualFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.14)
+                    border.color: shortcut.visualFocus ? welcome.accent : Qt.alpha(Kirigami.Theme.textColor, 0.14)
                 }
                 contentItem: GridLayout {
                     columns: shortcuts.columns === 1 ? 2 : 1

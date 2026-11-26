@@ -12,6 +12,9 @@ QQC2.Control {
 
     required property string title
     required property string iconName
+    property var appearance: SharedUiPreferences.ui
+    readonly property color accent: Look.assistantAccent(appearance?.robot_mascot ?? true,
+                                                        appearance?.robot_style ?? "pip", Kirigami.Theme.highlightColor)
     property string description: ""
     property Component headerArtwork
     default property alias contents: body.data
@@ -38,14 +41,14 @@ QQC2.Control {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: Kirigami.Units.cornerRadius * 2
-                color: Qt.alpha(Look.mascotAccent, 0.18)
+                color: Qt.alpha(card.accent, 0.18)
                 Kirigami.Icon {
                     anchors.centerIn: parent
                     width: Kirigami.Units.iconSizes.smallMedium
                     height: width
                     source: card.iconName
                     isMask: true
-                    color: Qt.tint(Kirigami.Theme.textColor, Qt.alpha(Look.mascotAccent, 0.42))
+                    color: Qt.tint(Kirigami.Theme.textColor, Qt.alpha(card.accent, 0.42))
                     Accessible.ignored: true
                 }
             }

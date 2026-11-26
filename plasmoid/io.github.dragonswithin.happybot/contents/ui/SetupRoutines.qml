@@ -87,6 +87,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Saved routines")
         iconName: "view-list-details"
@@ -220,6 +221,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Add a routine")
         iconName: "list-add"
@@ -278,6 +280,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Reminders")
         iconName: "view-calendar-tasks"

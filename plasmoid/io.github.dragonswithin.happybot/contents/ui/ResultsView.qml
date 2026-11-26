@@ -614,7 +614,7 @@ AssistantSurface {
                                     radius: Kirigami.Units.cornerRadius * 2
                                     color: saved.highlighted ? Qt.alpha(view.accent, 0.14)
                                         : saved.hovered ? Qt.alpha(Kirigami.Theme.textColor, 0.07) : "transparent"
-                                    border.color: saved.visualFocus ? Kirigami.Theme.highlightColor : "transparent"
+                                    border.color: saved.visualFocus ? view.accent : "transparent"
                                 }
                                 Accessible.name: i18n("Conversation: %1", modelData.title)
                                 highlighted: modelData.id === view.session.conversationId
@@ -777,6 +777,7 @@ AssistantSurface {
                     clip: true
 
                     SystemInfoView {
+                        accent: view.accent
                         id: systemInfo
                         x: view.inset
                         y: view.inset
@@ -848,6 +849,7 @@ AssistantSurface {
                     clip: true
 
                     SelectionFixCard {
+                        accent: view.accent
                         id: fixCard
                         x: view.inset
                         y: view.inset

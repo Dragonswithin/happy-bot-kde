@@ -132,6 +132,7 @@ ColumnLayout {
     readonly property QQC2.ButtonGroup appContextChoices: QQC2.ButtonGroup {}
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Approvals")
         iconName: "security-high"
@@ -170,6 +171,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Privacy")
         iconName: "preferences-desktop-user"
@@ -222,6 +224,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Allowed actions")
         iconName: "preferences-desktop-accessibility"
@@ -280,6 +283,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Your instructions")
         iconName: "document-edit"
@@ -337,6 +341,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Notifications")
         iconName: "preferences-desktop-notification"
@@ -370,6 +375,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Request limits and terminal")
         iconName: "utilities-terminal"
@@ -430,6 +436,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Tool sharing and plugins")
         iconName: "plugins"

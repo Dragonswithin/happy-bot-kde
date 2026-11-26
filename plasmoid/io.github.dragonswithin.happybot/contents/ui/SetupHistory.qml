@@ -124,6 +124,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Clear history and cache")
         iconName: "view-history"
@@ -178,6 +179,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Conversation retention")
         iconName: "chronometer"
@@ -205,6 +207,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Standard folders")
         iconName: "folder"
@@ -246,6 +249,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Notes and to-dos")
         iconName: "document-edit"

@@ -53,6 +53,7 @@ PositionedWindow {
     required property IconActivity activity
     property bool busy: false
     property bool useRobotMascot: false
+    readonly property color shortcutAccent: Look.assistantAccent(useRobotMascot, session.ui.robot_style ?? "pip", Kirigami.Theme.highlightColor)
     property int selectedIndex: -1
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
@@ -303,7 +304,7 @@ PositionedWindow {
                 radius: width / 2
                 color: "transparent"
                 border.width: 2
-                border.color: Kirigami.Theme.highlightColor
+                border.color: floating.shortcutAccent
                 visible: floating.busy
                 opacity: 0.8
 
@@ -326,7 +327,7 @@ PositionedWindow {
             opacity: (1 - floating.dockSlide) * (mouse.containsMouse || floating.activity.recording ? 1 : floating.idleOpacity)
             // Carry the note and recording light colours over from the mascot artwork.
             color: floating.activity.recording ? "#ff696b" : floating.activity.expression === "nudge" ? "#ffc463"
-                : Look.assistantAccent(floating.useRobotMascot, floating.session.ui.robot_style ?? "pip", Kirigami.Theme.highlightColor)
+                : floating.shortcutAccent
             border.width: 1
             border.color: Kirigami.Theme.textColor
         }

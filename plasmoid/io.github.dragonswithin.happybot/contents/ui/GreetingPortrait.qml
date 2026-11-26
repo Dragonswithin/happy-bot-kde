@@ -9,7 +9,7 @@ Item {
     required property string iconSource
     property string robotStyle: "pip"
     property bool animate: false
-    property color accent: Look.mascotAccent
+    property color accent: Look.robotDesign(robotStyle).accent
     implicitWidth: Kirigami.Units.gridUnit * 4
     implicitHeight: implicitWidth
     Accessible.ignored: true

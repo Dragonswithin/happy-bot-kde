@@ -216,6 +216,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Search sources")
         iconName: "edit-find"
@@ -235,6 +236,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Browser results")
         iconName: "bookmarks"
@@ -278,6 +280,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Offline Wikipedia")
         iconName: "documentation"
@@ -289,6 +292,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Connected tools")
         iconName: "plugins"

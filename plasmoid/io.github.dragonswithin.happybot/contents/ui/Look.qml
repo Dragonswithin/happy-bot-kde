@@ -21,8 +21,6 @@ QtObject {
     readonly property string homePath: String(QtCore.StandardPaths.writableLocation(
         QtCore.StandardPaths.HomeLocation)).replace(/^file:\/\//, "")
 
-    readonly property color mascotAccent: robotStyles[0].accent
-
     readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
     // Each pivot is in the same 48-unit drawing as its SVG beacon. Motion
     // values describe one short gesture before the robot settles and blinks.

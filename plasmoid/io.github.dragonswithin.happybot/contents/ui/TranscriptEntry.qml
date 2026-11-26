@@ -72,6 +72,7 @@ Item {
     readonly property bool hasChoices: kind === "tool" && cardData !== null && cardData.kind === "choices"
     property bool useRobotMascot: false
     property string robotStyle: "pip"
+    readonly property color accent: Look.assistantAccent(useRobotMascot, robotStyle, Kirigami.Theme.highlightColor)
     readonly property bool running: kind === "tool" && stage === "running"
     property real now: Date.now()
 
@@ -79,7 +80,7 @@ Item {
     readonly property bool isCard: kind === "assistant" || kind === "approval" || kind === "error" || kind === "setup"
     readonly property color cardColor: kind === "approval" ? Kirigami.Theme.neutralTextColor
         : kind === "error" ? Kirigami.Theme.negativeTextColor
-        : kind === "setup" ? Kirigami.Theme.highlightColor
+        : kind === "setup" ? entry.accent
         : Kirigami.Theme.textColor
     // Error messages from the daemon are one line; a known prefix becomes a
     // short headline and the rest the detail.
@@ -251,6 +252,7 @@ Item {
 
                     // the answer: Markdown, code blocks with Copy, file lists that open
                     AnswerBody {
+                        accent: entry.accent
                         id: answerText
                         Layout.fillWidth: true
                         visible: entry.kind === "assistant"
@@ -265,6 +267,7 @@ Item {
                         text: i18n("Copy answer")
                         display: PlasmaComponents3.AbstractButton.IconOnly
                         AssistantToolTip {
+                            accent: entry.accent
                             text: parent.text
                             visible: parent.hovered
                         }

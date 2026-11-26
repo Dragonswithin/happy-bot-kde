@@ -127,6 +127,7 @@ ColumnLayout {
 
                             anchors.fill: parent
                             highlighted: chip.position === chips.selectedIndex
+                            background: AccentSelection { control: button; accent: chips.accent }
                             Accessible.name: Look.hitWhere(chip.modelData).length > 0
                                 ? i18n("%1, in %2", chip.modelData.title, Look.hitWhere(chip.modelData)) : chip.modelData.title
                             AssistantToolTip {

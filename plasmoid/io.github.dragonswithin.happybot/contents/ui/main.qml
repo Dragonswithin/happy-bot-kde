@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
+import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
@@ -143,6 +144,7 @@ PlasmoidItem {
 
     readonly property bool animatePanelMascot: !standalone && session.ui.robot_mascot && session.ui.mascot_animations !== false
     readonly property string robotStyle: session.ui.robot_style ?? "pip"
+    readonly property color assistantAccent: Look.assistantAccent(session.ui.robot_mascot, robotStyle, Kirigami.Theme.highlightColor)
 
     // plasmawindowed publishes this string as the tray's theme icon name.
     Plasmoid.icon: {
@@ -304,6 +306,7 @@ PlasmoidItem {
     }
 
     compactRepresentation: CompactRepresentation {
+        accent: root.assistantAccent
         status: session.status
         iconName: Plasmoid.icon
         activity: iconActivity
@@ -367,6 +370,7 @@ PlasmoidItem {
     // applet never expands into it as a popup (`activationTogglesExpanded`
     // is false), so in the icon form it is unused.
     fullRepresentation: PanelBar {
+        accent: root.assistantAccent
         robotStyle: root.robotStyle
         iconDescription: iconActivity.description()
         busy: session.busy

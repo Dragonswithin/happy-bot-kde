@@ -56,6 +56,7 @@ import org.kde.plasma.components as PlasmaComponents3
 Item {
     id: bar
 
+    property color accent: Kirigami.Theme.highlightColor
     property bool busy: false
     property string statusText: ""
     property bool offline: false
@@ -200,6 +201,7 @@ Item {
         Accessible.onPressAction: bar.micClicked()
 
         AssistantToolTip {
+            accent: bar.accent
             text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
             visible: containsMouse
         }
@@ -222,6 +224,7 @@ Item {
         Accessible.onPressAction: bar.iconClicked()
 
         AssistantToolTip {
+            accent: bar.accent
             text: bar.iconDescription || i18n("Open Happy Bot")
             visible: containsMouse
         }

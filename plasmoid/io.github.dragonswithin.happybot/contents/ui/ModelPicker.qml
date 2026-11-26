@@ -70,11 +70,20 @@ T.ComboBox {
     }
 
     delegate: QQC2.ItemDelegate {
+        id: option
         required property int index
         required property string modelData
         width: ListView.view.width
         text: modelData
         highlighted: picker.highlightedIndex === index
+        background: AccentSelection { control: option; accent: picker.accent }
+        contentItem: QQC2.Label {
+            text: option.text
+            textFormat: Text.PlainText
+            color: Kirigami.Theme.textColor
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+        }
     }
 
     popup: QQC2.Popup {
