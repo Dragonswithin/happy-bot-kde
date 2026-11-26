@@ -22,6 +22,8 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "floating_opacity": 40,     # how visible the floating Happy Bot is while not in use, 15 to 100 percent
       "search_bookmarks": false,  # search results include browser bookmarks (browsers.py)
       "search_history": false,    # ... and recently visited websites; both read on this computer only
+      "web_pins": [],             # homepages chosen to always appear on the web start page
+      "web_hidden": [],           # homepages excluded from its frequent sites
       "floating_x": -1,           # its place, logical pixels from the screen's top left;
       "floating_y": -1,           #   -1 = near the bottom right
       "start_screen": ["files", "web", "help"],  # the start screen's buttons, in order (START_BUTTONS:
@@ -46,9 +48,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import web_preferences
+
 UI_DEFAULTS: dict[str, Any] = {
     "robot_mascot": True, "robot_style": "pip", "mascot_animations": True, "robot_sounds": False, "mascot_nudges": True,
     "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
+    "web_pins": [], "web_hidden": [],
     "floating_docked": False, "floating_size": 100, "floating_opacity": 40, "floating_x": -1, "floating_y": -1,
     "imported": [], "start_screen": ["files", "web", "help"],
 }
@@ -95,7 +100,14 @@ def validate_ui(raw: Any) -> dict[str, Any]:
     imported = ui["imported"]
     if not isinstance(imported, list) or any(item not in COPIES for item in imported):
         raise UiSettingsError(f"'ui': 'imported' may only list {', '.join(COPIES)}")
-    return {**ui, "imported": sorted(set(imported)), "start_screen": list(buttons)}
+    try:
+        pins, hidden = web_preferences.site_list(ui["web_pins"]), web_preferences.site_list(ui["web_hidden"])
+    except ValueError as error:
+        raise UiSettingsError(f"'ui': invalid web site preferences: {error}") from error
+    if pins.keys() & hidden.keys():
+        raise UiSettingsError("'ui': a site cannot be both pinned and hidden")
+    return {**ui, "imported": sorted(set(imported)), "start_screen": list(buttons),
+            "web_pins": list(pins.values()), "web_hidden": list(hidden.values())}
 
 
 def robot_theme_icon(style: str) -> str:

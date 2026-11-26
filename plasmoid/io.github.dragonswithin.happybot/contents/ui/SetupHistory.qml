@@ -41,7 +41,7 @@ ColumnLayout {
     property string clearingKind: ""
     readonly property var historyKinds: [
         { kind: "search", title: i18n("Search history"),
-          detail: i18n("Forget requests recalled with the arrow keys and start fresh with recent items and website suggestions in Happy Bot."),
+          detail: i18n("Clear recent web searches, frequent sites, recent items and requests recalled with the arrow keys. Keep your pinned and hidden site choices."),
           done: i18n("Search history cleared.") },
         { kind: "conversations", title: i18n("Saved conversations"),
           detail: i18n("Stop active replies and delete all conversations, including pinned chats."),

@@ -33,6 +33,7 @@ from urllib.parse import unquote, urlparse
 
 from .mcp_client import McpError, McpManager, ToolResult
 from .tool_roles import call_role
+from .web_preferences import site_field
 
 SEARCH_TIMEOUT_SECONDS = 8.0
 MAX_HITS = 20
@@ -153,7 +154,7 @@ def search_web(
     result = call_role(manager, settings, "web_search", query, timeout)
     if result.is_error:
         raise McpError(f"the web search tool reported an error: {result.text[:300]}")
-    return [{**hit, "source": "web"} for hit in extract_hits(result, limit) if hit["kind"] == "link"]
+    return [{**hit, "source": "web", **site_field(hit["location"])} for hit in extract_hits(result, limit) if hit["kind"] == "link"]
 
 
 def search_files(

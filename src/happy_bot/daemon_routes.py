@@ -106,6 +106,9 @@ Endpoints:
 - ``GET /quick/recent``: what the empty bar suggests (recent applications,
   files, settings pages, chats, and websites when recent websites are
   switched on; ``quick_results.recent``).
+- ``GET /web/start``: pinned and frequently visited sites and recent web searches.
+  ``POST /web/site`` saves a pin, unpin, hide or unhide action. ``POST /web/search/remember``
+  keeps a query the user chose.
 - ``POST /quick/activate``: ``{"action": {...}}`` from one of those results;
   an instant command runs its tool here and is written to the action log.
 - ``GET /quick/app?path=...``: what an application result's menu offers
@@ -155,7 +158,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
-from . import help_screenshot, settings as settings_store
+from . import help_screenshot, settings as settings_store, web_preferences
 from .agent_loop import user_folders
 from .mcp_client import McpError
 from .providers import ProviderError
@@ -230,9 +233,8 @@ def change_ui(server: "AssistantServer", query: dict[str, list[str]], body: dict
     changes = body.get("changes")
     if not isinstance(changes, dict):
         return _error(400, "changes must be an object", "invalid")
-    updated = {**server.settings, "ui": {**(server.settings.get("ui") or {}), **changes}}
     try:
-        stored = server.replace_settings(updated)
+        stored = server.update_ui(changes)
     except settings_store.SettingsError as error:
         return _error(400, str(error), "invalid")
     return 200, {"ok": True, "ui": stored["ui"]}
@@ -410,6 +412,39 @@ def search_web(server: "AssistantServer", query: dict[str, list[str]], body: dic
     except McpError as exc:
         return _error(502, str(exc), "tool_failed")
     return 200, {"ok": True, "query": text, "hits": hits}
+
+
+def web_start(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    index = server.search_history.index
+    ranked = index.frequent_sites() if server.settings["ui"]["search_history"] else []
+    # A first load may take a moment to read browser databases. Respect a change
+    # to privacy settings or a clear that happened while those reads were running.
+    ui = server.settings["ui"]
+    current = server.search_history.index
+    if index is not current or not ui["search_history"]:
+        ranked = []
+    return 200, {"ok": True, "sites": web_preferences.site_rows(ranked, ui), "history_enabled": ui["search_history"],
+                 "searches": server.search_history.web_queries(), "search_clear_revision": current.history_since}
+
+
+def change_web_site(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        server.change_web_site(body.get("url"), body.get("action"))
+    except ValueError as exc:
+        return _error(400, str(exc), "invalid")
+    except OSError:
+        return _error(500, "Could not save the site preference.", "save_failed")
+    return web_start(server, {}, {})
+
+
+def remember_web_search(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        server.search_history.remember_web_query(body.get("query"), body.get("revision"))
+    except ValueError as exc:
+        return _error(400, str(exc), "invalid")
+    except OSError:
+        return _error(500, "Could not save the web search.", "save_failed")
+    return 200, {"ok": True}
 
 
 def get_settings(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -854,6 +889,9 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/app/wait"): app_wait,
     ("GET", "/search"): search,
     ("GET", "/search/web"): search_web,
+    ("GET", "/web/start"): web_start,
+    ("POST", "/web/site"): change_web_site,
+    ("POST", "/web/search/remember"): remember_web_search,
     ("GET", "/settings"): get_settings,
     ("PUT", "/settings"): put_settings,
     ("GET", "/tools/discover"): discover_tools,

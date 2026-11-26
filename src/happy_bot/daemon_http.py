@@ -65,8 +65,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import (desktop_context, mascot_nudges, routines, selection_fix, system_monitor, user_timers, voice, wikipedia_library,
-               wikipedia_pages, wikipedia_reader, wikipedia_setup)
+from . import (desktop_context, mascot_nudges, routines, selection_fix, system_monitor, user_timers, voice, web_preferences,
+               wikipedia_library, wikipedia_pages, wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
@@ -200,7 +200,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.unit_dir = unit_dir or (user_timers.default_unit_dir() if self.manage_units
                                      else self.config_file.parent / "systemd-user")
         self.mcp = McpManager()
-        self.search_history = SearchHistory(self.config_file.with_name("search-cleared-at"))
+        self.search_history = SearchHistory(self.config_file.with_name("search-cleared-at"), self.runtime_dir / "web-searches.json")
         self.krunner = KRunnerBridge(self)
         self.conversation_clear_marker = self.runtime_dir / "conversations-cleared-at"
         self.history_clear_lock = threading.Lock()
@@ -214,7 +214,7 @@ class AssistantServer(ThreadingHTTPServer):
         # Offline Wikipedia's own pages for the article view, from a separate loopback server (wikipedia_pages).
         self.wikipedia_pages = wikipedia_pages.PageServer(
             lambda entry: wikipedia_reader.entry(self.mcp, self.settings, entry))
-        self._settings_lock = threading.Lock()
+        self._settings_lock = threading.RLock()
         self.settings_error = ""
         try:
             self.settings = settings_store.load_settings(self.config_file)
@@ -244,6 +244,15 @@ class AssistantServer(ThreadingHTTPServer):
             self.conversations.set_retention(stored["history_days"])
             self.sync_routines()
             return stored
+
+    def update_ui(self, changes: dict[str, Any]) -> dict[str, Any]:
+        """Apply a partial edit to the latest saved UI settings from either surface."""
+        with self._settings_lock:
+            return self.replace_settings({**self.settings, "ui": {**self.settings["ui"], **changes}})
+
+    def change_web_site(self, url: Any, action: Any) -> dict[str, Any]:
+        with self._settings_lock:
+            return self.update_ui(web_preferences.changed_sites(self.settings["ui"], url, action))
 
     def sync_routines(self) -> None:
         """Bring routine timers in step with the settings; problems become the daemon's last error."""

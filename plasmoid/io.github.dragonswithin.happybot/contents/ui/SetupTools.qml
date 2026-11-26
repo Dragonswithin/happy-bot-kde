@@ -238,7 +238,7 @@ ColumnLayout {
         Layout.fillWidth: true
         title: i18n("Browser results")
         iconName: "bookmarks"
-        description: i18n("Include these in the panel search bar and Find a file. Your browser data stays on this computer.")
+        description: i18n("Choose which browser results appear in Happy Bot. Recently visited websites also supply the Frequent sites section in Search the web.")
 
         QQC2.CheckBox {
             text: i18n("Bookmarks")
@@ -250,6 +250,30 @@ ColumnLayout {
             text: i18n("Recently visited websites")
             checked: section.page.settings?.ui?.search_history === true
             onToggled: section.changeBrowserResults("search_history", checked)
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: hiddenSites.count > 0
+            QQC2.Label { text: i18n("Sites hidden from Frequent sites") }
+            RowLayout {
+                Layout.fillWidth: true
+                QQC2.ComboBox {
+                    id: hiddenSites
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    model: section.page.settings?.ui?.web_hidden ?? []
+                    Accessible.name: i18n("Hidden site to restore")
+                }
+                QQC2.Button {
+                    text: i18n("Restore site")
+                    icon.name: "edit-undo"
+                    enabled: hiddenSites.currentIndex >= 0
+                    onClicked: section.page.client.request("POST", "/web/site",
+                        { url: hiddenSites.currentText, action: "unhide" }, () => section.page.reload(),
+                        data => section.page.report(data.error || i18n("Could not restore this site."), true))
+                }
+            }
         }
     }
 

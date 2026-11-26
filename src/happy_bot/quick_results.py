@@ -51,6 +51,8 @@ is skipped, never fatal.
 from __future__ import annotations
 
 import configparser
+import json
+import math
 import os
 import re
 import shutil
@@ -63,11 +65,14 @@ from typing import Any
 from . import browsers, characters, quick_answers, quick_commands, usage_history
 from .runtime_paths import read_clear_time, write_private_file
 from .tools import apps
+from .web_preferences import site_field
 
 MAX_RESULTS = 20
 _browsers = browsers.BrowserIndex()
 MIN_CHARS = 2
 CACHE_SECONDS = 60.0
+WEB_QUERY_COUNT = 8
+WEB_QUERY_LENGTH = 512
 SETTINGS_DIRS = (Path("/usr/share/applications"), Path("/usr/local/share/applications"))
 _cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
 _cache_lock = threading.Lock()
@@ -81,19 +86,54 @@ class SearchHistory:
     """Remember when earlier suggestions were cleared, without editing source databases.
 
     Each clear replaces the browser index so an already-running refresh finishes
-    into the retired index. The private timestamp alone survives restart.
+    into the retired index. Explicit web queries live in the session's private
+    runtime directory, tagged with the same cutoff so older copies stay cleared.
     """
 
-    def __init__(self, marker: Path) -> None:
+    def __init__(self, marker: Path, query_file: Path) -> None:
         self.marker = marker
+        self.query_file = query_file
         self.index = browsers.BrowserIndex(history_since=read_clear_time(marker))
+        self._lock = threading.Lock()
+        self._queries: list[str] = []
+        try:
+            data = json.loads(query_file.read_text(encoding="utf-8"))
+            if (isinstance(data, dict) and data.get("since") == self.index.history_since
+                    and isinstance(data.get("queries"), list)):
+                self._queries = [q for q in data["queries"] if isinstance(q, str)
+                                 and 0 < len(q) <= WEB_QUERY_LENGTH][:WEB_QUERY_COUNT]
+        except (OSError, ValueError):
+            pass
+
+    def web_queries(self) -> list[str]:
+        with self._lock:
+            return list(self._queries)
+
+    def remember_web_query(self, query: Any, revision: Any = None) -> None:
+        """Remember the user's explicit search. Ignore a request sent before a clear."""
+        if not isinstance(query, str) or not query.strip() or len(query) > WEB_QUERY_LENGTH:
+            raise ValueError(f"Choose a search between 1 and {WEB_QUERY_LENGTH} characters.")
+        if revision is not None and (type(revision) not in (int, float) or not 0 <= revision < math.inf):
+            raise ValueError("Invalid search history revision.")
+        query = " ".join(query.split())
+        with self._lock:
+            if revision is not None and revision < self.index.history_since:
+                return
+            queries = [query, *(q for q in self._queries if q.casefold() != query.casefold())][:WEB_QUERY_COUNT]
+            if queries != self._queries:
+                data = {"since": self.index.history_since, "queries": queries}
+                write_private_file(self.query_file, json.dumps(data, ensure_ascii=False))
+                self._queries = queries
 
     def clear(self) -> None:
         global _cache
-        since = time.time()
-        self.marker.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        write_private_file(self.marker, str(since))
-        self.index = browsers.BrowserIndex(history_since=since)
+        with self._lock:
+            since = time.time()
+            self.marker.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            write_private_file(self.marker, str(since))
+            self.index = browsers.BrowserIndex(history_since=since)
+            self._queries.clear()
+            self.query_file.unlink(missing_ok=True)
         with _cache_lock:
             _cache = {}
 
@@ -167,7 +207,7 @@ def _pages(text: str, bookmarks: bool, history: bool, index: browsers.BrowserInd
     marked, visited = index.search(text, bookmarks, history)
     return [{"kind": "quick", "title": page.title or browsers.host(page.url),
              "subtitle": f"{'Bookmark' if page.bookmark else 'Visited'} · {browsers.host(page.url)} · {page.browser}",
-             "icon": page.icon, "action": {"type": "bookmark" if page.bookmark else "visited", "target": page.url}}
+             "icon": page.icon, **site_field(page.url), "action": {"type": "bookmark" if page.bookmark else "visited", "target": page.url}}
             for page in [*marked, *visited]]
 
 

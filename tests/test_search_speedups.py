@@ -356,6 +356,7 @@ class WebFinderTests(unittest.TestCase):
             hits = instant_search.search_web(None, {}, "kwi")
         self.assertEqual(call.call_args[0][2], "web_search")
         self.assertEqual([hit["source"] for hit in hits], ["web", "web"])
+        self.assertEqual([hit["site_host"] for hit in hits], ["blogs.kde.org", "archlinux.org"])
 
     def test_the_route_says_when_web_search_is_not_set_up(self) -> None:
         from happy_bot.tool_roles import RoleNotConfigured

@@ -72,6 +72,38 @@ Item {
         results.selectedMenuRequested();
     }
 
+    WebSiteMenu {
+        id: webMenu
+        objectName: "webResultMenu"
+        property var hit: null
+        readonly property string location: hit?.location || hit?.action?.target || ""
+        readonly property var link: ({ kind: "link", title: hit?.title || "", location })
+        site: hit ? { location, pinned: (results.session.webStartData?.sites || []).some(
+            item => item.pinned && item.host === hit.site_host) } : null
+        onSiteActionRequested: (site, action) => results.session.changeWebSite(site.location, action)
+
+        QQC2.MenuSeparator {}
+        QQC2.MenuItem {
+            text: i18n("Open")
+            icon.name: "internet-web-browser"
+            onTriggered: results.resultActivated(webMenu.hit)
+        }
+        QQC2.MenuItem {
+            text: i18n("Copy link")
+            icon.name: "edit-copy"
+            onTriggered: results.fileActionRequested(webMenu.link, "copy")
+        }
+        QQC2.MenuItem {
+            text: i18n("Send to phone")
+            icon.name: "kdeconnect"
+            onTriggered: results.fileActionRequested(webMenu.link, "phone")
+        }
+        QQC2.MenuItem {
+            text: i18n("Ask about this")
+            icon.name: "help-contents"
+            onTriggered: results.fileActionRequested(webMenu.link, "ask")
+        }
+    }
 
     PlasmaComponents3.ScrollView {
         id: filesView
@@ -138,6 +170,7 @@ Item {
                             required property int index
                             required property var modelData
                             readonly property string group: Look.hitGroup(modelData)
+                            readonly property string siteHost: results.web ? modelData.site_host || "" : ""
                             readonly property bool isFile: modelData.kind !== "quick"
                             readonly property bool isApp: modelData.kind === "quick" && modelData.action.type === "launch"
                             readonly property bool startsGroup: index === 0
@@ -160,6 +193,17 @@ Item {
 
                             PlasmaComponents3.ItemDelegate {
                                 id: row
+                                objectName: "resultRow-" + entry.index
+                                function openMenu(x, y) {
+                                    if (entry.siteHost) {
+                                        webMenu.hit = entry.modelData;
+                                        webMenu.popup(row, x, y);
+                                    } else if (entry.isFile) {
+                                        fileMenu.popup(row, x, y);
+                                    } else if (entry.isApp) {
+                                        appMenu.show(row, x, y);
+                                    }
+                                }
 
                                 Connections {
                                     target: results
@@ -167,11 +211,7 @@ Item {
                                         if (entry.index !== results.selectedIndex) {
                                             return;
                                         }
-                                        if (entry.isFile) {
-                                            fileMenu.popup(row, 0, row.height);
-                                        } else if (entry.isApp) {
-                                            appMenu.show(row, 0, row.height);
-                                        }
+                                        row.openMenu(0, row.height);
                                     }
                                 }
 
@@ -180,6 +220,13 @@ Item {
                                 Accessible.name: Look.hitWhere(entry.modelData).length > 0
                                     ? i18n("%1, in %2", entry.modelData.title, Look.hitWhere(entry.modelData)) : entry.modelData.title
                                 onClicked: results.resultActivated(entry.modelData)
+                                Keys.onPressed: event => {
+                                    if (entry.siteHost && (event.key === Qt.Key_Menu
+                                            || (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier))) {
+                                        row.openMenu(0, row.height);
+                                        event.accepted = true;
+                                    }
+                                }
 
                                 // A file match can be dragged into another application.
                                 Drag.dragType: Drag.Automatic
@@ -198,8 +245,8 @@ Item {
                                 // A file's or an application's own actions, on right-click.
                                 TapHandler {
                                     acceptedButtons: Qt.RightButton
-                                    enabled: entry.isFile || entry.isApp
-                                    onTapped: entry.isFile ? fileMenu.popup() : appMenu.show()
+                                    enabled: entry.siteHost !== "" || entry.isFile || entry.isApp
+                                    onTapped: point => row.openMenu(point.position.x, point.position.y)
                                 }
 
                                 QQC2.Menu {
@@ -308,17 +355,28 @@ Item {
                                         PlasmaComponents3.Label {
                                             Layout.fillWidth: true
                                             text: entry.modelData.title
+                                            font.weight: entry.siteHost ? Font.DemiBold : Font.Normal
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                         }
 
                                         PlasmaComponents3.Label {
                                             Layout.fillWidth: true
-                                            text: Look.hitWhere(entry.modelData)
+                                            text: entry.siteHost || Look.hitWhere(entry.modelData)
                                             elide: entry.group === "web" || entry.group === "wikipedia" ? Text.ElideRight : Text.ElideMiddle
                                             textFormat: Text.PlainText
                                             font: Kirigami.Theme.smallFont
                                             opacity: 0.65
+                                        }
+                                        PlasmaComponents3.Label {
+                                            Layout.fillWidth: true
+                                            visible: entry.siteHost !== "" && text !== ""
+                                            text: entry.modelData.snippet || ""
+                                            textFormat: Text.PlainText
+                                            wrapMode: Text.Wrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                            opacity: 0.85
                                         }
                                     }
                                 }

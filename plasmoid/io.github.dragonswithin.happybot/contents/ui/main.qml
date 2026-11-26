@@ -872,6 +872,7 @@ PlasmoidItem {
     /** A file opens; a quick result does its action (an application starts, a window comes forward...).
      *  A saved conversation opens in Happy Bot, which stays open. */
     function openHit(hit) {
+        session.rememberWebSearch(session.searchedText);
         if (hit.source === "wikipedia") {
             session.openArticle(hit.location, hit.title);  // shown in Happy Bot itself, which stays open
             return;
@@ -951,6 +952,7 @@ PlasmoidItem {
         if (session.finding && text.length > 0) {
             // No match chosen: the assistant searches harder (other words, the whole index, the web's pages).
             const finder = session.finder;
+            session.rememberWebSearch(text);
             searchDelay.stop();
             session.stopFinding();
             text = (finder === "web" ? "Search the web for: " : "Find the file: ") + text;

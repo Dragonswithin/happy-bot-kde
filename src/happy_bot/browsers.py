@@ -31,6 +31,7 @@ result per address. The history stays in memory only and never leaves the comput
 from __future__ import annotations
 
 import json
+from collections import Counter
 from contextlib import closing
 import os
 import re
@@ -43,6 +44,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+from .web_preferences import site_identity
 
 HISTORY_DAYS = 90
 HISTORY_PER_PROFILE = 5000
@@ -150,18 +153,22 @@ def firefox_bookmarks(path: Path) -> list[tuple[str, str]]:
     return [(title or "", url) for title, url in rows]
 
 
-def _history(profile: Profile, since: float) -> list[Page]:
+def _history(profile: Profile, since: float, after_clear: bool) -> list[Page]:
     if profile.family == "firefox":  # last_visit_date: microseconds since 1970
+        cutoff = int(since * 1_000_000)
+        count = "(SELECT COUNT(*) FROM moz_historyvisits WHERE place_id = p.id AND visit_date >= ?)" if after_clear else "visit_count"
         rows = _with_copy(profile.folder / "places.sqlite",
-                          "SELECT url, title, visit_count, last_visit_date / 1000000.0 FROM moz_places "
+                          f"SELECT url, title, {count}, last_visit_date / 1000000.0 FROM moz_places p "
                           "WHERE hidden = 0 AND last_visit_date >= ? ORDER BY last_visit_date DESC LIMIT ?",
-                          (int(since * 1_000_000), HISTORY_PER_PROFILE))
+                          ((cutoff,) if after_clear else ()) + (cutoff, HISTORY_PER_PROFILE))
     else:  # last_visit_time: microseconds since 1601-01-01
         offset = 11_644_473_600
+        cutoff = int((since + offset) * 1_000_000)
+        count = "(SELECT COUNT(*) FROM visits WHERE visits.url = p.id AND visit_time >= ?)" if after_clear else "visit_count"
         rows = _with_copy(profile.folder / "History",
-                          "SELECT url, title, visit_count, last_visit_time / 1000000.0 - ? FROM urls "
+                          f"SELECT url, title, {count}, last_visit_time / 1000000.0 - ? FROM urls p "
                           "WHERE hidden = 0 AND last_visit_time >= ? ORDER BY last_visit_time DESC LIMIT ?",
-                          (offset, int((since + offset) * 1_000_000), HISTORY_PER_PROFILE))
+                          ((cutoff,) if after_clear else ()) + (offset, cutoff, HISTORY_PER_PROFILE))
     return [Page(title or "", url, profile.browser, profile.icon, False, int(visits or 0), float(visited or 0))
             for url, title, visits, visited in rows if str(url).startswith(("http://", "https://"))]
 
@@ -184,6 +191,7 @@ class BrowserIndex:
         self._home, self._config = home, config
         self.history_since = history_since
         self._lock = threading.Lock()
+        self._refresh_lock = threading.Lock()
         self._pages: list[Page] = []
         self._built = 0.0
         self._building = False
@@ -196,26 +204,59 @@ class BrowserIndex:
         for profile in profiles(self._home, self._config):
             pages += _bookmarks(profile)
             if history:
-                pages += _history(profile, since)
+                pages += _history(profile, since, after_clear=self.history_since > 0)
         with self._lock:
             self._pages, self._built, self._history_wanted = pages, time.monotonic(), history
+
+    def _fresh(self, history: bool) -> bool:
+        return self._built > 0 and time.monotonic() - self._built < REFRESH_SECONDS and (not history or self._history_wanted)
+
+    def _refresh(self, history: bool) -> None:
+        # A web start page and a typed search can ask for the same cold index at once.
+        with self._refresh_lock:
+            with self._lock:
+                if self._fresh(history):
+                    return
+            self.build(history)
 
     def refresh_in_background(self, history: bool) -> None:
         """Rebuild on a thread when stale (or when history was just switched on); never blocks."""
         with self._lock:
-            fresh = time.monotonic() - self._built < REFRESH_SECONDS and self._built and history <= self._history_wanted
-            if fresh or self._building:
+            if self._fresh(history) or self._building:
                 return
             self._building = True
 
         def run() -> None:
             try:
-                self.build(history)
+                self._refresh(history)
             finally:
                 with self._lock:
                     self._building = False
 
         threading.Thread(target=run, name="browser-index", daemon=True).start()
+
+    def frequent_sites(self) -> list[dict[str, str]]:
+        """Homepage shortcuts by total visits across profiles, with recent ties first."""
+        self._refresh(history=True)
+        with self._lock:
+            pages = self._pages  # build replaces the list, never mutates it
+        counts: Counter[str] = Counter()
+        latest: dict[str, tuple[float, str]] = {}
+        titles: dict[str, tuple[float, str]] = {}
+        for page in pages:
+            if page.bookmark or page.visits <= 0:
+                continue
+            identity = site_identity(page.url)
+            if identity is None:
+                continue
+            host, location = identity
+            counts[host] += page.visits
+            latest[host] = max(latest.get(host, (0.0, "")), (page.visited, location))
+            parts = urlsplit(page.url)
+            if parts.path in ("", "/") and not parts.query and not parts.fragment and page.title.strip():
+                titles[host] = max(titles.get(host, (0.0, "")), (page.visited, page.title.strip()[:160]))
+        ranked = sorted(counts, key=lambda host: (-counts[host], -latest[host][0], host))
+        return [{"host": host, "title": titles.get(host, (0, host))[1], "location": latest[host][1]} for host in ranked]
 
     def search(self, text: str, bookmarks: bool, history: bool, most: int = 4) -> tuple[list[Page], list[Page]]:
         """``(bookmarks, history)`` matching every word of ``text``, at most ``most`` of each."""

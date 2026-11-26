@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import subprocess
 import tempfile
+import threading
 import unittest
 import xml.etree.ElementTree as ET
 from unittest import mock
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from happy_bot import daemon_routes  # noqa: E402
+from happy_bot.daemon_http import AssistantServer  # noqa: E402
 from happy_bot.settings import load_settings, save_settings, validate_settings  # noqa: E402
 from happy_bot import ask_stream  # noqa: E402
 from happy_bot.ui_settings import (MASCOT_ICON, ROBOT_STYLES, UI_DEFAULTS, WAND_ICON, UiSettingsError,
@@ -102,8 +104,11 @@ class UiSchemaTests(unittest.TestCase):
 
 
 class FakeDaemon:
+    update_ui = AssistantServer.update_ui
+
     def __init__(self) -> None:
         self.settings = validate_settings({})
+        self._settings_lock = threading.RLock()
 
     def replace_settings(self, new_settings: Any) -> dict[str, Any]:
         self.settings = validate_settings(new_settings)

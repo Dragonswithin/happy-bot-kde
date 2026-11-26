@@ -96,7 +96,8 @@ import QtQuick
  * (`Look.groupHits`). The popup has two finders, opened from its welcome
  * screen by `startFinding(kind)` until `stopFinding` (`finder` says which,
  * `finding` whether one is open): "Find a file" ("files") searches the
- * same way as the panel bar, and "Search the web" ("web") shows matching
+ * same way as the panel bar. "Search the web" ("web") opens with pinned and
+ * frequent sites and submitted searches from /web/start. As you type it shows matching
  * bookmarks and visited websites (`/quick`, only those kinds) and web pages
  * from the user's web search tool (`/search/web`, from `WEB_MIN_CHARS`
  * characters; hits marked `source: "web"`) instead of files. When the
@@ -230,6 +231,16 @@ Item {
     property var wikiHits: []  // the web finder's offline Wikipedia articles
     property var recentHits: []
     property bool showingRecent: false
+    property var webStartData: ({})
+    property bool webStartLoading: false
+    property string webStartProblem: ""
+    property int webStartSequence: 0
+    property var pendingSiteActions: []
+    readonly property string webSiteSettings: JSON.stringify([ui.search_history, ui.web_pins, ui.web_hidden])
+    onWebSiteSettingsChanged: {
+        webStartData = {};
+        if (finder === "web") loadWebStart();
+    }
     readonly property var hits: Look.groupHits(showingRecent ? recentHits : quickHits.concat(wikiHits, fileHits))
     property bool searching: false
     property string searchedText: ""
@@ -355,7 +366,12 @@ Item {
         const searchCleared = search > session.searchClearRevision;
         const chatsCleared = chats > session.conversationClearRevision;
         if (!searchCleared && !chatsCleared) return false;
-        if (searchCleared) session.searchClearRevision = search;
+        if (searchCleared) {
+            session.searchClearRevision = search;
+            session.webStartSequence++;
+            session.webStartData = {};
+            session.webStartLoading = false;
+        }
         if (chatsCleared) session.conversationClearRevision = chats;
         session.clearSearch();  // the quick results and recent chips can both include chats
         if (chatsCleared && session.conversationCreatedAt <= chats) {
@@ -380,14 +396,68 @@ Item {
 
     /** The empty bar's suggestions (`/quick/recent`); a search started meanwhile wins. */
     function showRecent() {
+        if (session.finder === "web") {
+            loadWebStart();
+            return;
+        }
         session.searchSequence += 1;
         const sequence = session.searchSequence;
         request("GET", "/quick/recent", null, function(data) {
             if (sequence === session.searchSequence) {
-                session.recentHits = (data.results || []).filter(hit => session.finder !== "web" || session.webHit(hit));
+                session.recentHits = data.results || [];
                 session.showingRecent = session.recentHits.length > 0;
             }
         }, function(data) {});
+    }
+
+    function loadWebStart() {
+        const sequence = ++session.webStartSequence;
+        session.webStartLoading = true;
+        session.webStartProblem = "";
+        request("GET", "/web/start", null, function(data) {
+            if (sequence !== session.webStartSequence) return;
+            session.webStartData = data;
+            session.webStartLoading = false;
+        }, function(data) {
+            if (sequence !== session.webStartSequence) return;
+            session.webStartLoading = false;
+            session.webStartProblem = data.error || i18n("Could not load your sites and searches.");
+        });
+    }
+
+    function rememberWebSearch(query) {
+        if (session.finder !== "web" || !query.trim()) return;
+        request("POST", "/web/search/remember", {
+            query: query.trim(), revision: session.webStartData.search_clear_revision ?? session.searchClearRevision
+        }, function() {}, function() {});
+    }
+
+    function changeWebSite(location, action) {
+        session.pendingSiteActions = session.pendingSiteActions.concat([{ url: location, action }]);
+        if (session.pendingSiteActions.length === 1) saveNextSite();
+    }
+
+    function saveNextSite() {
+        const revision = session.searchClearRevision;
+        const settingsAtSave = session.webSiteSettings;
+        function next() {
+            session.pendingSiteActions = session.pendingSiteActions.slice(1);
+            if (session.pendingSiteActions.length) saveNextSite();
+        }
+        request("POST", "/web/site", session.pendingSiteActions[0], function(data) {
+            if (revision === session.searchClearRevision && settingsAtSave === session.webSiteSettings) {
+                session.webStartSequence++;
+                session.webStartLoading = false;
+                session.webStartProblem = "";
+                session.webStartData = data;
+            } else if (session.finder === "web") {
+                loadWebStart();
+            }
+            next();
+        }, function(data) {
+            session.webStartProblem = data.error || i18n("Could not save this site preference.");
+            next();
+        });
     }
 
     /** What an application result's menu offers (`{update, uninstall, autostart, ...}`), or null. */
@@ -487,6 +557,7 @@ Item {
     function startFinding(kind) {
         clearSearch();
         session.finder = kind;
+        if (kind === "web") session.webStartData = {};
         showRecent();
     }
 

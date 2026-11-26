@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import QtQuick
 import QtTest
+import org.kde.kirigami as Kirigami
 import "../plasmoid/io.github.dragonswithin.happybot/contents/ui" as HappyBot
 
 Item {
@@ -48,15 +49,23 @@ Item {
         }
 
         function test_startScreenTiles_data() {
-            return ["Find a file", "Search the web", "System info", "Desktop help"].map(text => ({ tag: text, text }));
+            const cases = [];
+            for (const saved of [false, true])
+                for (const text of ["Find a file", "Search the web", "System info", "Desktop help"])
+                    cases.push({ tag: text + (saved ? " with sidebar" : ""), text, saved });
+            return cases;
         }
 
         function test_startScreenTiles(data) {
+            session.history = data.saved ? [{ id: "a", title: "Saved chat", updated: 0 }] : [];
+            const width = view.width;
             compare(heading.text, "Start screen");
             tryVerify(() => !!button(view, data.text));
             waitForRendering(view);
             mouseClick(button(view, data.text));
             tryCompare(heading, "text", data.text);
+            compare(view.width, width);
+            compare(view.height, view.heightInGridUnits * Kirigami.Units.gridUnit);
             waitForRendering(view);
             mouseClick(button(view, "Back"));
             tryCompare(heading, "text", "Start screen");

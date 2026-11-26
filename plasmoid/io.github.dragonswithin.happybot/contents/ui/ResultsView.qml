@@ -17,6 +17,8 @@ import org.kde.plasma.extras as PlasmaExtras
  * The field sits on the side nearest the launcher with the chat's AI picker.
  *
  * The body shows one thing at a time:
+ * - The empty web finder shows WebStartPage.qml. Both finders, Help and System info
+ *   keep the user's configured popup dimensions while their contents change.
  *
  * - FILES in the file finder, or while there are results, a search under
  *   way (`session.searchedText`) or a search problem: FileResults.qml (the
@@ -103,13 +105,14 @@ Rectangle {
     readonly property bool sidebarVisible: session.history.length > 0 && !helpVisible
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
+    readonly property bool webStartVisible: filesVisible && session.finder === "web" && !query.length
+    property int webStartIndex: -1
+    onWebStartVisibleChanged: webStartIndex = -1
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
+    readonly property bool fullSizeTool: session.finding || articleVisible || systemVisible
+        || helpVisible || (conversationVisible && session.helpChat)
     readonly property real contentHeight: fixVisible
         ? fixCard.naturalHeight + inset * 2
-        : articleVisible
-        ? (articleView.webMode ? maximumHeight : articleView.naturalHeight + inset * 2)
-        : systemVisible || helpVisible
-        ? maximumHeight
         : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
@@ -150,7 +153,7 @@ Rectangle {
     // Rounded, and computed only from exact sizes (plain columns, never a
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
-    implicitHeight: Math.round(Math.min(maximumHeight, inputBar.height
+    implicitHeight: fullSizeTool ? maximumHeight : Math.round(Math.min(maximumHeight, inputBar.height
         + titleBar.implicitHeight + nudge.height + bodyHeight))
 
     function focusInput() {
@@ -168,7 +171,20 @@ Rectangle {
 
     // The selected match's row answers this by opening its own menu.
     function openSelectedMenu() {
-        fileResults.openSelectedMenu();
+        if (webStartVisible) webStart.openSelectedMenu();
+        else fileResults.openSelectedMenu();
+    }
+
+    function moveInField(delta) {
+        if (webStartVisible)
+            webStartIndex = Math.max(-1, Math.min(webStart.itemCount - 1, webStartIndex + delta));
+        else
+            selectionMove(delta);
+    }
+
+    function acceptField() {
+        if (webStartVisible) webStart.activateSelected();
+        else accepted(query);
     }
 
     // --- header band: title, status and actions ---------------------------
@@ -419,11 +435,14 @@ Rectangle {
                     : view.session.finder === "web" ? i18n("Search the web…")
                     : view.session.finding ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
                 onTextChanged: view.queryEdited(text)
-                Keys.onReturnPressed: view.accepted(text.trim())
-                Keys.onEnterPressed: view.accepted(text.trim())
-                Keys.onDownPressed: view.selectionMove(1)
-                Keys.onUpPressed: view.selectionMove(-1)
-                Keys.onTabPressed: view.completeRequested()
+                Keys.onReturnPressed: view.acceptField()
+                Keys.onEnterPressed: view.acceptField()
+                Keys.onDownPressed: view.moveInField(1)
+                Keys.onUpPressed: view.moveInField(-1)
+                Keys.onTabPressed: event => {
+                    if (view.webStartVisible) event.accepted = false;
+                    else view.completeRequested();
+                }
                 // The Menu key (or Shift+F10) opens the selected match's actions, as a right-click does.
                 Keys.onMenuPressed: view.openSelectedMenu()
                 Keys.onPressed: event => {
@@ -646,7 +665,7 @@ Rectangle {
                 id: fileResults
 
                 anchors.fill: parent
-                visible: view.filesVisible
+                visible: view.filesVisible && !view.webStartVisible
                 session: view.session
                 query: view.query
                 selectedIndex: view.selectedIndex
@@ -655,6 +674,33 @@ Rectangle {
                 onResultActivated: hit => view.resultActivated(hit)
                 onFileActionRequested: (hit, action) => view.fileActionRequested(hit, action)
                 onAskRequested: text => view.askRequested(text)
+            }
+
+            WebStartPage {
+                id: webStart
+                anchors.fill: parent
+                visible: view.webStartVisible
+                sites: view.session.webStartData.sites ?? []
+                searches: view.session.webStartData.searches ?? []
+                historyEnabled: view.session.webStartData.history_enabled ?? view.session.ui.search_history ?? false
+                loading: view.session.webStartLoading
+                problem: view.session.webStartProblem
+                accent: view.accent
+                selectedIndex: view.webStartIndex
+                onSitesChanged: view.webStartIndex = -1
+                onSearchesChanged: view.webStartIndex = -1
+                onSiteActivated: site => view.hitActivated(site.location)
+                onSiteSearchRequested: host => {
+                    view.setInput("site:" + host + " ");
+                    view.focusInput();
+                }
+                onSiteActionRequested: (site, action) => view.session.changeWebSite(site.location, action)
+                onSearchActivated: query => {
+                    view.setInput(query);
+                    view.focusInput();
+                    view.session.rememberWebSearch(query);
+                }
+                onSettingsRequested: view.settingsRequested()
             }
 
             PlasmaComponents3.ScrollView {

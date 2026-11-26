@@ -457,6 +457,16 @@ check both surfaces. Change the shortcut size, drag it to the edge of the
 screen and reopen it. The shortcut should stay reachable and the popup should
 open at its configured dimensions.
 
+**Web finder.** Opening Search the web shows pinned and frequently visited
+sites and recent searches before typing. A site can be pinned or hidden
+from this page. The file finder, web finder, Help and System info use the
+same configured popup dimensions as their content changes.
+
+The next web finder work is a readable result preview that preserves the
+search position, questions answered from the selected page with links to
+the supporting passage, and a comparison of two selected pages with a
+source beside each difference.
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog and
 the maintainer's priorities are in `docs/FEATURES.md`. Work is scheduled

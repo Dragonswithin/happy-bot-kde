@@ -122,10 +122,16 @@ used.
   "euro sign" lists characters and Enter copies one. Right-click an
   application to update it, uninstall it (in a terminal, where you
   confirm) or start it at login; right-click a file to send it to your
-  phone (KDE Connect). In Happy Bot itself, "Find a file" and "Search the
-  web" work the same way: recent items first, then matches as you type;
-  "Search the web" lists your bookmarks, visited websites and pages from
-  your web search tool, and Enter opens one.
+  phone (KDE Connect). **Find a file**, **Help with…**, **System info** and
+  **Search the web** all open at the same size set under Appearance.
+- **Search the web** opens with your frequent sites and recent web searches.
+  Click a site to open its homepage, or a search to run it again. Turn on
+  **Search & Tools → Browser results → Recently visited websites** to fill
+  the tiles from local browser history. Right-click a tile to search within
+  that site, pin it first, unpin it, or hide it from Frequent sites. Hidden sites can be restored in
+  Browser results. Once you type, the finder shows matching bookmarks,
+  visited websites and results from your web search tool. Enter opens a
+  result. Clearing search history keeps your pinned and hidden site choices.
 - **Offline Wikipedia**: on the Search & Tools page, "Set up…" next to
   Wikipedia uses a Wikipedia archive already on your computer or downloads
   one from Kiwix (introductions only, every article without pictures, or

@@ -74,6 +74,42 @@ class RouteTests(unittest.TestCase):
     def test_search_without_setup_says_so(self) -> None:
         status, reply = self.call("GET", "/search?q=tax")
         self.assertEqual((status, reply["code"]), (409, "not_configured"))
+
+    def test_web_start_shows_saved_pins_without_reading_browser_history(self) -> None:
+        index = self.server.search_history.index
+        with mock.patch.object(index, "frequent_sites", side_effect=AssertionError("browser history disabled")):
+            self.assertEqual(self.call("GET", "/web/start"), (200, {"ok": True, "sites": [], "searches": [],
+                "history_enabled": False, "search_clear_revision": 0}))
+            status, start = self.call("POST", "/web/site", {"action": "pin", "url": "https://kde.org/discuss?ref=1"})
+            self.assertEqual(status, 200)
+            self.assertEqual(start["sites"], [{"host": "kde.org", "location": "https://kde.org/",
+                                               "title": "kde.org", "pinned": True}])
+            self.assertEqual(self.call("POST", "/web/site", {"action": "pin", "url": "file:///tmp/test"})[0], 400)
+            self.assertEqual(self.call("POST", "/web/site", {"action": "delete", "url": "https://kde.org"})[0], 400)
+
+        frequent = [{"host": "planet.kde.org", "title": "KDE Planet", "location": "https://planet.kde.org/"}]
+        self.call("POST", "/ui", {"changes": {"search_history": True}})
+        with mock.patch.object(index, "frequent_sites", return_value=frequent):
+            start = self.call("GET", "/web/start")[1]
+            self.assertEqual([site["host"] for site in start["sites"]], ["kde.org", "planet.kde.org"])
+            self.assertTrue(start["history_enabled"])
+            hidden = self.call("POST", "/web/site", {"action": "hide", "url": "https://planet.kde.org/"})[1]
+            self.assertEqual([site["host"] for site in hidden["sites"]], ["kde.org"])
+            restored = self.call("POST", "/web/site", {"action": "unhide", "url": "https://planet.kde.org/"})[1]
+            self.assertEqual(restored["sites"], start["sites"])
+
+    def test_web_start_keeps_only_deliberate_searches_and_observes_clear(self) -> None:
+        self.call("GET", "/search/web?q=unfini")
+        self.assertEqual(self.call("GET", "/web/start")[1]["searches"], [])
+        query = {"query": "KDE shortcuts", "revision": 0}
+        self.assertEqual(self.call("POST", "/web/search/remember", query)[0], 200)
+        self.assertEqual(self.call("GET", "/web/start")[1]["searches"], ["KDE shortcuts"])
+        self.call("POST", "/history/clear", {"kind": "search"})
+        self.call("POST", "/web/search/remember", query)
+        cleared = self.call("GET", "/web/start")[1]
+        self.assertEqual(cleared["searches"], [])
+        self.assertGreater(cleared["search_clear_revision"], 0)
+        self.assertEqual(self.call("POST", "/web/search/remember", {"query": []})[0], 400)
         self.assertFalse(self.call("GET", "/health")[1]["setup"]["file_search"])
 
     def test_clear_search_keeps_archived_chats_and_survives_restart(self) -> None:

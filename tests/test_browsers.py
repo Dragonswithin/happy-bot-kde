@@ -34,13 +34,16 @@ def firefox_profile(folder: Path, bookmarks: list[tuple[str, str]], visits: list
     with closing(sqlite3.connect(folder / "places.sqlite")) as database, database:
         database.executescript("CREATE TABLE moz_places (id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, "
                                "hidden INTEGER DEFAULT 0, last_visit_date INTEGER);"
-                               "CREATE TABLE moz_bookmarks (id INTEGER PRIMARY KEY, type INTEGER, fk INTEGER, title TEXT);")
+                               "CREATE TABLE moz_bookmarks (id INTEGER PRIMARY KEY, type INTEGER, fk INTEGER, title TEXT);"
+                               "CREATE TABLE moz_historyvisits (place_id INTEGER, visit_date INTEGER);")
         for title, url in bookmarks:
             place = database.execute("INSERT INTO moz_places (url, title, visit_count) VALUES (?, ?, 0)", (url, title)).lastrowid
             database.execute("INSERT INTO moz_bookmarks (type, fk, title) VALUES (1, ?, ?)", (place, title))
         for url, title, count, when in visits:
-            database.execute("INSERT INTO moz_places (url, title, visit_count, last_visit_date) VALUES (?, ?, ?, ?)",
-                             (url, title, count, int(when * 1_000_000)))
+            timestamp = int(when * 1_000_000)
+            place = database.execute("INSERT INTO moz_places (url, title, visit_count, last_visit_date) VALUES (?, ?, ?, ?)",
+                                     (url, title, count, timestamp)).lastrowid
+            database.executemany("INSERT INTO moz_historyvisits VALUES (?, ?)", [(place, timestamp)] * count)
 
 
 def chromium_profile(folder: Path, bookmarks: list[tuple[str, str]], visits: list[tuple[str, str, int, float]]) -> None:
@@ -50,9 +53,12 @@ def chromium_profile(folder: Path, bookmarks: list[tuple[str, str]], visits: lis
     with closing(sqlite3.connect(folder / "History")) as database, database:
         database.execute("CREATE TABLE urls (id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, "
                          "last_visit_time INTEGER, hidden INTEGER DEFAULT 0)")
+        database.execute("CREATE TABLE visits (url INTEGER, visit_time INTEGER)")
         for url, title, count, when in visits:
-            database.execute("INSERT INTO urls (url, title, visit_count, last_visit_time) VALUES (?, ?, ?, ?)",
-                             (url, title, count, int((when + 11_644_473_600) * 1_000_000)))
+            timestamp = int((when + 11_644_473_600) * 1_000_000)
+            place = database.execute("INSERT INTO urls (url, title, visit_count, last_visit_time) VALUES (?, ?, ?, ?)",
+                                     (url, title, count, timestamp)).lastrowid
+            database.executemany("INSERT INTO visits VALUES (?, ?)", [(place, timestamp)] * count)
 
 
 class BrowserTests(unittest.TestCase):
@@ -91,6 +97,30 @@ class BrowserTests(unittest.TestCase):
         self.index.build(history=False)
         self.assertEqual(self.index.search("planet", bookmarks=True, history=True), ([], []))
 
+    def test_frequent_sites_rank_hosts_and_keep_only_homepages(self) -> None:
+        chromium_profile(self.home / ".config/chromium/Profile 1", [],
+                         [("https://www.kde.org/private?key=secret", "A private page title", 8, NOW - DAY),
+                          ("https://user:password@private.example/", "Credentials", 50, NOW),
+                          ("https://other.example/account", "Another private page title", 1, NOW),
+                          ("https://wiki.archlinux.org:8443/page", "Another service", 1, NOW - 2 * DAY)])
+        rows = self.index.frequent_sites()  # first opening builds the history index
+        self.assertEqual([row["host"] for row in rows], ["kde.org", "wiki.archlinux.org", "planet.kde.org",
+                                                        "other.example", "wiki.archlinux.org:8443", "store.kde.org"])
+        self.assertEqual(rows[0], {"host": "kde.org", "title": "KDE", "location": "https://www.kde.org/"})
+        self.assertEqual(rows[1]["title"], "wiki.archlinux.org")
+        self.assertNotIn("private", json.dumps(rows))
+        self.assertNotIn("secret", json.dumps(rows))
+        with mock.patch.object(browsers, "profiles", side_effect=AssertionError("already indexed")):
+            self.assertEqual(self.index.frequent_sites(), rows)
+
+    def test_after_clear_old_visits_to_a_revisited_site_do_not_affect_its_rank(self) -> None:
+        firefox = self.home / ".mozilla/firefox/abc.default-release/places.sqlite"
+        with closing(sqlite3.connect(firefox)) as database, database:
+            database.execute("UPDATE moz_historyvisits SET visit_date = ?", (int((NOW - 10 * DAY) * 1e6),))
+            database.execute("INSERT INTO moz_historyvisits SELECT id, last_visit_date FROM moz_places WHERE visit_count > 0")
+        index = browsers.BrowserIndex(self.home, self.home / ".config", history_since=NOW - 1.5 * DAY)
+        self.assertEqual([row["host"] for row in index.frequent_sites()], ["planet.kde.org", "wiki.archlinux.org"])
+
     def test_rebuilding_after_a_clear_keeps_bookmarks_and_only_later_visits(self) -> None:
         database = self.home / ".mozilla/firefox/abc.default-release/places.sqlite"
         original = database.read_bytes()
@@ -108,6 +138,7 @@ class BrowserTests(unittest.TestCase):
             results = quick_results.gather("planet kde", [], bookmarks=True, history=True)
             self.assertEqual(quick_results.gather("planet kde", [], bookmarks=False, history=False), [])
         page = next(item for item in results if item["action"]["type"] == "visited")
+        self.assertEqual(page["site_host"], "planet.kde.org")
         self.assertEqual((page["title"], page["subtitle"], page["icon"]),
                          ("Planet KDE", "Visited · planet.kde.org · Chromium", "chromium"))
         started = []
