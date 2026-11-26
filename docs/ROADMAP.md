@@ -1420,6 +1420,15 @@ battery, disk and restart indicators once a minute. Every 15 minutes it
 reads available pacman, apt or dnf update metadata from local caches.
 Appearance’s **Show helpful nudges** switch disables these checks.
 
+Each of the ten robots has its own set of short sounds for opening the
+assistant, an error, long task completion, an alarm, a reminder, a request
+for attention, microphone ready, recording finished, background job completion
+and a newly active nudge. Settings → Sounds has a robot choice, preview and
+on/off control for each event. Appearance → **Also change sounds** applies
+the selected robot’s theme to all ten events while preserving their on/off
+settings. Existing greeting preferences carry forward. Alarms and reminders
+read the chosen sound when their scheduled notification is delivered.
+
 Fixture tests covered all four conditions, dismissal through the daemon,
 and choosing a suggested action in the shared assistant view. Offscreen
 checks at 50%, 100% and 200% verified the shortcut’s click target and

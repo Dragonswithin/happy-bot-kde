@@ -57,6 +57,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from . import sounds
 from .redaction import is_local_address
 from .runtime_paths import clear_cache_files
 
@@ -225,7 +226,7 @@ class Listener:
         self._stop.set()
         return self.active
 
-    def listen(self, voice: dict[str, Any], local_only: bool) -> dict[str, Any]:
+    def listen(self, voice: dict[str, Any], local_only: bool, ui: dict[str, Any] | None = None) -> dict[str, Any]:
         """Record until a pause and return ``{"text"}``; raises ``VoiceError``."""
         _usable(voice, local_only)
         if not self._lock.acquire(blocking=False):
@@ -233,20 +234,27 @@ class Listener:
         try:
             self.active, self._discard = True, False
             self._stop.clear()
-            frames, speech_power = self._record()
+            command = _recorder()
+            with sounds.audio_lock:
+                if not self._stop.is_set():
+                    sounds.play(ui or {}, "mic_ready", wait=True)
+                if self._stop.is_set():
+                    return {"text": "", "discarded": True}
+                frames, speech_power = self._record(command)
             if self._discard:
                 return {"text": "", "discarded": True}
+            sounds.play(ui or {}, "mic_done")
             return {"text": transcribe(voice, _wav(normalize(frames, speech_power)))}
         finally:
             self.active = False
             self._lock.release()
 
-    def _record(self) -> tuple[bytes, float]:
+    def _record(self, command: list[str]) -> tuple[bytes, float]:
         """Raw sound from the microphone until the user pauses (or the limits), and the mean square of
         the chunks heard as speech; raises when no speech was heard."""
         chunk_bytes = int(RATE * CHUNK_SECONDS) * 2
         try:
-            process = subprocess.Popen(_recorder(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                        stdin=subprocess.DEVNULL)
         except OSError as error:
             raise VoiceError("no_microphone", f"The microphone could not be opened: {error}") from error

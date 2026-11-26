@@ -131,7 +131,18 @@ def _assistant_icon() -> str:
         return ui_settings.WAND_ICON
 
 
-def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, notify: bool = False) -> int:
+def play_scheduled_cue(event: str) -> None:
+    """Read the current sound setting inside a short-lived systemd job."""
+    from . import settings, sounds
+    try:
+        ui = settings.load_settings()["ui"]
+    except (OSError, settings.SettingsError):
+        return
+    sounds.play(ui, event, wait=True)
+
+
+def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, notify: bool = False,
+               background: bool = False) -> int:
     """Send one request and print the streamed turn. Returns the process exit status.
 
     ``dry_run`` offers the model only look-up tools and asks for the steps it
@@ -139,7 +150,8 @@ def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, n
     notification; routines started by a timer use it, since nobody watches
     their output.
     """
-    payload = json.dumps({"message": message, "conversation_id": conversation_id, "dry_run": dry_run}).encode("utf-8")
+    payload = json.dumps({"message": message, "conversation_id": conversation_id, "dry_run": dry_run,
+                          "background": background}).encode("utf-8")
     headers = {"Authorization": f"Bearer {read_token()}", "Content-Type": "application/json"}
     request = Request(f"{base_url()}/ask", data=payload, method="POST", headers=headers)
     status = 0
@@ -183,8 +195,9 @@ def stream_ask(message: str, conversation_id: str = "", dry_run: bool = False, n
         sys.stdout.write("\n")
     if notify and shutil.which("notify-send"):
         body = ("".join(answer).strip() + ("\n" + "\n".join(problems) if problems else "")).strip()
-        subprocess.run(["notify-send", "--app-name=Happy Bot", f"--icon={_assistant_icon()}", "--",
-                        "Assistant: " + message[:80], body[:1500] or "Done."], check=False, timeout=10)
+        subprocess.run(["notify-send", "--app-name=Happy Bot", "--hint=boolean:suppress-sound:true",
+                        f"--icon={_assistant_icon()}", "--", "Assistant: " + message[:80], body[:1500] or "Done."],
+                       check=False, timeout=10)
     return status
 
 
@@ -257,6 +270,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     wikipedia = sub.add_parser("wikipedia", help="Offline Wikipedia: download a newer build now if Happy Bot keeps "
                                "it up to date (run monthly by its timer).")
     wikipedia.add_argument("action", choices=("update",))
+    due = sub.add_parser("reminder-due", help="Deliver a scheduled alarm or reminder, including its selected sound.")
+    due.add_argument("kind", choices=("alarm", "reminder"))
+    due.add_argument("text")
     routine_check = sub.add_parser("routine-check", help="Run a routine if its network or battery condition has just "
                                    "become true (started by the routine's timer).")
     routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
@@ -282,6 +298,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ask.add_argument("--dry-run", action="store_true",
                      help="Only look things up and list the steps that would be taken; change nothing.")
     ask.add_argument("--notify", action="store_true", help="Also show the answer as a desktop notification.")
+    ask.add_argument("--background", action="store_true", help="Use the background-job sound when this request finishes.")
 
     model = sub.add_parser("model", help="Manage the AI models the assistant can use.")
     model_sub = model.add_subparsers(dest="model_command", required=True)
@@ -469,6 +486,17 @@ def main(argv: list[str] | None = None) -> int:
         from .file_index_server import serve as serve_index
 
         return serve_index(args.index)
+    if args.command == "reminder-due":
+        try:
+            shown = subprocess.run(["notify-send", "--app-name=Happy Bot", "--urgency=critical",
+                                    "--hint=boolean:suppress-sound:true", "--icon=appointment-soon", "--",
+                                    args.kind.title(), args.text], check=False, timeout=10)
+            return shown.returncode
+        except (OSError, subprocess.TimeoutExpired) as error:
+            print(f"Could not show the scheduled {args.kind}: {error}", file=sys.stderr)
+            return 1
+        finally:
+            play_scheduled_cue(args.kind)
     if args.command == "wikipedia":
         # The timer's job: it must not need the daemon, which runs only in a desktop session.
         from .settings import load_settings
@@ -480,6 +508,9 @@ def main(argv: list[str] | None = None) -> int:
                 request_json("POST", "/wikipedia/reload", {})
             except Exception:  # noqa: BLE001 - no daemon running: it opens the new archive when it starts
                 pass
+            play_scheduled_cue("background")
+        elif not result.get("ok"):
+            play_scheduled_cue("error")
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result.get("ok") else 1
     try:
@@ -518,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
                 reply = {"ok": True, "result": "no such routine, or it is paused"}
             else:
                 reply = {"ok": True, "result": check(args.name, args.kind, args.value,
-                                                      lambda: stream_ask(routine["request"], notify=True))}
+                                                      lambda: stream_ask(routine["request"], notify=True, background=True))}
         elif args.command == "app":
             if args.action in ("show", "settings", "talk", "fix"):
                 if args.action != "show" and not request_json("GET", "/app").get("running"):
@@ -563,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"{item['id']}  {time.strftime('%Y-%m-%d %H:%M', time.localtime(item['updated']))}  {item['title']}")
                     return 0
         elif args.command == "ask":
-            return stream_ask(" ".join(args.message), args.conversation, args.dry_run, args.notify)
+            return stream_ask(" ".join(args.message), args.conversation, args.dry_run, args.notify, args.background)
         elif args.command == "model":
             reply = run_model(args)
         elif args.command == "folders":

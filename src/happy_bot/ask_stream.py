@@ -101,7 +101,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from . import app_context, desktop_actions
 from . import settings as settings_store
-from . import spend, ui_settings
+from . import sounds, spend, ui_settings
 from .agent_loop import run_turn, system_prompt
 from .conversation import Message
 from .desktop_context import run_command
@@ -125,36 +125,76 @@ class ClientGone(ConnectionError):
     """The client closed the connection while events were being streamed."""
 
 
+def _completion_sound(event: dict[str, Any], background: bool, long_running: bool) -> str:
+    if event["stop"] == "cancelled":
+        return ""
+    # A successful retry replaces the earlier failure of the same action.
+    outcomes = {action["summary"]: action["outcome"] for action in event.get("actions", [])}.values()
+    if event["stop"] == "step_limit" or any(outcome in ("failed", "not_run") for outcome in outcomes):
+        return "error"
+    if "declined" in outcomes:
+        return "error" if background else ""
+    if event["stop"] != "answered":
+        return ""
+    if background:
+        return "background"
+    return "complete" if long_running else ""
+
+
 def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[dict[str, Any]], None]) -> None:
     """Run one turn and stream its events through ``send``. Never raises ``ClientGone``."""
     message = str(body.get("message") or "").strip()[:MAX_MESSAGE_CHARS]
+    started = time.monotonic()
+    awaiting_answer = False
+
+    def deliver(event: dict[str, Any]) -> None:
+        nonlocal awaiting_answer
+        send(event)
+        if body.get("ephemeral") is True:
+            return
+        kind = event["type"]
+        cue = ""
+        if kind == "approval_required" and body.get("background") is not True:
+            cue = "attention"
+        elif kind == "tool_result":
+            card = event.get("card") or {}
+            if card.get("kind") == "choices" and not card.get("follow_up"):
+                awaiting_answer = True
+                cue = "attention"
+        elif kind == "error":
+            cue = "error"
+        elif kind == "done" and not awaiting_answer:
+            threshold = server.settings["agent"]["notify_after_seconds"] or settings_store.DEFAULT_NOTIFY_AFTER_SECONDS
+            cue = _completion_sound(event, body.get("background") is True, time.monotonic() - started > threshold)
+        if cue:
+            sounds.play(server.settings["ui"], cue)
+
     try:
         if not message:
-            send({"type": "error", "message": "message is required", "code": "invalid"})
+            deliver({"type": "error", "message": "message is required", "code": "invalid"})
             return
         settings = server.settings
         chosen = str(body.get("model") or "")
         if chosen and chosen not in settings.get("models", {}):
-            send({"type": "error", "message": f"There is no model named {chosen}.", "code": "invalid"})
+            deliver({"type": "error", "message": f"There is no model named {chosen}.", "code": "invalid"})
             return
         names = [chosen] if chosen else list(settings.get("model_order") or [])
         if not names:
-            send({"type": "error", "message": "No AI model is set up yet.", "code": "not_configured"})
+            deliver({"type": "error", "message": "No AI model is set up yet.", "code": "not_configured"})
             return
         chain, skipped = _usable(settings, names)
         if not chain:
-            send({"type": "error", "code": "not_configured", "message": "No AI in your list can answer: "
+            deliver({"type": "error", "code": "not_configured", "message": "No AI in your list can answer: "
                   + "; ".join(skipped) + ". Change this on the AI Model page."})
             return
         conversation = server.conversations.acquire_turn(str(body.get("conversation_id") or ""))
         if conversation is None:
-            send({"type": "error", "message": "The assistant is still working on the previous request.", "code": "busy"})
+            deliver({"type": "error", "message": "The assistant is still working on the previous request.", "code": "busy"})
             return
         conversation.model = chosen
     except ClientGone:
         return
 
-    started = time.monotonic()
     agent = settings.get("agent") or settings_store.default_agent()
     try:
         def update_settings(mutate):
@@ -206,7 +246,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         def emit(event: dict[str, Any]) -> None:
             conversation.record(event)
             try:
-                send(event)
+                deliver(event)
             except ClientGone:
                 conversation.cancel.set()
 
@@ -359,7 +399,8 @@ def notify_finished(title: str, icon: str = ui_settings.WAND_ICON) -> None:
         return
 
     def show() -> None:
-        result = run_command(["notify-send", "--app-name=Happy Bot", f"--icon={icon}", "--action=open=Open",
+        result = run_command(["notify-send", "--app-name=Happy Bot", "--hint=boolean:suppress-sound:true",
+                              f"--icon={icon}", "--action=open=Open",
                               "--wait", "--", "The assistant finished", title or "Your request is done."], timeout=3600)
         if result.get("stdout", "").strip() == "open":
             try:

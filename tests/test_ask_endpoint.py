@@ -285,6 +285,23 @@ class AskEndpointTests(unittest.TestCase):
         self.model.replies.append(chunks_for("recovered"))
         self.assertEqual(done_core(self.ask("again", events[0]["conversation_id"])[-1]), {"type": "done", "stop": "answered", "actions": []})
 
+    def test_live_questions_and_scheduled_turns_each_have_one_cue(self) -> None:
+        with mock.patch("happy_bot.sounds.play") as play:
+            self.ask("before setup")
+            self.assertEqual([call.args[1] for call in play.call_args_list], ["error"])
+            self.configure()
+            play.reset_mock()
+            self.model.replies.append(chunks_for(tool_calls=[
+                ("question", "ask_user", '{"question":"Which one?","choices":["One","Two"]}')]))
+            with self.request("POST", "/ask", {"message": "choose", "buttons": True, "background": True}) as response:
+                response.read()
+            self.assertEqual([call.args[1] for call in play.call_args_list], ["attention"])
+            play.reset_mock()
+            self.model.replies.append(chunks_for("Done"))
+            with self.request("POST", "/ask", {"message": "routine", "background": True}) as response:
+                response.read()
+            self.assertEqual([call.args[1] for call in play.call_args_list], ["background"])
+
     def test_broken_tool_server_is_a_warning_and_the_turn_still_runs(self) -> None:
         self.configure()
         settings = self.call("GET", "/settings")["settings"]

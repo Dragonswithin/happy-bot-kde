@@ -27,7 +27,9 @@ optdepends=('tesseract: reading text in pictures'
             'qalculate-gtk: unit conversions in the bar (provides qalc)'
             'spectacle: screenshots'
             'lm_sensors: temperatures'
-            'qt6-multimedia: optional robot greeting sound'
+            'pipewire-audio: mascot event sounds with pw-play'
+            'libpulse: alternative mascot sound playback with paplay'
+            'alsa-utils: alternative mascot sound playback with aplay'
             'qt6-webengine: offline Wikipedia articles shown as Wikipedia looks (else as plain text)'
             'uv: the offline Wikipedia reader (openzim-mcp), unless it is installed itself')
 source=()

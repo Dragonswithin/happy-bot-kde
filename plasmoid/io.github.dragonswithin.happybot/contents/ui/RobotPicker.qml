@@ -10,6 +10,7 @@ ColumnLayout {
     id: picker
     required property bool useRobotMascot
     required property string robotStyle
+    property bool soundsFollowMascot: true
     signal choiceRequested(var changes)
 
     Layout.minimumWidth: 0
@@ -34,6 +35,18 @@ ColumnLayout {
             checked: !picker.useRobotMascot
             onClicked: if (picker.useRobotMascot) picker.choiceRequested({robot_mascot: false})
         }
+    }
+
+    QQC2.CheckBox {
+        objectName: "followMascotSounds"
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        visible: picker.useRobotMascot
+        text: i18n("Also change sounds")
+        QQC2.ToolTip.text: i18n("Choosing another robot changes the theme of every event sound. Each event keeps its on or off setting.")
+        QQC2.ToolTip.visible: hovered || visualFocus
+        checked: picker.soundsFollowMascot
+        onToggled: picker.choiceRequested({sounds_follow_mascot: checked})
     }
 
     GridLayout {

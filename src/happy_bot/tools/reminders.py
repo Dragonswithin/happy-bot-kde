@@ -3,7 +3,8 @@
 A reminder is a pair of systemd user units written by ``user_timers``: a
 timer for the chosen minute (``Persistent=true``, so one missed while the
 computer was off is shown at the next start) and a service that shows a
-desktop notification with the reminder's text. Being units, reminders fire
+desktop notification with the reminder's text and plays the selected alarm or
+reminder cue. Being units, reminders fire
 with the popup closed and survive the daemon, a logout and a reboot; they
 need no process of this project to be running.
 
@@ -30,10 +31,34 @@ from pathlib import Path
 from typing import Any
 
 from .. import user_timers
+from ..runtime_paths import write_private_file
 from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, object_schema
 
 KIND = "reminder"
 MAX_TEXT = 300
+# Older scheduled reminders called notify-send directly. Match the original command
+# and leave its quoted, possibly multiline or percent-escaped text argument intact.
+_OLD_NOTIFY = re.compile(r'^ExecStart="(?:[^"\n]*/)?notify-send" "--app-name=Happy Bot" "--urgency=critical" '
+                         r'"--icon=appointment-soon" "Reminder" (?=")', re.MULTILINE)
+
+
+def upgrade_scheduled_sounds(unit_dir: Path, manage: bool) -> None:
+    """Teach existing reminders to use the current sound preferences when they fire."""
+    changed = False
+    command = " ".join(map(user_timers.quote_exec, [user_timers.launcher(), "reminder-due", "reminder", "--"]))
+    for paths in user_timers.owned_units(unit_dir, KIND).values():
+        for service in paths:
+            if service.suffix != ".service":
+                continue
+            old = service.read_text(encoding="utf-8")
+            updated = _OLD_NOTIFY.sub(lambda _: "ExecStart=" + command + " ", old, count=1)
+            if updated != old:
+                write_private_file(service, updated)
+                changed = True
+    if changed and manage:
+        ok, message = user_timers.systemctl("daemon-reload")
+        if not ok:
+            raise OSError(message or "systemd could not reload the reminder services")
 
 
 def _location() -> tuple[Path, bool]:
@@ -69,6 +94,9 @@ def parse_when(arguments: dict[str, Any], now: datetime.datetime | None = None) 
 
 
 def set_reminder(arguments: dict[str, Any]) -> str:
+    kind = arguments.get("kind", "reminder")
+    if kind not in ("alarm", "reminder"):
+        raise ToolFailure("'kind' must be alarm or reminder")
     text = str(arguments.get("text") or "").strip()
     if not text:
         raise ToolFailure("'text' is required: what to remind the user of")
@@ -80,17 +108,15 @@ def set_reminder(arguments: dict[str, Any]) -> str:
     unit_dir, manage = _location()
     ident = secrets.token_hex(4)
     name = user_timers.unit_name(KIND, ident)
-    user_timers.write_units(unit_dir, name, text, [
-        shutil.which("notify-send") or "notify-send", "--app-name=Happy Bot", "--urgency=critical",
-        "--icon=appointment-soon", "Reminder", text,
-    ], "timer", when.strftime("%Y-%m-%d %H:%M:00"))
+    user_timers.write_units(unit_dir, name, text, [user_timers.launcher(), "reminder-due", kind, "--", text],
+                            "timer", when.strftime("%Y-%m-%d %H:%M:00"))
     if manage:
         for command in (("daemon-reload",), ("enable", "--now", f"{name}.timer")):
             ok, message = user_timers.systemctl(*command)
             if not ok:
                 user_timers.remove_units(list(unit_dir.glob(f"{name}.*")))
                 raise ToolFailure(f"the reminder could not be scheduled: {message}")
-    return f"Reminder {ident} set for {when:%A %d %B, %H:%M}: {text}"
+    return f"{kind.title()} {ident} set for {when:%A %d %B, %H:%M}: {text}"
 
 
 def upcoming() -> list[dict[str, Any]]:
@@ -145,12 +171,15 @@ def cancel_reminder(arguments: dict[str, Any]) -> str:
 
 def reminder_tools() -> list[Tool]:
     return [
-        Tool("set_reminder", "Show the user a reminder notification at a time, or after some minutes (a timer). It "
-             "works even if the assistant is closed or the computer restarts.",
+        Tool("set_reminder", "Schedule an alarm, countdown timer or reminder at a time or after some minutes. "
+             "Use kind=alarm for alarms and countdown timers. It works even if the assistant is closed or the computer restarts.",
              object_schema({"text": {"type": "string"},
                             "at": {"type": "string", "description": "Local time: YYYY-MM-DD HH:MM, or HH:MM for the "
                                    "next time that clock time comes"},
-                            "in_minutes": {"type": "number"}}, ["text"]),
+                            "in_minutes": {"type": "number"},
+                            "kind": {"type": "string", "enum": ["alarm", "reminder"],
+                                     "description": "Use alarm for an explicit alarm or countdown timer; use reminder "
+                                                    "for a reminder, even one requested in a number of minutes."}}, ["text"]),
              RISK_CHANGE, set_reminder,
              summarize=lambda a: f"Remind: {str(a.get('text', ''))[:120]}"),
         Tool("list_reminders", "The reminders and timers that are set, with their ids.", object_schema(), RISK_READ,

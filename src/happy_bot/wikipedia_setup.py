@@ -38,7 +38,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import wikipedia_catalog, wikipedia_library
+from . import sounds, wikipedia_catalog, wikipedia_library
 from .mcp_client import McpError, McpServerSpec, McpSession
 
 if TYPE_CHECKING:
@@ -173,8 +173,12 @@ class DownloadJob:
             wikipedia_catalog.update(folder, book, self.progress, self.cancel)
             message = _apply(server, folder, auto_update)["message"]
             self.progress.set(state="done", message=message)
+            if not self.cancel.is_set():
+                sounds.play(server.settings["ui"], "background")
         except (wikipedia_catalog.CatalogError, SetupError, OSError) as error:
             self.progress.set(state="failed", message=str(error))
+            if not self.cancel.is_set():
+                sounds.play(server.settings["ui"], "error")
 
 
 def use(server: "AssistantServer", choice: str, auto_update: bool) -> dict[str, Any]:

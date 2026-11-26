@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from happy_bot import routines, user_timers  # noqa: E402
+from happy_bot import cli, routines, settings, sounds, user_timers  # noqa: E402
 from happy_bot.agent_loop import system_prompt  # noqa: E402
 from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
 from happy_bot.tools import media, phone, reminders  # noqa: E402
@@ -190,6 +190,36 @@ class ReminderTests(TimerDirTest):
         self.assertEqual(reminders.list_reminders({}), "No reminders are set.")
         self.assertEqual(sorted(path.name for path in self.unit_dir.iterdir()), ["someone-else.timer"])
 
+    def test_alarm_kind_survives_scheduling_and_existing_reminders_upgrade_in_place(self) -> None:
+        ident = reminders.set_reminder({"text": "Tea", "in_minutes": 5, "kind": "alarm"}).split()[1]
+        alarm = self.unit_dir / f"happy-bot-reminder-{ident}.service"
+        self.assertIn('"reminder-due" "alarm" "--" "Tea"', alarm.read_text())
+        message = '100% done? "$yes"'
+        user_timers.write_units(self.unit_dir, "happy-bot-reminder-old", message,
+                                ["/usr/bin/notify-send", "--app-name=Happy Bot", "--urgency=critical",
+                                 "--icon=appointment-soon", "Reminder", message], "timer", "2030-01-01 10:00:00")
+        service = self.unit_dir / "happy-bot-reminder-old.service"
+        timer = self.unit_dir / "happy-bot-reminder-old.timer"
+        calendar = timer.read_bytes()
+        with mock.patch.object(user_timers, "systemctl", return_value=(True, "")) as ctl:
+            reminders.upgrade_scheduled_sounds(self.unit_dir, True)
+            reminders.upgrade_scheduled_sounds(self.unit_dir, True)
+            ctl.assert_called_once_with("daemon-reload")
+        self.assertIn('"reminder-due" "reminder" "--" ' + user_timers.quote_exec(message), service.read_text())
+        self.assertEqual(calendar, timer.read_bytes())
+
+    def test_scheduled_notification_reads_current_settings_without_a_daemon(self) -> None:
+        for event in ("alarm", "reminder"):
+            with self.subTest(event=event), mock.patch.object(cli, "ensure_daemon", side_effect=AssertionError), \
+                    mock.patch.object(cli.subprocess, "run", return_value=mock.Mock(returncode=0)) as notify, \
+                    mock.patch.object(settings, "load_settings", return_value={"ui": {"example": event}}), \
+                    mock.patch.object(sounds, "play") as play:
+                self.assertEqual(cli.main(["reminder-due", event, "--", "--read this"]), 0)
+                command = notify.call_args.args[0]
+                self.assertIn("--hint=boolean:suppress-sound:true", command)
+                self.assertEqual(command[-3:], ["--", event.title(), "--read this"])
+                play.assert_called_once_with({"example": event}, event, wait=True)
+
 
 class RoutineTests(TimerDirTest):
     def test_routines_are_validated(self) -> None:
@@ -219,7 +249,7 @@ class RoutineTests(TimerDirTest):
         timer = next(self.unit_dir.glob("*schedule.timer")).read_text()
         self.assertIn("OnCalendar=Mon..Fri 08:00", timer)
         service = next(self.unit_dir.glob("*schedule.service")).read_text()
-        self.assertIn('"ask" "--notify" "--" "Summarise my calendar"', service)
+        self.assertIn('"ask" "--background" "--notify" "--" "Summarise my calendar"', service)
         self.assertIn("PathChanged=/tmp/inbox", next(self.unit_dir.glob("*watch.path")).read_text())
         routines.sync({}, self.unit_dir, manage=False)
         self.assertEqual(list(self.unit_dir.iterdir()), [])

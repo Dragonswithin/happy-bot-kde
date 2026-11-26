@@ -77,6 +77,14 @@ class NotificationIconTests(unittest.TestCase):
 
 
 class UiSchemaTests(unittest.TestCase):
+    def test_greeting_migrates_to_the_configured_robot(self) -> None:
+        old = validate_ui({"robot_style": "orbit", "robot_sounds": True})
+        self.assertTrue(old["sounds_follow_mascot"])
+        sounds = old["event_sounds"]
+        self.assertEqual([event for event, fields in sounds.items() if fields["enabled"]], ["open"])
+        self.assertEqual({row["theme"] for row in sounds.values()}, {"orbit"})
+        self.assertEqual(validate_ui(old), old)
+
     def test_existing_picture_choice_gets_quiet_feedback_defaults(self) -> None:
         older_ui = validate_ui({"robot_mascot": False})
         self.assertFalse(older_ui["robot_mascot"])
@@ -116,6 +124,39 @@ class FakeDaemon:
 
 
 class ChangeUiRouteTests(unittest.TestCase):
+    def test_sound_choices_follow_the_robot_only_when_requested(self) -> None:
+        daemon = FakeDaemon()
+
+        def save(**changes):
+            status, data = daemon_routes.change_ui(daemon, {}, {"changes": changes})
+            self.assertEqual(status, 200, data)
+            return data["ui"]
+
+        save(event_sounds={"reminder": {"theme": "sprig", "enabled": True}, "error": {"theme": "rivet"}})
+        save(sounds_follow_mascot=False)
+        sounds = save(robot_style="nixie")["event_sounds"]
+        self.assertEqual(sounds["reminder"], {"theme": "sprig", "enabled": True})
+        self.assertEqual(sounds["error"], {"theme": "rivet", "enabled": False})
+        save(sounds_follow_mascot=True)
+        sounds = save(robot_style="sonar")["event_sounds"]
+        self.assertEqual({row["theme"] for row in sounds.values()}, {"sonar"})
+        self.assertEqual([event for event, row in sounds.items() if row["enabled"]], ["reminder"])
+        save(event_sounds={"error": {"enabled": True}})
+        sounds = save(event_sounds={"error": {"theme": "dotty"}})["event_sounds"]
+        self.assertEqual(sounds["error"], {"theme": "dotty", "enabled": True})
+        self.assertEqual(sounds["reminder"], {"theme": "sonar", "enabled": True})
+        self.assertTrue(save(robot_sounds=True)["event_sounds"]["open"]["enabled"])
+        self.assertFalse(save(event_sounds={"open": {"enabled": False}})["robot_sounds"])
+
+    def test_invalid_event_edits_are_atomic(self) -> None:
+        daemon = FakeDaemon()
+        for patch in (None, [], {"bad": {}}, {"error": {"theme": "../test"}}, {"open": {"enabled": "no"}},
+                      {"alarm": {"source": "elsewhere"}}, {"error": 3}):
+            with self.subTest(patch=patch):
+                status, _ = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_style": "pixel", "event_sounds": patch}})
+                self.assertEqual(status, 400)
+                self.assertEqual(daemon.settings["ui"], UI_DEFAULTS)
+
     def test_style_changes_are_checked_before_replacing_a_saved_robot(self) -> None:
         daemon = FakeDaemon()
         for style in ROBOT_STYLES:

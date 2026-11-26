@@ -45,10 +45,7 @@ KCM.SimpleKCM {
     property string cfg_daemonUrl: ""
 
     property bool unsavedChanges: false
-    property var savedUi: null
-    property var sending: null
-    property var pending: ({})
-    readonly property var ui: savedUi ? Object.assign({}, savedUi, sending, pending) : null
+    readonly property var ui: SharedUiPreferences.ui
     property bool appAutostart: false
     property var panelWidgets: []  // [{id, search_bar, bar_width, vertical}], from GET /panel
     readonly property bool onPanel: panelWidgets.length > 0
@@ -60,38 +57,8 @@ KCM.SimpleKCM {
         page.unsavedChanges = false;
     }
 
-    function read(finished) {
-        client.request("GET", "/health", null, function(data) {
-            page.savedUi = data.ui || null;
-            if (finished) finished();
-        }, function(data) {
-            page.problem = data.error || i18n("The assistant is not running");
-            if (finished) finished();
-        });
-    }
-
     function save(changes) {
-        page.pending = Object.assign({}, page.pending, changes);
-        page.sendPending();
-    }
-
-    // Moving quickly between portraits can select another while the first is saving.
-    function sendPending() {
-        if (page.sending || Object.keys(page.pending).length === 0) return;
-        page.sending = page.pending;
-        page.pending = {};
-        function finished() {
-            page.sending = null;
-            page.sendPending();
-        }
-        client.request("POST", "/ui", { changes: page.sending }, function(data) {
-            page.savedUi = data.ui;
-            page.problem = "";
-            finished();
-        }, function(data) {
-            page.problem = data.error || i18n("That could not be saved");
-            page.read(finished);
-        });
+        SharedUiPreferences.save(changes);
     }
 
     function readPanel() {
@@ -117,8 +84,14 @@ KCM.SimpleKCM {
         configuredUrl: page.cfg_daemonUrl || ""
     }
 
+    Connections {
+        target: SharedUiPreferences
+        function onProblem(message) { page.problem = message; }
+    }
+
     Component.onCompleted: {
-        page.read();
+        SharedUiPreferences.configuredUrl = cfg_daemonUrl || "";
+        SharedUiPreferences.read();
         page.readPanel();
     }
 
@@ -145,7 +118,7 @@ KCM.SimpleKCM {
                     icon.name: "view-refresh"
                     onTriggered: {
                         page.problem = "";
-                        page.read();
+                        SharedUiPreferences.read();
                         page.readPanel();
                     }
                 }
@@ -168,6 +141,7 @@ KCM.SimpleKCM {
                 Layout.fillWidth: true
                 useRobotMascot: page.ui?.robot_mascot ?? true
                 robotStyle: page.ui?.robot_style ?? "pip"
+                soundsFollowMascot: page.ui?.sounds_follow_mascot ?? true
                 onChoiceRequested: changes => page.save(changes)
             }
 
@@ -184,27 +158,6 @@ KCM.SimpleKCM {
                 onToggled: page.save({ mascot_nudges: checked })
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-
-                QQC2.CheckBox {
-                    text: i18n("Play a greeting sound")
-                    checked: page.ui !== null && page.ui.robot_sounds === true
-                    onToggled: page.save({ robot_sounds: checked })
-                }
-
-                QQC2.ToolButton {
-                    text: i18n("Preview")
-                    Accessible.name: i18n("Preview greeting sound")
-                    icon.name: "media-playback-start"
-                    onClicked: feedback.greet()
-                }
-
-                RobotFeedback {
-                    id: feedback
-                    onUnavailable: page.problem = i18n("The greeting could not play. Check your audio output and that Qt Multimedia is installed.")
-                }
-            }
         }
 
         SettingsSection {

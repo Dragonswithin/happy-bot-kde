@@ -50,6 +50,7 @@ class IconActivity:
                            nudges=[], search_clear_revision=str(search_cleared) if search_cleared else "",
                            conversation_clear_revision=str(conversations_cleared) if conversations_cleared else "")
         self._dismissed_nudges: set[str] = set()
+        self._last_known_nudges: dict[str, bool] = {}
         self._hot = _Sustained(10, 20)
         self._busy = _Sustained(10, 8)
         self._memory = _Sustained(15, 20)
@@ -71,14 +72,24 @@ class IconActivity:
         with self._changed:
             self._update(recording=active)
 
-    def observe_nudges(self, **conditions: bool | None) -> None:
-        """Publish a snapshot in display order. Only a known recovery ends dismissal."""
+    def observe_nudges(self, **conditions: bool | None) -> bool:
+        """Publish the display cues. Return True when a known condition becomes active."""
         with self._changed:
+            new_nudge = False
+            if not conditions:  # Sampling is switched off. Re-enabling starts with a quiet baseline.
+                self._last_known_nudges.clear()
             for kind in NUDGE_KINDS:
-                if conditions.get(kind) is False:
+                active = conditions.get(kind)
+                if active is None:
+                    continue
+                if active and self._last_known_nudges.get(kind) is False:
+                    new_nudge = True
+                self._last_known_nudges[kind] = active
+                if not active:
                     self._dismissed_nudges.discard(kind)
             self._update(nudges=[kind for kind in NUDGE_KINDS
                                  if conditions.get(kind) is True and kind not in self._dismissed_nudges])
+            return new_nudge
 
     def dismiss_nudge(self, kind: str) -> bool:
         """Hide an active condition for everyone; repeating a supported dismissal succeeds."""

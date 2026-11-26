@@ -176,7 +176,7 @@ def sync_timer(wikipedia: dict[str, Any], unit_dir: Path, manage: bool) -> None:
             if manage:
                 user_timers.systemctl("daemon-reload")
         return
-    launcher = shutil.which("happy-bot") or str(Path.home() / ".local" / "bin" / "happy-bot")
+    launcher = user_timers.launcher()
     command = [launcher, "wikipedia", "update"] if os.path.exists(launcher) else [sys.executable, "-m",
                                                                                   "happy_bot.cli", "wikipedia", "update"]
     user_timers.write_units(unit_dir, name, "Happy Bot: download a newer offline Wikipedia when there is one",

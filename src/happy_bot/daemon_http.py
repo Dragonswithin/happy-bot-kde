@@ -65,10 +65,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import (desktop_context, mascot_nudges, routines, selection_fix, system_monitor, user_timers, voice, web_preferences,
+from . import (desktop_context, mascot_nudges, routines, selection_fix, sounds, system_monitor, user_timers, voice, web_preferences,
                wikipedia_library, wikipedia_pages, wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
 from . import settings as settings_store
+from .ui_settings import merge_ui
 from .icon_activity import IconActivity
 from .ask_stream import ClientGone, stream_ask
 from .conversation_archive import ConversationArchive
@@ -80,6 +81,7 @@ from .mcp_client import McpManager
 from .krunner_bridge import KRunnerBridge
 from .permissions import ApprovalBroker
 from .quick_results import SearchHistory
+from .tools.reminders import upgrade_scheduled_sounds
 from .runtime_paths import (
     DEFAULT_HOST,
     default_port,
@@ -225,6 +227,10 @@ class AssistantServer(ThreadingHTTPServer):
         self.conversations = ConversationStore(ConversationArchive(history_dir, self.settings["history_days"]))
         self.conversations.set_retention(self.settings["history_days"])
         self.sync_routines()
+        try:
+            upgrade_scheduled_sounds(self.unit_dir, self.manage_units)
+        except OSError as error:
+            self.state.last_error = f"Existing reminder sounds could not be updated: {error}"
         upgraded = wikipedia_setup.upgraded_settings(self.settings)  # an older offline Wikipedia reader
         if upgraded is not None and not self.settings_error:
             try:
@@ -248,7 +254,7 @@ class AssistantServer(ThreadingHTTPServer):
     def update_ui(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Apply a partial edit to the latest saved UI settings from either surface."""
         with self._settings_lock:
-            return self.replace_settings({**self.settings, "ui": {**self.settings["ui"], **changes}})
+            return self.replace_settings({**self.settings, "ui": merge_ui(self.settings["ui"], changes)})
 
     def change_web_site(self, url: Any, action: Any) -> dict[str, Any]:
         with self._settings_lock:
@@ -337,6 +343,13 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:  # noqa: BLE001 - a handler bug must still produce a reply
             status, payload = 500, {
                 "ok": False, "code": "internal", "error": f"The assistant hit an internal error: {type(error).__name__}: {error}"}
+        # These routes are explicit desktop actions. Live searches and health polls
+        # can fail repeatedly while typing or offline and never warrant a sound.
+        if status >= 400 and method == "POST" and parsed.path in (
+            "/open", "/quick/activate", "/quick/app", "/selection/rewrite", "/selection/replace",
+            "/system/stop", "/context/screenshot/edit",
+        ):
+            sounds.play(self.server.settings["ui"], "error")
         self._json(status, payload)
 
     def _stream_events(self, body: dict[str, Any]) -> None:
@@ -396,8 +409,12 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
         server.activity.observe_sensors(**readings)
         server.system_history.add(readings)
 
+    def observe_nudges(**readings: bool | None) -> None:
+        if server.activity.observe_nudges(**readings) and server.settings["ui"].get("mascot_nudges", True):
+            sounds.play(server.settings["ui"], "nudge")
+
     sensors = SensorSampler(observe)
-    nudges = SensorSampler(server.activity.observe_nudges, mascot_nudges.NudgeReadings(
+    nudges = SensorSampler(observe_nudges, mascot_nudges.NudgeReadings(
         lambda: server.settings["ui"].get("mascot_nudges", True)), interval=mascot_nudges.SAMPLE_SECONDS)
     sensors.start()
     nudges.start()

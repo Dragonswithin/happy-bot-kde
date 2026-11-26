@@ -121,6 +121,35 @@ class ListeningTests(unittest.TestCase):
             self.assertEqual(listener.listen(self.voice, local_only=True), {"text": "hello"})
         self.assertEqual(changes, [True, False])
 
+    def test_tones_bracket_capture_and_finish_before_transcription(self) -> None:
+        events = []
+        ui = {"robot_style": "orbit"}
+        listener = voice.Listener(self.runtime, lambda active: events.append("capture" if active else "closed"))
+
+        def cue(settings, event, *, wait=False):
+            self.assertIs(settings, ui)
+            self.assertEqual(wait, event == "mic_ready")
+            events.append(event)
+
+        def transcribe(settings, audio):
+            events.append("transcribe")
+            return "hello"
+
+        with self.microphone(quiet=4, loud=8), mock.patch.object(voice.sounds, "play", cue), \
+                mock.patch.object(voice, "transcribe", transcribe):
+            listener.listen(self.voice, local_only=True, ui=ui)
+        self.assertEqual(events, ["mic_ready", "capture", "closed", "mic_done", "transcribe"])
+
+    def test_discard_during_ready_tone_skips_microphone_and_completion(self) -> None:
+        def cue(settings, event, *, wait=False):
+            self.assertEqual((event, wait), ("mic_ready", True))
+            self.listener.stop(discard=True)
+
+        with self.microphone(quiet=4, loud=8), mock.patch.object(voice.sounds, "play", cue), \
+                mock.patch.object(voice.subprocess, "Popen") as recorder:
+            self.assertEqual(self.listener.listen(self.voice, local_only=True), {"text": "", "discarded": True})
+        recorder.assert_not_called()
+
     def test_device_that_never_opens_does_not_show_recording(self) -> None:
         changes = []
         listener = voice.Listener(self.runtime, changes.append)
@@ -175,6 +204,16 @@ class ListeningTests(unittest.TestCase):
         status, reply = daemon_routes._voice_error(voice.VoiceError("no_microphone", "No sound came from the microphone."))
         self.assertEqual((status, reply["code"]), (503, "no_microphone"))
         self.assertEqual(daemon_routes._voice_error(voice.VoiceError("service", "down"))[0], 502)
+
+    def test_final_listening_errors_sound_once_and_busy_capture_stays_quiet(self) -> None:
+        from happy_bot import daemon_routes
+        server = mock.Mock(settings={"ui": {}, "voice": self.voice})
+        with mock.patch.object(voice.sounds, "play") as play:
+            server.voice.listen.side_effect = voice.VoiceError("service", "Service unavailable")
+            self.assertEqual(daemon_routes.voice_listen(server, {}, {})[0], 502)
+            server.voice.listen.side_effect = voice.VoiceError("busy", "Already listening")
+            self.assertEqual(daemon_routes.voice_listen(server, {}, {})[0], 409)
+        play.assert_called_once_with({}, "error")
 
     def test_check_sends_silence_and_accepts_text(self) -> None:
         self.assertEqual(voice.check_service({**self.voice, "model": "whisper-v3:turbo"}), {"ok": True})

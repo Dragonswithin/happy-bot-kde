@@ -21,6 +21,7 @@ Item {
             picker.changes.push(change);
             if (change.robot_mascot !== undefined) picker.useRobotMascot = change.robot_mascot;
             if (change.robot_style !== undefined) picker.robotStyle = change.robot_style;
+            if (change.sounds_follow_mascot !== undefined) picker.soundsFollowMascot = change.sounds_follow_mascot;
         }
     }
 
@@ -37,6 +38,7 @@ Item {
         function init() {
             picker.useRobotMascot = true;
             picker.robotStyle = "pip";
+            picker.soundsFollowMascot = true;
             picker.width = view.width;
             picker.changes = [];
             waitForPolish(picker);
@@ -71,6 +73,16 @@ Item {
             mouseClick(findChild(picker, "useRobot"));
             compare(picker.changes[2], {robot_mascot: true});
             verify(tile("sonar").visible && tile("sonar").checked);
+        }
+
+        function test_soundCheckboxIsOnInitiallyAndCanBeClearedBeforeChoosing() {
+            const follow = findChild(picker, "followMascotSounds");
+            verify(follow.checked);
+            mouseClick(follow);
+            compare(picker.changes[0], {sounds_follow_mascot: false});
+            mouseClick(tile("dotty"));
+            compare(picker.robotStyle, "dotty");
+            verify(!follow.checked);
         }
 
         function test_keyboardFollowsColumnsWhenNarrowOrWide() {

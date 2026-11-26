@@ -14,7 +14,9 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "robot_style": "pip",       # which robot wears the mascot's expressions
       "mascot_nudges": true,      # offer help with battery, disk, updates or a pending restart
       "mascot_animations": true,  # animate the robot's idle movements and activity poses
-      "robot_sounds": false,       # a short chirp when the assistant opens
+      "robot_sounds": false,       # legacy alias for event_sounds.open.enabled
+      "sounds_follow_mascot": true, # change all event themes when choosing a different robot
+      "event_sounds": {...},       # independent enabled flag and robot theme per event
       "popup_width": 30,          # the popup's size, in grid units: width 20 to 70,
       "popup_height": 26,         #   height 12 to 50
       "floating_docked": false,   # tuck the shortcut into a tab on the nearest side of the screen
@@ -50,8 +52,16 @@ from typing import Any
 
 from . import web_preferences
 
+SOUND_EVENTS = ("open", "error", "complete", "alarm", "reminder", "attention", "mic_ready", "mic_done", "background", "nudge")
+
+
+def _default_sounds(theme: str, greeting: bool = False) -> dict[str, dict[str, Any]]:
+    return {event: {"enabled": event == "open" and greeting, "theme": theme} for event in SOUND_EVENTS}
+
+
 UI_DEFAULTS: dict[str, Any] = {
     "robot_mascot": True, "robot_style": "pip", "mascot_animations": True, "robot_sounds": False, "mascot_nudges": True,
+    "sounds_follow_mascot": True, "event_sounds": _default_sounds("pip"),
     "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
     "web_pins": [], "web_hidden": [],
     "floating_docked": False, "floating_size": 100, "floating_opacity": 40, "floating_x": -1, "floating_y": -1,
@@ -71,6 +81,28 @@ COPIES = ("panel", "app")
 
 class UiSettingsError(ValueError):
     """A ``ui`` value is not acceptable; the message says which and why."""
+
+
+def _sound_edits(previous: dict[str, Any], edits: Any) -> Any:
+    """Apply per-field edits without losing another event's choices. Validation follows the merge."""
+    if not isinstance(edits, dict):
+        return edits
+    sounds = previous.copy()
+    for event, fields in edits.items():
+        sounds[event] = {**sounds.get(event, {}), **fields} if isinstance(fields, dict) else fields
+    return sounds
+
+
+def merge_ui(current: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    """Merge an incremental /ui edit, including robot changes and partial event edits, in order."""
+    merged = {**current, **changes}
+    sounds = current["event_sounds"]
+    if merged["sounds_follow_mascot"] is True and merged["robot_style"] != current["robot_style"]:
+        sounds = {event: {**fields, "theme": merged["robot_style"]} for event, fields in sounds.items()}
+    if "robot_sounds" in changes:
+        sounds = _sound_edits(sounds, {"open": {"enabled": changes["robot_sounds"]}})
+    merged["event_sounds"] = _sound_edits(sounds, changes.get("event_sounds", {}))
+    return merged
 
 
 def validate_ui(raw: Any) -> dict[str, Any]:
@@ -93,6 +125,16 @@ def validate_ui(raw: Any) -> dict[str, Any]:
                 raise UiSettingsError(f"'ui': '{key}' must be a whole number from {low} to {high}")
     if ui["robot_style"] not in ROBOT_STYLES:
         raise UiSettingsError(f"'ui': 'robot_style' must be one of {', '.join(ROBOT_STYLES)}")
+    # Older installations had a greeting switch and a robot, but no per-event preferences.
+    sounds = _sound_edits(_default_sounds(ui["robot_style"], ui["robot_sounds"]), raw.get("event_sounds", {}))
+    if not isinstance(sounds, dict) or sounds.keys() != set(SOUND_EVENTS):
+        raise UiSettingsError("'ui': 'event_sounds' must map known sound events to their settings")
+    for event, fields in sounds.items():
+        if (not isinstance(fields, dict) or fields.keys() != {"enabled", "theme"}
+                or not isinstance(fields["enabled"], bool) or fields["theme"] not in ROBOT_STYLES):
+            raise UiSettingsError(f"'ui': sound '{event}' needs an enabled switch and a known robot theme")
+    ui["event_sounds"] = sounds
+    ui["robot_sounds"] = sounds["open"]["enabled"]
     buttons = ui["start_screen"]
     if (not isinstance(buttons, list) or any(item not in START_BUTTONS for item in buttons)
             or len(set(buttons)) != len(buttons)):

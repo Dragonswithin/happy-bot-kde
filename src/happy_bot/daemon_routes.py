@@ -158,7 +158,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
-from . import help_screenshot, settings as settings_store, web_preferences
+from . import help_screenshot, settings as settings_store, sounds, ui_settings, web_preferences
 from .agent_loop import user_folders
 from .mcp_client import McpError
 from .providers import ProviderError
@@ -212,6 +212,26 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
 def icon_activity(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     """Current icon cues, immediately on first connection or as soon as any cue changes."""
     return 200, server.activity.wait(_first(query, "seen"))
+
+
+def play_sound(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    event = body.get("event")
+    if event not in ui_settings.SOUND_EVENTS:
+        return _error(400, "Unknown sound event.", "invalid")
+    if not server.voice.active:
+        sounds.play(server.settings["ui"], event)
+    return 200, {"ok": True}
+
+
+def preview_sound(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    event, theme = body.get("event"), body.get("theme")
+    if event not in ui_settings.SOUND_EVENTS or theme not in ui_settings.ROBOT_STYLES:
+        return _error(400, "Choose a listed event and robot sound.", "invalid")
+    if server.voice.active:
+        return _error(409, "Finish voice input before previewing a sound.", "busy")
+    if not sounds.preview(theme, event):
+        return _error(503, "Could not play this sound. Check the audio output and that pw-play, paplay or aplay is available.", "audio_unavailable")
+    return 200, {"ok": True}
 
 
 def dismiss_nudge(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -297,8 +317,12 @@ def _voice_error(error: "voice.VoiceError") -> Reply:
 def voice_listen(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     agent = server.settings.get("agent") or {}
     try:
-        heard = server.voice.listen(server.settings.get("voice") or voice.VOICE_DEFAULTS, bool(agent.get("local_only")))
+        heard = server.voice.listen(server.settings.get("voice") or voice.VOICE_DEFAULTS, bool(agent.get("local_only")),
+                                    server.settings.get("ui", {}))
     except voice.VoiceError as error:
+        # A second request should not feed an error tone into an ongoing recording.
+        if error.code != "busy":
+            sounds.play(server.settings.get("ui", {}), "error")
         return _voice_error(error)
     return 200, {"ok": True, **heard}
 
@@ -870,6 +894,8 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/icon/activity"): icon_activity,
+    ("POST", "/sound/play"): play_sound,
+    ("POST", "/sound/preview"): preview_sound,
     ("POST", "/icon/nudge/dismiss"): dismiss_nudge,
     ("GET", "/health"): health,
     ("GET", "/context"): context,

@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from happy_bot import (settings as settings_store, wikipedia_catalog, wikipedia_library,  # noqa: E402
+from happy_bot import (cli, settings as settings_store, wikipedia_catalog, wikipedia_library,  # noqa: E402
                        wikipedia_reader, wikipedia_routes, wikipedia_setup)
 from happy_bot.mcp_client import ToolResult  # noqa: E402
 
@@ -442,6 +442,33 @@ class SetupTests(unittest.TestCase):
             update.assert_called_once_with(str(self.folder), "wikipedia_en_all_maxi")
         (self.folder / wikipedia_library.FOREIGN_LOCK).write_text("")
         self.assertEqual(wikipedia_setup.scheduled_update(kept)["action"], "updated_elsewhere")
+
+    def test_download_sounds_once_for_final_outcome_and_stays_quiet_on_cancel(self) -> None:
+        job = self.server.wikipedia_download
+        with mock.patch.object(wikipedia_setup.sounds, "play") as play, \
+                mock.patch.object(wikipedia_catalog, "update") as update, \
+                mock.patch.object(wikipedia_setup, "_apply", return_value={"message": "Ready"}):
+            job._run(self.server, "wikipedia_en_all_maxi", False)
+            play.assert_called_once_with(self.server.settings["ui"], "background")
+            play.reset_mock()
+            update.side_effect = wikipedia_catalog.CatalogError("download failed")
+            job._run(self.server, "wikipedia_en_all_maxi", False)
+            play.assert_called_once_with(self.server.settings["ui"], "error")
+            play.reset_mock()
+            job.cancel.set()
+            job._run(self.server, "wikipedia_en_all_maxi", False)
+            play.assert_not_called()
+
+    def test_monthly_job_only_announces_a_download_or_failure(self) -> None:
+        outcomes = [({"ok": True, "action": "current"}, []), ({"ok": True, "action": "downloaded"}, ["background"]),
+                    ({"ok": False, "error": "download failed"}, ["error"])]
+        for reply, events in outcomes:
+            with self.subTest(reply=reply), mock.patch.object(cli, "ensure_daemon", side_effect=AssertionError), \
+                    mock.patch.object(cli, "request_json"), mock.patch.object(settings_store, "load_settings", return_value={}), \
+                    mock.patch.object(wikipedia_setup, "scheduled_update", return_value=reply), \
+                    mock.patch.object(cli, "play_scheduled_cue") as cue, mock.patch("sys.stdout", io.StringIO()):
+                self.assertEqual(cli.main(["wikipedia", "update"]), 0 if reply["ok"] else 1)
+                self.assertEqual(cue.call_args_list, [mock.call(event) for event in events])
 
 
 class SelfCheckTests(unittest.TestCase):

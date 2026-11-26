@@ -32,6 +32,11 @@ PREFIX = "happy-bot-"
 MARKER = "X-HappyBot"
 
 
+def launcher() -> str:
+    """Absolute CLI path for a unit that can run with the daemon stopped."""
+    return shutil.which("happy-bot") or str(Path.home() / ".local" / "bin" / "happy-bot")
+
+
 def default_unit_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(base) / "systemd" / "user"

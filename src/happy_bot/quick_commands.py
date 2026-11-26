@@ -19,7 +19,7 @@ Commands (case and extra spaces do not matter):
 - ``wifi on|off``, ``bluetooth on|off`` (either word order, "turn" optional):
   ``set_radio``;
 - ``timer 10m`` / ``timer 1h30m`` / ``10 minute timer`` (whole minutes, 1 to
-  1440): ``set_reminder``, which notifies when the time is up;
+  1440) and ``alarm 07:30`` use the alarm cue when due;
 - ``lock`` / ``lock screen``: ``session_action`` lock;
 - ``do not disturb`` / ``dnd 30m`` (an hour when no time is given), ``do not
   disturb off``: ``do_not_disturb``.
@@ -116,13 +116,18 @@ def parse(text: str) -> Command | None:
         name = "Bluetooth" if radio == "bluetooth" else "Wi-Fi"
         return Command(f"Turn {name} {state}", "network-bluetooth" if radio == "bluetooth" else "network-wireless",
                        "set_radio", {"radio": radio, "enabled": state == "on"})
+    match = re.fullmatch(r"(?:set )?(?:an )?alarm (?:at |for )?([01]?\d|2[0-3]):([0-5]\d)", said)
+    if match:
+        when = f"{int(match.group(1)):02d}:{match.group(2)}"
+        return Command(f"Set an alarm for {when}", "appointment-soon", "set_reminder",
+                       {"text": f"Your alarm for {when}", "at": when, "kind": "alarm"})
     match = (re.fullmatch(r"(?:set )?(?:an? )?timer (?:for )?" + _DURATION, said)
              or re.fullmatch(r"(?:set )?(?:an? )?" + _DURATION + r" timer", said))
     if match:
         total = _minutes(*match.groups())
         if total:
             return Command(f"Start a timer for {_span(total)}", "chronometer", "set_reminder",
-                           {"text": f"Time is up: your timer for {_span(total)}", "in_minutes": total})
+                           {"text": f"Time is up: your timer for {_span(total)}", "in_minutes": total, "kind": "alarm"})
     if said in ("lock", "lock screen", "lock the screen", "lock computer", "lock the computer"):
         return Command("Lock the screen", "system-lock-screen", "session_action", {"action": "lock"})
     match = re.fullmatch(r"(?:do not disturb|dnd)(?: (off|on|(?:for )?" + _DURATION + r"))?", said)

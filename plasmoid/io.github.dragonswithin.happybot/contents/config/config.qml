@@ -38,6 +38,12 @@ ConfigModel {
         source: pages.app ? "ConfigAppearance.qml" : "ConfigPanel.qml"
     }
     ConfigCategory {
+        name: i18n("Sounds")
+        icon: "preferences-desktop-sound"
+        source: "ConfigSounds.qml"
+        visible: pages.app
+    }
+    ConfigCategory {
         name: i18n("AI Model")
         icon: "assistant"
         source: "ConfigModels.qml"

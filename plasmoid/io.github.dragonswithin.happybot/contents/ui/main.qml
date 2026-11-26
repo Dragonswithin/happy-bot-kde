@@ -194,12 +194,12 @@ PlasmoidItem {
         id: iconActivity
         nudgesEnabled: session.ui.mascot_nudges !== false
     }
-    RobotFeedback { id: feedback }
 
     readonly property bool assistantOpen: popup.visible || floatingOpen
+    property bool openingForVoice: false
     onAssistantOpenChanged: {
-        if (assistantOpen && session.ui.robot_sounds === true && !session.listening) {
-            feedback.greet();
+        if (assistantOpen && !openingForVoice && !session.listening) {
+            session.request("POST", "/sound/play", { event: "open" }, () => {}, () => {});
         }
     }
 
@@ -555,7 +555,9 @@ PlasmoidItem {
             } else if (fresh && data.action === "talk") {
                 // The "Talk to Happy Bot" shortcut: open here, listening (pressed again: stop and send).
                 if (!session.listening) {
+                    root.openingForVoice = true;
                     root.openForApplication();
+                    root.openingForVoice = false;
                 }
                 root.talk("assistant");
             } else if (fresh && root.showRequests >= 0) {

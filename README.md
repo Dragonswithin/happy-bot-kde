@@ -285,8 +285,8 @@ panel widget always look and behave the same.
   This month’s usage continues to count toward your model spending limits. The
   same page sets conversation retention and the locations of your standard
   folders, notes and to-dos.
-- **Appearance:** the robot mascot or the wand, mascot animations, an optional
-  greeting sound, start-screen buttons and their order, the hotkey, starting
+- **Appearance:** the robot mascot or the wand, mascot animations,
+  start-screen buttons and their order, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
   back in its corner, the popup's size, and in the panel Happy Bot's icon
   or a search bar, and the bar's width. In **Happy Bot’s picture**, choose
@@ -294,13 +294,19 @@ panel widget always look and behave the same.
   original mint robot. Switching to **Wand** remembers your robot for later.
   **Animate the robot** enables each character’s idle movements on the floating
   shortcut, in the panel and on the start screen.
-  Enable **Play a greeting sound** to hear a short chirp when the assistant opens.
-  The preview button plays it in settings.
+  **Also change sounds** is checked by default. Picking a robot gives each event
+  that robot’s sound and keeps its on/off setting. Uncheck it to keep your mix.
   Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the
   usual size. **Popup size** controls the window that opens when you click.
   Turn on **Dock to screen edge** to tuck the shortcut into a small tab on
   the nearest left or right edge. Hover over the tab to reveal the shortcut,
   then click to open Happy Bot. Drag the shortcut to change sides or height.
+- **Sounds** lets you enable, choose and preview any of ten mascot sounds for
+  each event. Events include opening Happy Bot, an error, a long task finishing,
+  an alarm or timer, a reminder, a request for your attention, microphone ready,
+  recording finished, a background job finishing, and a new mascot nudge. A
+  long task uses the threshold under Behaviour (60 seconds when desktop
+  completion notifications are off). New events start muted.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.
@@ -525,7 +531,8 @@ which it refuses if they contain a key or personal details).
 Plasma 6 on Wayland, Python 3.11 or newer, and PyGObject (`python-gobject`
 or `python3-gi`) with `at-spi2-core`, which the window and application
 control tools use to talk to KWin, the accessibility bus and the desktop
-portal. The optional greeting sound uses Qt Multimedia (`qt6-multimedia` on Arch).
+portal. Optional mascot sounds use the first working desktop audio player
+among `pw-play`, `paplay` and `aplay`.
 Editing Help screenshots uses Python Pillow (`python-pillow` on Arch or
 `python3-pil` on Debian). Recognizing text in them uses Tesseract with English
 language data. Both are optional for asking questions and previewing screenshots.

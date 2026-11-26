@@ -64,3 +64,18 @@ class IconActivityTests(unittest.TestCase):
                 state, other = (wait.result() for wait in waits)
                 self.assertEqual(state, other)
                 self.assertIs(state["recording"], recording)
+
+    def test_nudge_sound_requires_a_new_known_condition(self):
+        observe = self.activity.observe_nudges
+        self.assertFalse(observe(battery=True, disk=False))  # first sample sets the baseline
+        self.assertTrue(observe(battery=True, disk=True))
+        self.activity.dismiss_nudge("disk")
+        self.assertFalse(observe(disk=None))
+        self.assertFalse(observe(disk=True))  # unknown readings and reconnected views cannot rearm it
+        self.assertNotIn("disk", self.activity.wait("")["nudges"])
+        self.assertFalse(observe(battery=False, disk=False))
+        self.assertTrue(observe(battery=True, disk=True))  # one callback covers both
+        self.assertFalse(observe(battery=True, disk=True))
+        self.assertFalse(observe(disk=False))
+        self.assertFalse(observe())  # nudges disabled
+        self.assertFalse(observe(disk=True))

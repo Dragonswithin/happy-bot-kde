@@ -43,7 +43,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -120,10 +119,6 @@ def prompt_lines(routines: dict[str, dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _launcher() -> str:
-    return shutil.which("happy-bot") or str(Path.home() / ".local" / "bin" / "happy-bot")
-
-
 def _ident(name: str, trigger: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "routine"
     return f"{slug}-{hashlib.sha1(name.encode()).hexdigest()[:6]}-{trigger}"
@@ -135,7 +130,7 @@ def desired_units(routines: dict[str, dict[str, Any]]) -> dict[str, tuple[str, l
     for name, entry in routines.items():
         if not entry["enabled"]:
             continue
-        command = [_launcher(), "ask", "--notify", "--", entry["request"]]
+        command = [user_timers.launcher(), "ask", "--background", "--notify", "--", entry["request"]]
         description = f"Assistant routine: {name}"
         if entry["schedule"]:
             wanted[user_timers.unit_name(KIND, _ident(name, "schedule"))] = (description, command, "timer", entry["schedule"])
@@ -146,7 +141,7 @@ def desired_units(routines: dict[str, dict[str, Any]]) -> dict[str, tuple[str, l
             wanted[user_timers.unit_name(KIND, _ident(name, "drive"))] = (description, command, "device", device)
         for kind, value in (("network", entry.get("on_network", "")), ("battery", entry.get("battery_below", 0))):
             if value:
-                check = [_launcher(), "routine-check", "--kind", kind, "--value", str(value), "--", name]
+                check = [user_timers.launcher(), "routine-check", "--kind", kind, "--value", str(value), "--", name]
                 wanted[user_timers.unit_name(KIND, _ident(name, kind))] = (description, check, "timer", CHECK_EVERY)
     return wanted
 
