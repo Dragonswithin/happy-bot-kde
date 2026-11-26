@@ -35,7 +35,9 @@ Endpoints:
 - ``POST /context/screenshot`` ``{"window": id}``: only after the user chose
   "Help with …": a screenshot of that window for the chat's next request
   (``app_context.remember_screenshot``), when an AI that sees pictures may
-  see it; ``taken`` says whether one was.
+  see it; ``taken`` says whether one was. With ``preview: true``, capture for
+  local display even with a text-only AI. Return its file URL, attachment ID
+  and eligible model names. ``desktop: true`` requests the whole desktop.
 - ``GET /search?q=...``: instant file search through the ``file_search`` role;
   ``GET /search/web?q=...`` the web finder's pages through ``web_search``.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
@@ -144,6 +146,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
@@ -342,8 +345,15 @@ def current_application(server: "AssistantServer", query: dict[str, list[str]], 
 def capture_screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     """``{"window": id}``: after "Help with …", a screenshot of that window for the chat's next request."""
     if (server.settings.get("agent") or {}).get("app_context") == "off":
-        return 200, {"ok": True, "taken": False}
-    taken = app_context.remember_screenshot(server.settings, str(body.get("window") or ""), server.runtime_dir)
+        return 200, {"ok": True, "taken": False, "reason": "disabled"}
+    window = str(body.get("window") or "")
+    if body.get("preview") is True:
+        path = app_context.preview_screenshot(window, body.get("desktop") is True, server.runtime_dir)
+        if not path:
+            return 200, {"ok": True, "taken": False}
+        return 200, {"ok": True, "taken": True, "url": Path(path).as_uri(), "id": Path(path).stem,
+                     "models": app_context.screenshot_models(server.settings)}
+    taken = app_context.remember_screenshot(server.settings, window, server.runtime_dir)
     return 200, {"ok": True, "taken": taken}
 
 

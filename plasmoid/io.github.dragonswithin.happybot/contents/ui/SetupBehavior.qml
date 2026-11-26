@@ -217,7 +217,7 @@ ColumnLayout {
         }
 
         Hint {
-            text: i18n("App details include the name, version and window title. “Help with…” can also include selected text, visible controls and the open file.")
+            text: i18n("App details include the name, version and window title. “Help with…” can also include selected text, visible controls and the open file. Models with image access can see the screenshot you preview before sending. Choose “No models” to turn off Help screenshots.")
         }
     }
 

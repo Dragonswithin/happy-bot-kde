@@ -39,8 +39,7 @@ import QtQuick
  * and its open file (src/happy_bot/app_context.py, which also decides which
  * AI may see any of it). Choosing that shortcut also calls `captureForHelp`,
  * which asks for a screenshot of the application (`POST /context/screenshot`)
- * when the daemon said an AI that sees pictures may see it
- * (`screenshotsWanted`); nothing is captured when Happy Bot opens. A new or
+ * to preview locally before the first question. Nothing is captured when Happy Bot opens. A new or
  * reopened chat clears `helpChat`. Every way of opening Happy Bot notes the
  * application (`captureApplication`), the panel included.
  *
@@ -176,8 +175,11 @@ Item {
     property var helpWith: null
     property string helpWithIcon: ""  // the application's icon name, for the welcome screen only
     property bool helpChat: false  // this chat began with "Help with …": requests carry the full context
-    property bool screenshotsWanted: false  // from /context/app: an AI that sees pictures may see this app
-    property bool capturing: false  // a "Help with …" screenshot is being taken (the app is briefly in front)
+    property bool locatingApplication: false
+    property int applicationLookup: 0
+    property var helpWindow: null  // the target chosen on the tile, retained for follow-up questions
+    property var helpDraft: null  // the capture in progress or the preview awaiting a question
+    readonly property bool capturing: helpDraft?.loading === true
     property var ui: ({
         robot_mascot: true, robot_style: "pip", mascot_animations: true, mascot_nudges: true, robot_sounds: false,
         popup_width: 30, popup_height: 26,
@@ -704,6 +706,7 @@ Item {
     /** Shows the chat `conversationId` (its saved events, replayed), leaving a finder, an article or fixing text
      *  first, so a chat picked in the sidebar during a search comes to the front; the open chat just shows again. */
     function openConversation(conversationId) {
+        dismissHelpDraft();
         stopFixing();
         stopFinding();
         if (session.busy || conversationId === session.conversationId) {
@@ -747,27 +750,48 @@ Item {
 
     /** Notes the application the user is in, for the next requests; called before the popup opens. */
     function captureApplication() {
+        const lookup = ++session.applicationLookup;
+        session.locatingApplication = true;
         request("GET", "/context/app", null, function(data) {
+            if (lookup !== session.applicationLookup) return;
             session.helpWith = data.app || data.title
                 ? { app: data.app, "class": data["class"], title: data.title, window: data.window || "" } : null;
             session.helpWithIcon = session.helpWith ? data.icon || "" : "";
-            session.screenshotsWanted = session.helpWith !== null && data.screenshots === true;
+            session.locatingApplication = false;
         }, function(data) {
+            if (lookup !== session.applicationLookup) return;
             session.helpWith = null;
             session.helpWithIcon = "";
+            session.locatingApplication = false;
         });
     }
 
-    /** After "Help with …": a screenshot of the application for the chat's next request, when one could be
-     *  used. Never when Happy Bot opens. `capturing` is true meanwhile, so the popup stays open while the
-     *  application is briefly made active, and takes the keyboard back when it turns false. */
+    /** Open Help immediately. Ignore a late reply if the user already left this draft. */
     function captureForHelp() {
-        if (!session.helpWith || !session.screenshotsWanted || !session.helpWith.window || session.capturing) {
-            return;
+        if (session.capturing) return;
+        session.helpChat = true;
+        session.helpWindow = session.helpWith;
+        session.helpDraft = { loading: true };
+        const draft = session.helpDraft;
+        const target = session.helpWindow;
+        function finish(data) {
+            if (session.helpDraft !== draft) return;
+            session.helpDraft = {
+                url: data.url || "", id: data.id || "", models: data.models || [],
+                problem: data.url ? "" : data.reason === "disabled"
+                    ? i18n("Screenshots are turned off in Behaviour settings. You can still ask a question.")
+                    : i18n("Couldn’t capture the screenshot. You can still describe what you see.")
+            };
         }
-        session.capturing = true;
-        request("POST", "/context/screenshot", { window: session.helpWith.window },
-                function(data) { session.capturing = false; }, function(data) { session.capturing = false; });
+        request("POST", "/context/screenshot", { window: target?.window || "", desktop: !target, preview: true },
+                finish, finish);
+    }
+
+    function dismissHelpDraft() {
+        if (!session.helpDraft) return;
+        session.helpDraft = null;
+        session.helpWindow = null;
+        session.helpChat = false;
     }
 
     function newChat() {
@@ -784,6 +808,8 @@ Item {
         session.conversationId = "";
         session.conversationCreatedAt = 0;
         session.chatModel = "";
+        session.helpDraft = null;
+        session.helpWindow = null;
         session.helpChat = false;
         session.entries.clear();
     }
@@ -791,7 +817,7 @@ Item {
     /** Sends one request to the assistant. Returns false if it was not sent. */
     function ask(message) {
         const text = (message || "").trim();
-        if (!text || session.busy) {
+        if (!text || session.busy || session.capturing) {
             return false;
         }
         session.showingSystem = false;  // the answer must show, not System info
@@ -799,15 +825,22 @@ Item {
         if (!session.conversationId) session.conversationCreatedAt = Date.now() / 1000;
         setStatus("thinking", i18n("Thinking"));
         appendEntry("user", text);
+        const body = { message: text, conversation_id: session.conversationId, model: session.chatModel,
+                       buttons: true, about_window: session.helpChat ? session.helpWindow : session.helpWith };
+        if (session.helpChat) {
+            body.full_context = true;
+            body.screenshot_id = session.helpDraft?.id || "";
+        }
+        session.helpDraft = null;
         const xhr = new XMLHttpRequest();
         session.activeStream = xhr;
         client.withToken(() => {
-            if (session.activeStream === xhr) startStream(text, true, xhr);
+            if (session.activeStream === xhr) startStream(body, true, xhr);
         });
         return true;
     }
 
-    function startStream(text, mayReload, xhr) {
+    function startStream(body, mayReload, xhr) {
         session.activeStream = xhr;
         session.streamOffset = 0;
         session.streamBuffer = "";
@@ -823,7 +856,7 @@ Item {
             } else if (xhr.readyState === XMLHttpRequest.DONE) {
                 if (xhr.status === 401 && mayReload) {
                     client.loadToken(() => {
-                        if (session.activeStream === xhr) session.startStream(text, false, new XMLHttpRequest());
+                        if (session.activeStream === xhr) session.startStream(body, false, new XMLHttpRequest());
                     });
                     return;
                 }
@@ -837,12 +870,6 @@ Item {
                 session.finishStream();
             }
         };
-        // buttons: this window draws answer buttons, so the assistant may offer them (tools/choices.py).
-        const body = { message: text, conversation_id: session.conversationId, model: session.chatModel, buttons: true };
-        if (session.helpWith) {
-            body.about_window = session.helpWith;
-            body.full_context = session.helpChat;
-        }
         xhr.send(JSON.stringify(body));
     }
 

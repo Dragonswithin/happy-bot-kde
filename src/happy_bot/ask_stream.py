@@ -17,8 +17,8 @@ also carry ``about_window`` (``{"app", "class", "title", "window"}``, from
 the hotkey, and ``full_context: true`` in a chat started from the welcome
 screen's "Help with …" button. ``app_context.background_note`` turns it into
 a note about that application (with ``full_context``, also its selection,
-controls and open file, and the screenshot ``GET /context/app`` took when an
-AI that sees pictures may see the app), stored on the user's message
+controls and open file). The popup can also send the ``screenshot_id`` from
+the Help preview. The note and eligible image are stored on the user's message
 (``Message.context``, ``Message.images``);
 the application is read only when the user's ``agent.app_context`` lets some
 AI in the chain see it. Each model then gets the history through
@@ -183,7 +183,14 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         # Read the application only when some AI in the chain may be told about it.
         note = app_context.background_note(body.get("about_window"), full=body.get("full_context") is True) \
             if any(app_context.shows_context(policy, is_local_address(model["base_url"])) for _, model, _ in chain) else ""
-        shot = app_context.take_screenshot(body.get("about_window")) if note and body.get("full_context") is True else ""
+        shot = ""
+        if body.get("full_context") is True:
+            if "screenshot_id" in body:
+                if any(model.get("vision") and app_context.shows_context(policy, is_local_address(model["base_url"]))
+                       for _, model, _ in chain):
+                    shot = app_context.preview_path(server.runtime_dir, body["screenshot_id"])
+            elif note:  # older clients associate their pending capture with the window
+                shot = app_context.take_screenshot(body.get("about_window"))
         conversation.history.append(Message("user", message, context=note, images=(shot,) if shot else ()))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")

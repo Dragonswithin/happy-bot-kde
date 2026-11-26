@@ -190,6 +190,11 @@ def capture_window(window_id: str, directory: Path) -> str:
     else:
         return ""
     time.sleep(0.15)  # let the window draw itself as active before it is captured
+    return capture_png(directory, ["-a"])
+
+
+def capture_png(directory: Path, options: list[str]) -> str:
+    """Save a private, uniquely named Spectacle capture in the runtime cache."""
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     cutoff = time.time() - SCREENSHOT_KEEP_SECONDS
     for old in directory.glob("*.png"):
@@ -199,11 +204,12 @@ def capture_window(window_id: str, directory: Path) -> str:
         except OSError:
             pass
     target = directory / f"{uuid.uuid4().hex}.png"
-    run_command(["spectacle", "-b", "-n", "-a", "-o", str(target)], timeout=10)
+    result = run_command(["spectacle", "-b", "-n", *options, "-o", str(target)], timeout=10)
     try:
-        if target.stat().st_size > 0:
+        if result["ok"] and target.stat().st_size > 0:
             target.chmod(0o600)
             return str(target)
+        target.unlink(missing_ok=True)
     except OSError:
         pass
     return ""

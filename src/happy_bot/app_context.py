@@ -23,18 +23,14 @@ the history: the note joined to the message or left out, private results kept or
 ``redaction.redact`` again, so a secret a local AI read is hidden before an online one sees it.
 The history itself is never changed, so a later local model still sees everything.
 
-Screenshots: never when Happy Bot opens, only when the user chooses "Help with …", and only when
-some AI in their model order both sees pictures (its ``vision`` setting) and may see the app
-(``screenshots_wanted``, also reported by ``GET /context/app`` so the popup knows whether to ask).
-Then ``remember_screenshot`` (``POST /context/screenshot``) captures that window
-(``app_snapshot.capture_window``) and keeps it for that window. The chat's next request takes it
-(``take_screenshot``) and stores it on the user's message (``Message.images``); ``for_model`` keeps
-the picture only for a model that sees pictures and may see the app. A screenshot is used once, so
-a later question in the same chat does not resend an old picture.
+The Help button captures a local preview on click unless app context is off. The popup names that
+specific capture with its question. Only models with vision and permission receive the image.
+Older clients request an attachment by window ID without displaying a preview.
 """
 
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -65,15 +61,37 @@ _screenshots_lock = threading.Lock()
 
 
 def screenshots_wanted(settings: dict[str, Any]) -> bool:
-    """Whether some AI in the model order sees pictures and may see the app (so a screenshot is worth taking)."""
+    return bool(screenshot_models(settings))
+
+
+def screenshot_models(settings: dict[str, Any]) -> list[str]:
+    """Models in the user's order allowed to see a Help screenshot."""
     agent = settings.get("agent") or {}
     policy = agent.get("app_context", DEFAULT_POLICY)
+    names = []
     for name in settings.get("model_order") or []:
         model = (settings.get("models") or {}).get(name) or {}
         local = is_local_address(str(model.get("base_url") or ""))
         if model.get("vision") and shows_context(policy, local) and (local or not agent.get("local_only")):
-            return True
-    return False
+            names.append(name)
+    return names
+
+
+def preview_screenshot(window_id: str, desktop: bool, runtime_dir: Path) -> str:
+    with _screenshots_lock:
+        folder = runtime_dir / "screenshots"
+        if desktop and not window_id:
+            # Give the compositor time to draw the desktop without the Help popup.
+            return app_snapshot.capture_png(folder, ["-f", "-d", "350"])
+        return app_snapshot.capture_window(window_id, folder)
+
+
+def preview_path(runtime_dir: Path, capture_id: Any) -> str:
+    """Resolve only a daemon-generated PNG identifier, never a client-supplied path."""
+    if not isinstance(capture_id, str) or not re.fullmatch("[0-9a-f]{32}", capture_id):
+        return ""
+    path = runtime_dir / "screenshots" / f"{capture_id}.png"
+    return str(path) if path.is_file() else ""
 
 
 def remember_screenshot(settings: dict[str, Any], window_id: str, runtime_dir: Path) -> bool:

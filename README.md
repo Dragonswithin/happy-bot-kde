@@ -168,9 +168,12 @@ used.
   and its version, and Plasma's; a chat started with "Help with …" also
   gets the text you selected, the window's buttons and text, the file it
   has open and, for an AI marked as seeing pictures, a screenshot of the
-  window. The screenshot is taken only when you click "Help with …" (your
-  app comes to the front for a moment), never when Happy Bot opens. Who may see this is yours to choose on the Behaviour page: AIs on
-  this computer only (the default), any AI, or none. "Close chat" goes back
+  window. Click "Help with …" to capture the window and see its preview,
+  then type your question and press Enter. "Desktop help" previews the
+  desktop when there’s no app window. Back discards the draft. Text-only
+  models can answer your description. Behaviour settings control who
+  may see app details. Choosing "No models" also turns off Help captures.
+  "Close chat" goes back
   to the welcome screen; the chat stays in your saved ones.
 - Tool servers (MCP, stdio) are started and supervised by the daemon. Ones
   you already configured for other AI programs can be imported.

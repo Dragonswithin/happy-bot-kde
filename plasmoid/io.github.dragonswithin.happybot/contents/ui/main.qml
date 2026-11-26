@@ -261,7 +261,7 @@ PlasmoidItem {
         }
         // A "Help with …" screenshot briefly made the application active; take the keyboard back.
         onCapturingChanged: {
-            if (!capturing) {
+            if (!capturing && session.helpDraft) {
                 root.surface.refocus();
             }
         }
@@ -297,6 +297,7 @@ PlasmoidItem {
         onSettingsRequested: root.openSettings()
         onDismissed: {
             searchDelay.stop();
+            session.dismissHelpDraft();
             session.stopFinding();
             root.cancelTalking();
             popup.clearInput();  // the bar stays empty too: what was typed is not kept after clicking away
@@ -353,6 +354,7 @@ PlasmoidItem {
             onSettingsRequested: root.openSettings()
             onDismissed: {
                 searchDelay.stop();
+                session.dismissHelpDraft();
                 session.stopFinding();
                 root.cancelTalking();
                 clearInput();

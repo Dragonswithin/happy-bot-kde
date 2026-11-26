@@ -77,6 +77,9 @@ Rectangle {
     clip: true
 
     required property var session
+    // A full desktop capture includes overlays. Let the desktop draw through the
+    // transparent popup while keeping its window open and its draft intact.
+    opacity: session.capturing && !session.helpWindow ? 0 : 1
     property bool useRobotMascot: false
     readonly property string robotStyle: session.ui?.robot_style ?? "pip"
     readonly property color accent: useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
@@ -89,6 +92,7 @@ Rectangle {
     property int heightInGridUnits: 26
 
     readonly property bool hasHits: session.hits.length > 0
+    readonly property bool helpVisible: !!session.helpDraft
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool fixVisible: session.fixing !== null
     readonly property bool articleVisible: !fixVisible && session.article !== null
@@ -109,7 +113,7 @@ Rectangle {
         : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
-            ? welcome.implicitHeight + inset * 2
+            ? welcomeArea.contentHeight
             : transcriptColumn.implicitHeight + view.inset * 2
     readonly property real bodyHeight: sidebarVisible
         ? Math.max(contentHeight, Math.min(historyHeader.height + historyColumn.implicitHeight, Kirigami.Units.gridUnit * 16))
@@ -198,7 +202,11 @@ Rectangle {
             }
 
             PlasmaComponents3.Label {
-                text: view.filesVisible ? i18n("Find a file") : i18n("Happy Bot")
+                Layout.maximumWidth: view.width * 0.5
+                elide: Text.ElideRight
+                text: view.helpVisible ? (view.session.helpWindow?.app
+                    ? i18n("Help with %1", view.session.helpWindow.app) : i18n("Desktop help"))
+                    : view.filesVisible ? i18n("Find a file") : i18n("Happy Bot")
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
                 font.weight: Font.DemiBold
             }
@@ -242,9 +250,13 @@ Rectangle {
             PlasmaComponents3.ToolButton {
                 icon.name: "go-previous"
                 text: i18n("Back")
-                visible: view.session.finding || view.fixVisible || view.systemVisible
+                visible: view.session.finding || view.fixVisible || view.systemVisible || view.helpVisible
                 onClicked: {
-                    if (view.fixVisible) {
+                    if (view.helpVisible) {
+                        view.session.dismissHelpDraft();
+                        view.clearInput();
+                        view.focusInput();
+                    } else if (view.fixVisible) {
                         view.session.stopFixing();
                     } else if (view.systemVisible) {
                         view.session.closeSystemInfo();
@@ -353,11 +365,12 @@ Rectangle {
                         icon.width: Kirigami.Units.iconSizes.sizeForLabels
                         icon.height: Kirigami.Units.iconSizes.sizeForLabels
                         text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
-                        enabled: field.text.trim().length > 0
+                        enabled: field.text.trim().length > 0 && !view.session.capturing
                         onClicked: view.accepted(field.text.trim())
                     }
                     FieldButton {
                         visible: view.session.voiceEnabled
+                        enabled: !view.session.capturing
                         text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
                         Accessible.name: text
                         Accessible.checkable: true
@@ -377,6 +390,7 @@ Rectangle {
                 }
                 placeholderText: view.session.listening ? i18n("Listening… talk, then pause")
                     : view.session.voiceProblem.length > 0 ? view.session.voiceProblem
+                    : view.helpVisible ? i18n("Ask your question…")
                     : view.fixVisible ? i18n("Or say what to do with the text…")
                     : view.session.finder === "web" ? i18n("Search the web…")
                     : view.session.finding ? i18n("Type an app or file name…") : i18n("Ask or search anything…")
@@ -397,6 +411,8 @@ Rectangle {
                 Keys.onEscapePressed: {
                     if (text.length > 0) {
                         text = "";
+                    } else if (view.helpVisible) {
+                        view.session.dismissHelpDraft();
                     } else if (view.fixVisible) {
                         view.session.stopFixing();
                         view.closeRequested();
@@ -427,7 +443,7 @@ Rectangle {
         kind: view.session.nudges?.[0] || ""
         needsSetup: view.session.needsSetup
         accent: view.accent
-        visible: suggestion !== null && view.conversationVisible && !view.session.busy && !view.session.listening
+        visible: suggestion !== null && view.conversationVisible && !view.helpVisible && !view.session.busy && !view.session.listening
                  && !view.session.pendingApprovals && view.inputText.length === 0
         height: visible ? implicitHeight : 0
         onChosen: message => view.askRequested(message)
@@ -784,11 +800,23 @@ Rectangle {
                 Flickable {
                     id: welcomeArea
                     contentWidth: width
-                    contentHeight: welcome.implicitHeight + view.inset * 2
+                    contentHeight: (view.helpVisible ? helpPreview.implicitHeight : welcome.implicitHeight) + view.inset * 2
                     clip: true
+
+                    HelpPreview {
+                        id: helpPreview
+                        x: view.inset
+                        y: view.inset
+                        width: Math.max(1, welcomeArea.width - view.inset * 2)
+                        visible: view.helpVisible
+                        draft: view.session.helpDraft
+                        chatModel: view.session.chatModel
+                    }
 
                     AssistantWelcome {
                         id: welcome
+                        visible: !view.helpVisible
+                        locatingApplication: view.session.locatingApplication
                         x: view.inset
                         y: Math.max(view.inset, (welcomeArea.height - height) / 2)
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
@@ -810,13 +838,8 @@ Rectangle {
                             view.setInput("");
                             view.focusInput();
                         }
-                        onHelpChosen: prompt => {
-                            view.session.helpChat = true;
+                        onHelpChosen: {
                             view.session.captureForHelp();
-                            welcome.promptChosen(prompt);
-                        }
-                        onPromptChosen: prompt => {
-                            view.setInput(prompt);
                             view.focusInput();
                         }
                     }

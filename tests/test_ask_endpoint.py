@@ -19,6 +19,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -176,10 +177,47 @@ class AskEndpointTests(unittest.TestCase):
         settings["agent"]["app_context"] = "off"
         self.call("PUT", "/settings", {"settings": settings})
         self.assertEqual(self.call("GET", "/context/app")["app"], "")
+        with mock.patch("happy_bot.app_context.preview_screenshot") as capture:
+            preview = self.call("POST", "/context/screenshot", {"preview": True, "desktop": True})
+            self.assertEqual(preview["reason"], "disabled")
+            capture.assert_not_called()
         self.model.replies.append(chunks_for("Use Ctrl+Shift+L."))
         about = {"app": "Kate", "class": "org.kde.kate", "title": "notes.txt — Kate"}
         self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about}).read()
         self.assertEqual(self.model.requests[-1]["messages"][-1]["content"], "how do I split the view?")
+
+    def test_help_attaches_the_preview_chosen_by_this_client(self) -> None:
+        self.configure()
+        folder = self.server.runtime_dir / "screenshots"
+        folder.mkdir()
+        pictures = [folder / (letter * 32 + ".png") for letter in "ab"]
+        for picture in pictures:
+            picture.write_bytes(b"\x89PNG" + picture.stem.encode())
+        with mock.patch("happy_bot.app_snapshot.capture_window", side_effect=map(str, pictures)) as capture:
+            first, second = [self.call("POST", "/context/screenshot", {"window": "{w}", "preview": True})
+                             for _ in pictures]
+        self.assertEqual(capture.call_args_list, [mock.call("{w}", folder)] * 2)
+        self.assertEqual(first["models"], [])  # a text-only AI still gets a local preview
+        self.assertEqual(first["url"], pictures[0].as_uri())
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertFalse(self.model.requests)
+
+        def ask_with(capture_id):
+            self.model.replies.append(chunks_for("ok"))
+            self.request("POST", "/ask", {"message": "what is this?", "full_context": True,
+                                         "screenshot_id": capture_id}).read()
+            return self.model.requests[-1]["messages"][-1]["content"]
+
+        self.assertEqual(ask_with(first["id"]), "what is this?")
+        settings = self.call("GET", "/settings")["settings"]
+        settings["models"]["m"]["vision"] = True
+        self.call("PUT", "/settings", {"settings": settings})
+        from happy_bot.providers.base import image_data_url
+        self.assertEqual(ask_with(first["id"])[1]["image_url"]["url"], image_data_url(str(pictures[0])))
+        self.assertEqual(ask_with(str(pictures[0])), "what is this?")
+        settings["agent"]["app_context"] = "off"
+        self.call("PUT", "/settings", {"settings": settings})
+        self.assertEqual(ask_with(first["id"]), "what is this?")
 
     def test_errors_are_events_not_broken_streams(self) -> None:
         self.assertEqual(self.ask("hi")[0]["code"], "not_configured")

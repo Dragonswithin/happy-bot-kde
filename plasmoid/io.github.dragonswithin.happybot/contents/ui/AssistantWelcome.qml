@@ -22,16 +22,8 @@ import org.kde.plasma.components as PlasmaComponents3
  * (`AssistantSession.finder`: matching applications, settings and files, or
  * bookmarks, visited websites and web pages, show as the user types);
  * "System info" emits `systemInfoChosen`, which opens SystemInfoView.qml.
- * The others emit `promptChosen`
- * with the start of a request ("Help me with "), which ResultsView.qml
- * puts in the assistant's composer for them to finish. Nothing is sent until
- * they press Enter. The help shortcut names the application the user was in
- * (`helpWith`, `AssistantSession.helpWith`: "Help with Kate", with its
- * icon), so it is plain that Happy Bot knows which one; with none (opened
- * from the panel, or from the desktop itself) it is "Desktop help". Choosing
- * "Help with …" emits `helpChosen`, which also marks the chat so its requests
- * carry the application's full context (`AssistantSession.helpChat`). The
- * component keeps no state.
+ * The Help tile opens a screenshot preview and question field. It names the
+ * current application when known, or offers Desktop help.
  */
 ColumnLayout {
     id: welcome
@@ -44,7 +36,8 @@ ColumnLayout {
     property var helpWith: null
     property string helpWithIcon: ""
     readonly property string appName: helpWith && helpWith.app ? helpWith.app : ""
-    signal promptChosen(string prompt)
+    property bool locatingApplication: false
+    signal helpChosen()
     signal findFilesChosen()
     signal webSearchChosen()
     signal systemInfoChosen()
@@ -53,19 +46,16 @@ ColumnLayout {
     property var buttons: ["files", "web", "help"]
     readonly property var tiles: welcome.buttons.map(id => {
         switch (id) {
-        case "files": return { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: "" };
-        case "web": return { label: i18n("Search the web"), icon: "globe", prompt: "", web: true };
-        case "system": return { label: i18n("System info"), icon: "speedometer", prompt: "", system: true };
+        case "files": return { label: i18n("Find a file"), icon: "folder-open-symbolic" };
+        case "web": return { label: i18n("Search the web"), icon: "globe", web: true };
+        case "system": return { label: i18n("System info"), icon: "speedometer", system: true };
         case "help": return welcome.appName
             ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
-                appIcon: true, help: true, prompt: i18n("In %1, help me", welcome.appName) }
-            : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") };
+                appIcon: true, help: true }
+            : { label: i18n("Desktop help"), icon: "computer-symbolic", help: true };
         default: return null;
         }
     }).filter(tile => tile !== null)
-    // "Help with …": like promptChosen, and the chat it starts carries the application's full context.
-    signal helpChosen(string prompt)
-
     spacing: Kirigami.Units.largeSpacing
 
     Rectangle {
@@ -147,10 +137,17 @@ ColumnLayout {
                 Layout.minimumWidth: 0
                 padding: Kirigami.Units.largeSpacing * 1.5
                 text: modelData.label
-                onClicked: modelData.help ? welcome.helpChosen(modelData.prompt + " ")
+                enabled: !modelData.help || !welcome.locatingApplication
+                Accessible.description: modelData.help ? (welcome.appName
+                    ? i18n("Preview a screenshot of this window, then ask a question.")
+                    : i18n("Preview a screenshot of your desktop, then ask a question.")) : ""
+                PlasmaComponents3.ToolTip.text: Accessible.description
+                PlasmaComponents3.ToolTip.visible: modelData.help === true && hovered
+                PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                onClicked: modelData.help ? welcome.helpChosen()
                     : modelData.web ? welcome.webSearchChosen()
                     : modelData.system ? welcome.systemInfoChosen()
-                    : modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
+                    : welcome.findFilesChosen()
 
                 background: Rectangle {
                     radius: Kirigami.Units.cornerRadius * 2
