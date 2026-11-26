@@ -471,7 +471,10 @@ Rectangle {
                                 }
                                 Accessible.name: i18n("Conversation: %1", modelData.title)
                                 highlighted: modelData.id === view.session.conversationId
-                                onClicked: view.session.openConversation(modelData.id)
+                                onClicked: {
+                                    view.session.openConversation(modelData.id);  // leaves a search or article first
+                                    view.setInput("");
+                                }
                                 PlasmaComponents3.ToolTip.text: modelData.title
                                 PlasmaComponents3.ToolTip.visible: hovered && titleLabel.truncated
                                 PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay

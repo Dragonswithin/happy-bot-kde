@@ -613,8 +613,11 @@ Item {
         setStatus("idle", i18n("Ready"));
     }
 
+    /** Shows the chat `conversationId` (its saved events, replayed), leaving a finder, an article or fixing text
+     *  first, so a chat picked in the sidebar during a search comes to the front; the open chat just shows again. */
     function openConversation(conversationId) {
         stopFixing();
+        stopFinding();
         if (session.busy || conversationId === session.conversationId) {
             return;
         }
