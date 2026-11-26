@@ -28,6 +28,16 @@ QtObject {
     readonly property url activeMicrophoneIcon: Qt.resolvedUrl("../images/microphone-active.svg")
     readonly property url microphoneIcon: Qt.resolvedUrl("../images/microphone.svg")
 
+    function nudgeTitle(kind: string): string {
+        switch (kind) {
+        case "battery": return i18n("Your battery is running low");
+        case "disk": return i18n("Disk space is running low");
+        case "restart": return i18n("Your system needs a restart");
+        case "updates": return i18n("Software updates are available");
+        default: return "";
+        }
+    }
+
     function assistantIcon(useRobotMascot: bool): string {
         return useRobotMascot ? robotIcon.toString() : "tools-wizard";
     }

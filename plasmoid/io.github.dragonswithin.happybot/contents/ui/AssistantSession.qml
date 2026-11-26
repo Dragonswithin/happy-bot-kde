@@ -178,9 +178,11 @@ Item {
     property bool screenshotsWanted: false  // from /context/app: an AI that sees pictures may see this app
     property bool capturing: false  // a "Help with …" screenshot is being taken (the app is briefly in front)
     property var ui: ({
-        robot_mascot: true, mascot_animations: true, robot_sounds: false, popup_width: 30, popup_height: 26, floating_opacity: 40, floating_x: -1, floating_y: -1,
+        mascot_nudges: true, robot_mascot: true, mascot_animations: true, robot_sounds: false, popup_width: 30, popup_height: 26,
+        floating_size: 100, floating_opacity: 40, floating_x: -1, floating_y: -1,
         imported: [], start_screen: ["files", "web", "help"]
     })
+    property var nudges: []  // Active conditions from the shared icon activity stream.
     property bool showingSystem: false  // the start screen's System info view is shown (SystemInfoView.qml)
     property bool uiLoaded: false
     // Talking: the microphone button shows when the user switched voice on and set a speech service

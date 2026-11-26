@@ -146,7 +146,7 @@ Rectangle {
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
     implicitHeight: Math.round(Math.min(maximumHeight, inputBar.height
-        + titleBar.implicitHeight + bodyHeight))
+        + titleBar.implicitHeight + nudge.height + bodyHeight))
 
     function focusInput() {
         inputBar.forceFieldFocus();
@@ -418,13 +418,33 @@ Rectangle {
         }
     }
 
+    MascotNudge {
+        id: nudge
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: titleBar.bottom
+        kind: view.session.nudges?.[0] || ""
+        needsSetup: view.session.needsSetup
+        accent: view.accent
+        visible: suggestion !== null && view.conversationVisible && !view.session.busy && !view.session.listening
+                 && !view.session.pendingApprovals && view.inputText.length === 0
+        height: visible ? implicitHeight : 0
+        onChosen: message => view.askRequested(message)
+        onSetupRequested: view.settingsRequested()
+        onDismissRequested: kind => {
+            view.session.request("POST", "/icon/nudge/dismiss", { kind: kind }, () => {}, data => {
+                if (nudge.kind === kind) nudge.problem = data.error || i18n("Could not dismiss this nudge.");
+            });
+        }
+    }
+
     // --- body -----------------------------------------------------------------
     Item {
         id: body
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: titleBar.bottom
+        anchors.top: nudge.bottom
         anchors.bottom: view.fieldAtBottom ? inputBar.top : parent.bottom
         clip: true
 

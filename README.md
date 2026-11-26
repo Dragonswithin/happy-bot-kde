@@ -88,6 +88,13 @@ used.
   which application you are in when opened this way or with the hotkey,
   without your saying so and without showing anything; you can still ask
   about anything else.
+- **Mascot nudges.** A little gold note means Happy Bot has spotted a low
+  battery, low disk space, waiting updates or a pending restart. Open Happy
+  Bot to see the issue and choose its suggested action. The action uses
+  your usual assistant and approval settings. Dismiss the nudge to hide it
+  on both surfaces for the current session. It can return if the condition
+  clears and happens again. Turn **Show helpful nudges** off in Appearance
+  to disable the checks.
 - The panel widget (search bar or icon) is optional and works alongside the
   app. Its own settings are only what concerns the panel (icon or search
   bar, the bar's width); everything else is set in Happy Bot itself, so the
@@ -261,6 +268,8 @@ panel widget always look and behave the same.
   or a search bar, and the bar's width. New setups start with the animated robot.
   Enable **Play a greeting sound** to hear a short chirp when the assistant opens.
   The preview button plays it in settings.
+  Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the
+  usual size. **Popup size** controls the window that opens when you click.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.

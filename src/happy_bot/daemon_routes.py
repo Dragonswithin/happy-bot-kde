@@ -203,6 +203,13 @@ def icon_activity(server: "AssistantServer", query: dict[str, list[str]], body: 
     return 200, server.activity.wait(_first(query, "seen"))
 
 
+def dismiss_nudge(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    kind = body.get("kind")
+    if not isinstance(kind, str) or not server.activity.dismiss_nudge(kind):
+        return _error(400, "Unknown mascot nudge", "invalid")
+    return 200, {"ok": True}
+
+
 def context(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     kind = _first(query, "kind", "combined")
     captured = desktop_context.combined_context(kind)
@@ -754,6 +761,7 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/icon/activity"): icon_activity,
+    ("POST", "/icon/nudge/dismiss"): dismiss_nudge,
     ("GET", "/health"): health,
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,

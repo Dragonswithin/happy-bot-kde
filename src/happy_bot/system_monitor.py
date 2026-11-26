@@ -35,7 +35,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from . import system_sensors
 
@@ -168,19 +168,21 @@ def _disks() -> list[dict[str, Any]]:
     return disks
 
 
-def _battery(sys_root: Path = Path("/sys")) -> dict[str, Any] | None:
-    for supply in sorted((sys_root / "class/power_supply").glob("BAT*")):
-        percent = _number(supply / "capacity")
-        if percent is None:
+def batteries(sys_root: Path = Path("/sys")) -> Iterator[dict[str, Any]]:
+    """Present system batteries from sysfs; peripherals have their own charge indicator."""
+    for supply in sorted((sys_root / "class/power_supply").glob("*")):
+        if _text(supply / "type") != "Battery" or _text(supply / "scope") == "Device" or _number(supply / "present") == 0:
             continue
+        percent = _number(supply / "capacity")
+        if percent is not None and not 0 <= percent <= 100:
+            percent = None
         status = _text(supply / "status")
         energy, power = _number(supply / "energy_now"), _number(supply / "power_now")
         full = _number(supply / "energy_full")
         hours = None
         if power and energy is not None:
             hours = (full - energy) / power if status == "Charging" and full else energy / power
-        return {"percent": percent, "status": status, "hours_left": round(hours, 1) if hours else None}
-    return None
+        yield {"percent": percent, "status": status, "hours_left": round(hours, 1) if hours else None}
 
 
 def _network() -> dict[str, Any]:
@@ -207,7 +209,7 @@ def overview(history: History) -> dict[str, Any]:
         "disks": _disks(),
         "network": {**_network(), "receive_bps": latest.get("receive_bytes_per_second"),
                     "send_bps": latest.get("send_bytes_per_second")},
-        "battery": _battery(),
+        "battery": next((battery for battery in batteries() if battery["percent"] is not None), None),
         "uptime_seconds": float(uptime[0]) if uptime else None,
         "history": {
             "cpu": [sample["cpu_percent"] for sample in samples],

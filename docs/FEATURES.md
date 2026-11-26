@@ -19,9 +19,10 @@ Status marks:
 
 The roadmap's "Built 2026-11-23" findings list where each new feature lives.
 
-## Priority After The First Release
+## Feature Priorities
 
-Chosen by the maintainer on 2026-11-23, in this order, to follow the Phase 6 exit check:
+The maintainer chose this order on 2026-11-23. The sections below record
+progress on each feature.
 
 1. **Undo and trust** (§17): undo the last change, a readable activity
    history, and checking the model's claims against the action log.
@@ -112,11 +113,17 @@ Start screen and System info (requested 2026-11-25, Phase 11):
   minutes, and the busiest programs with Stop. (Rendered with real
   readings; not yet used by a person.)
 
-Mascot nudges and a morning card:
+Mascot nudges and the floating shortcut (Phase 12):
 
-- Nudges with a fix button: a calm pose when the battery is low, updates
-  are waiting, the disk is nearly full or a restart is pending; clicking it
-  offers one-press fixes as answer buttons.
+- ◐ A small gold note on the mascot signals low battery, low disk space,
+  waiting updates or a pending restart. Open Happy Bot to see the issue and
+  its suggested action. Dismiss a nudge to hide it until the condition clears
+  and returns. The pose has been rendered and checked at panel and floating sizes.
+- ◐ Set the size of the floating shortcut under Appearance. The popup has
+  its own size controls.
+
+Other mascot ideas:
+
 - A morning card the first time Happy Bot opens each day: weather, waiting
   updates, today's reminders and anything left unfinished.
 - A short happy pose when a long install or task finishes.
@@ -580,8 +587,8 @@ Automation and help:
 
 ## 19. Install, Setup And Reach
 
-- ◐ One-command install and uninstall, first-run setup (the fresh-account
-  exit check is open).
+- ◐ One-command install and uninstall, first-run setup (testing from a
+  fresh Plasma login is still on the installation test list).
 - ◐ An AUR package, then the KDE Store, then Flatpak if it proves workable.
   (an Arch PKGBUILD builds from the checkout; publishing to the AUR, the KDE
   Store or Flatpak is deferred)

@@ -11,6 +11,7 @@ IMAGES = Path(__file__).resolve().parents[1] / "plasmoid" / APP_ID / "contents/i
 LAYERS = {
     "busy": ("busy",),
     "memory": ("memory",),
+    "nudge": ("nudge",),
     "microphone-active": (),
     "hot": ("hot-face", "sweat"),
     "download": ("download",),

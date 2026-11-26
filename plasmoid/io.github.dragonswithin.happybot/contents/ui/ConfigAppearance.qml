@@ -18,7 +18,7 @@ import org.kde.plasma.plasmoid
  * looks and behaves, in the app and in the panel widget alike.
  *
  * - Look and feel (the daemon's `ui` settings, src/happy_bot/ui_settings.py):
- *   the mascot or the wand, the floating Happy Bot's look (how faded while
+ *   the mascot or the wand, the floating Happy Bot's look (shortcut size, how faded while
  *   not in use, back to its corner), the popup's size, the start screen's
  *   buttons and their order (StartScreenButtons.qml), mascot motion and sounds.
  *   They are read from `GET /health` and each change is saved
@@ -194,6 +194,12 @@ KCM.SimpleKCM {
                 onToggled: page.save({ mascot_animations: checked })
             }
 
+            QQC2.CheckBox {
+                text: i18n("Show helpful nudges")
+                checked: page.ui !== null && page.ui.mascot_nudges !== false
+                onToggled: page.save({ mascot_nudges: checked })
+            }
+
             RowLayout {
                 Layout.fillWidth: true
 
@@ -253,6 +259,18 @@ KCM.SimpleKCM {
                     keySequence: Plasmoid.globalShortcut
                     patterns: ShortcutPattern.Modifier | ShortcutPattern.ModifierAndKey
                     onKeySequenceModified: page.unsavedChanges = keySequence !== Plasmoid.globalShortcut
+                }
+
+                QQC2.SpinBox {
+                    Kirigami.FormData.label: i18n("Shortcut size:")
+                    Accessible.name: i18n("Floating shortcut size")
+                    wheelEnabled: false
+                    from: 50
+                    to: 200
+                    stepSize: 10
+                    value: page.ui?.floating_size ?? 100
+                    textFromValue: (number, locale) => i18n("%1%", number)
+                    onValueModified: page.save({ floating_size: value })
                 }
 
                 RowLayout {

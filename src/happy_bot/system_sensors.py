@@ -40,7 +40,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 SAMPLE_SECONDS = 1.0
 PRESSURE_STALL_PERCENT = 10.0
@@ -224,10 +224,14 @@ class SystemReadings:
         }
 
 
+class Readings(Protocol):
+    def snapshot(self) -> dict[str, Any]: ...
+
+
 class SensorSampler:
     """Feeds one snapshot per tick to ``observe`` (``IconActivity.observe_sensors``) on its own thread."""
 
-    def __init__(self, observe: Callable[..., None], readings: SystemReadings | None = None,
+    def __init__(self, observe: Callable[..., None], readings: Readings | None = None,
                  interval: float = SAMPLE_SECONDS) -> None:
         self._observe, self._interval = observe, interval
         self._readings = readings or SystemReadings()

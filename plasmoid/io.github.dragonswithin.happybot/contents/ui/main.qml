@@ -161,7 +161,7 @@ PlasmoidItem {
         }
         return iconActivity.recording || session.busy || popup.visible || root.floatingOpen ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus;
     }
-    toolTipSubText: iconActivity.recording ? i18n("Recording microphone") : session.statusText
+    toolTipSubText: iconActivity.description() || session.statusText
     activationTogglesExpanded: false
     preferredRepresentation: barMode ? fullRepresentation : compactRepresentation
 
@@ -187,7 +187,10 @@ PlasmoidItem {
     readonly property bool floatingOpen: floating !== null && floating.expanded
     readonly property var surface: floatingOpen ? floating : popup
 
-    IconActivity { id: iconActivity }
+    IconActivity {
+        id: iconActivity
+        nudgesEnabled: session.ui.mascot_nudges !== false
+    }
     RobotFeedback { id: feedback }
 
     readonly property bool assistantOpen: popup.visible || floatingOpen
@@ -219,6 +222,7 @@ PlasmoidItem {
 
     AssistantSession {
         id: session
+        nudges: iconActivity.nudgesEnabled ? iconActivity.nudges : []
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
         // The top result starts selected, so Enter opens it; with none, the Ask row is selected (-1).
         // The empty bar's suggestions start with nothing selected, so Enter there still opens the popup.
@@ -291,7 +295,7 @@ PlasmoidItem {
         iconName: Plasmoid.icon
         busy: session.busy
         needsAttention: session.pendingApprovals > 0
-        Accessible.description: iconActivity.recording ? i18n("Recording microphone") : ""
+        Accessible.description: iconActivity.description()
         open: popup.visible
         onClicked: {
             session.captureApplication();  // the application the user was in, as from the floating button
@@ -344,6 +348,7 @@ PlasmoidItem {
     // applet never expands into it as a popup (`activationTogglesExpanded`
     // is false), so in the icon form it is unused.
     fullRepresentation: PanelBar {
+        iconDescription: iconActivity.description()
         busy: session.busy
         statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here")
             : session.needsSetup && session.status !== "offline" ? i18n("Type here, or press Enter to set up")

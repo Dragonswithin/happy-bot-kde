@@ -1,0 +1,13 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Looking up at a small note. The eyes and smile share the resting visor's colours. -->
+  <rect x="10" y="18" width="28" height="17" rx="7" fill="#194852"/>
+  <g fill="#adfff1">
+    <rect x="12.5" y="21" width="4.5" height="5" rx="2.2"/>
+    <rect x="26" y="21" width="4.5" height="5" rx="2.2"/>
+  </g>
+  <path d="M19.5 29q3 3 6 0" fill="none" stroke="#adfff1" stroke-width="2" stroke-linecap="round"/>
+  <path d="M5 2h11q3 0 3 3v6q0 3-3 3h-1v4l-5-4H5q-3 0-3-3V5q0-3 3-3Z"
+        fill="#ffc463" stroke="#183840" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M7 8h7" fill="none" stroke="#664a27" stroke-width="2" stroke-linecap="round"/>
+</svg>

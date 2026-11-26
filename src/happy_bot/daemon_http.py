@@ -42,7 +42,7 @@ answers with a server-sent event stream (``text/event-stream``, one
 ``data: <json>`` block per event, connection closed at the end) produced by
 ``ask_stream``. ``serve`` also runs the ``system_sensors.SensorSampler``,
 which feeds ``activity.observe_sensors`` and ``system_history`` one reading
-a second; tests that
+a second. A second sampler reads the local mascot nudge conditions once a minute. Tests that
 build an ``AssistantServer`` themselves get no sampler. On shutdown the
 sampler stops, the state file and token are removed and every tool server
 is stopped.
@@ -65,7 +65,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import (desktop_context, routines, selection_fix, system_monitor, user_timers, voice, wikipedia_library,
+from . import (desktop_context, mascot_nudges, routines, selection_fix, system_monitor, user_timers, voice, wikipedia_library,
                wikipedia_pages, wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
 from . import settings as settings_store
@@ -383,7 +383,10 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
         server.system_history.add(readings)
 
     sensors = SensorSampler(observe)
+    nudges = SensorSampler(server.activity.observe_nudges, mascot_nudges.NudgeReadings(
+        lambda: server.settings["ui"].get("mascot_nudges", True)), interval=mascot_nudges.SAMPLE_SECONDS)
     sensors.start()
+    nudges.start()
 
     def stop_on_signal(signum: int, frame: Any) -> None:
         # systemd stops the unit with SIGTERM; unwind like Ctrl+C so the
@@ -397,6 +400,7 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
         pass
     finally:
         sensors.stop()
+        nudges.stop()
         try:
             server.server_close()
         finally:

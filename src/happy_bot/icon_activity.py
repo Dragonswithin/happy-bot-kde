@@ -2,7 +2,9 @@
 
 The recorder publishes capture transitions. A sensor sampler can call
 observe_sensors with CPU temperature and load, available memory and pressure,
-and the active connection's receive/transmit rates. Unknown readings clear their own cue.
+and the active connection's receive/transmit rates. A slower local sampler reports
+battery, disk, restart and update conditions. Dismissal applies to both views
+until that condition clears. Unknown readings hide the cue without rearming it.
 Both views long-poll the latest snapshot. Nothing is stored on disk.
 """
 
@@ -11,6 +13,8 @@ from __future__ import annotations
 import math
 import threading
 import time
+
+NUDGE_KINDS = ("battery", "disk", "restart", "updates")
 
 
 class _Sustained:
@@ -41,14 +45,16 @@ class IconActivity:
     def __init__(self) -> None:
         self._changed = threading.Condition()
         self._revision = time.monotonic_ns()
-        self._state = dict(recording=False, hot=False, busy=False, low_memory=False, downloading=False, uploading=False)
+        self._state = dict(recording=False, hot=False, busy=False, low_memory=False, downloading=False, uploading=False,
+                           nudges=[])
+        self._dismissed_nudges: set[str] = set()
         self._hot = _Sustained(10, 20)
         self._busy = _Sustained(10, 8)
         self._memory = _Sustained(15, 20)
         self._down = _Sustained(3, 5)
         self._up = _Sustained(3, 5)
 
-    def _update(self, **fields: bool) -> None:
+    def _update(self, **fields: bool | list[str]) -> None:
         if any(self._state[key] != value for key, value in fields.items()):
             self._state.update(fields)
             self._revision += 1
@@ -57,6 +63,26 @@ class IconActivity:
     def set_recording(self, active: bool) -> None:
         with self._changed:
             self._update(recording=active)
+
+    def observe_nudges(self, **conditions: bool | None) -> None:
+        """Publish a snapshot in display order. Only a known recovery ends dismissal."""
+        with self._changed:
+            for kind in NUDGE_KINDS:
+                if conditions.get(kind) is False:
+                    self._dismissed_nudges.discard(kind)
+            self._update(nudges=[kind for kind in NUDGE_KINDS
+                                 if conditions.get(kind) is True and kind not in self._dismissed_nudges])
+
+    def dismiss_nudge(self, kind: str) -> bool:
+        """Hide an active condition for everyone; repeating a supported dismissal succeeds."""
+        if kind not in NUDGE_KINDS:
+            return False
+        with self._changed:
+            active = self._state["nudges"]
+            if kind in active:
+                self._dismissed_nudges.add(kind)
+                self._update(nudges=[item for item in active if item != kind])
+            return True
 
     def observe_sensors(self, *, cpu_c: float | None, high_c: float | None,
                         receive_bytes_per_second: float | None, send_bytes_per_second: float | None,

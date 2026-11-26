@@ -59,6 +59,7 @@ Item {
     property bool busy: false
     property string statusText: ""
     property bool offline: false
+    property string iconDescription: ""
     property string iconName: "search"
     property int widthInGridUnits: 18
     property bool voiceEnabled: false  // show the microphone at the bar's right end
@@ -211,9 +212,10 @@ Item {
         onClicked: bar.iconClicked()
         Accessible.role: Accessible.Button
         Accessible.name: i18n("Open Happy Bot")
+        Accessible.description: bar.iconDescription
         Accessible.onPressAction: bar.iconClicked()
 
-        QQC2.ToolTip.text: i18n("Open Happy Bot")
+        QQC2.ToolTip.text: bar.iconDescription || i18n("Open Happy Bot")
         QQC2.ToolTip.visible: containsMouse
         QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
     }

@@ -743,11 +743,22 @@ class TerminalTextTests(unittest.TestCase):
         from unittest import mock
 
         release = os.uname().release
-        with mock.patch.object(shell.os.path, "isdir", side_effect=lambda path: path == "/usr/lib/modules"):
-            self.assertIn(f"running kernel ({release}) was replaced", shell.pending_reboot())
-        with mock.patch.object(shell.os.path, "isdir", return_value=True), \
-                mock.patch.object(shell.os.path, "exists", side_effect=lambda path: path == shell.REBOOT_REQUIRED_FLAG):
-            self.assertEqual(shell.pending_reboot(), "the system reports that a reboot is required")
-        with mock.patch.object(shell.os.path, "isdir", return_value=True), \
-                mock.patch.object(shell.os.path, "exists", return_value=False):
-            self.assertEqual(shell.pending_reboot(), "")
+        with tempfile.TemporaryDirectory() as tmp:
+            modules = Path(tmp) / "modules"
+            flag = Path(tmp) / "reboot-required"
+            container = Path(tmp) / "container"
+            with mock.patch.object(shell, "KERNEL_MODULES", modules), \
+                    mock.patch.object(shell, "REBOOT_REQUIRED_FLAG", flag), \
+                    mock.patch.object(shell, "CONTAINER_MARKERS", (container,)), mock.patch.dict(os.environ, {"container": ""}):
+                modules.mkdir()
+                self.assertEqual(shell.pending_reboot(), "")
+                (modules / "replacement").mkdir()
+                (modules / "replacement/modules.dep").touch()
+                self.assertIn(f"running kernel ({release}) was replaced", shell.pending_reboot())
+                container.touch()
+                self.assertEqual(shell.pending_reboot(), "")
+                container.unlink()
+                (modules / release).mkdir()
+                self.assertEqual(shell.pending_reboot(), "")
+                flag.touch()
+                self.assertEqual(shell.pending_reboot(), "the system reports that a reboot is required")

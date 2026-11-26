@@ -90,6 +90,8 @@ TERMINAL_WAIT_SECONDS = 4 * 3600
 TERMINAL_HEAD_CHARS = 1500
 TERMINAL_TAIL_CHARS = 3500
 REBOOT_REQUIRED_FLAG = "/run/reboot-required"
+KERNEL_MODULES = Path("/usr/lib/modules")
+CONTAINER_MARKERS = ("/.dockerenv", "/run/.containerenv", "/run/systemd/container", "/run/host/container-manager")
 # Terminal windows still open when the tool returned (they wait for a key
 # press, or were left running on Stop). Kept referenced so they are not
 # reported as leaked child processes; they belong to the user.
@@ -301,11 +303,17 @@ def _last_line(text: str) -> str:
 
 def pending_reboot() -> str:
     """Why a reboot is needed now, or "" when nothing says so."""
-    release = os.uname().release
-    if os.path.isdir("/usr/lib/modules") and not os.path.isdir(f"/usr/lib/modules/{release}"):
-        return f"the running kernel ({release}) was replaced by an update"
     if os.path.exists(REBOOT_REQUIRED_FLAG):
         return "the system reports that a reboot is required"
+    release = os.uname().release
+    if (KERNEL_MODULES / release).is_dir():
+        return ""
+    # Containers share the host's kernel. An empty modules directory is also
+    # common on minimal systems; look for evidence of a replacement kernel.
+    if os.getenv("container") or any(os.path.exists(marker) for marker in CONTAINER_MARKERS):
+        return ""
+    if any(entry.is_file() for entry in KERNEL_MODULES.glob("*/modules.dep")):
+        return f"the running kernel ({release}) was replaced by an update"
     return ""
 
 

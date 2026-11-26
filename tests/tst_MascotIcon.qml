@@ -61,5 +61,32 @@ Item {
             compare(cues.trayPose, "download");
             cues.apply({});
         }
+
+        function test_quietNudgeUsesTheSameCornerAsTransfer() {
+            const idle = capture();
+            cues.apply({nudges: ["battery", "unknown", "disk", "battery", "restart", "updates"]});
+            compare(cues.nudges, ["battery", "disk", "restart", "updates"]);
+            compare(cues.trayPose, "nudge");
+            tryVerify(() => !capture().equals(idle));
+            const note = capture();
+            cues.uploading = true;
+            compare(face.transfer, "");
+            verify(capture().equals(note));
+
+            cues.busy = true;
+            compare(cues.trayPose, "busy");
+            cues.recording = true;
+            compare(cues.trayPose, "recording");
+            cues.busy = false;
+            cues.recording = false;
+            compare(cues.trayPose, "nudge");
+            cues.nudgesEnabled = false;
+            compare(cues.trayPose, "upload");
+            cues.nudgesEnabled = true;
+            cues.apply({});
+            compare(cues.nudges, []);
+            compare(cues.trayPose, "");
+            tryVerify(() => capture().equals(idle));
+        }
     }
 }

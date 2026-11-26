@@ -141,6 +141,14 @@ class RouteTests(unittest.TestCase):
         self.assertIn({"name": "query", "type": "string", "required": True}, find_files["arguments"])
         self.assertEqual((find_files["query_argument"], find_files["limit_argument"]), ("query", "limit"))
 
+    def test_dismissing_one_nudge_updates_the_shared_activity_snapshot(self) -> None:
+        self.server.activity.observe_nudges(battery=True, disk=True)
+        self.assertEqual(self.call("GET", "/icon/activity")[1]["nudges"], ["battery", "disk"])
+        self.assertEqual(self.call("POST", "/icon/nudge/dismiss", {"kind": "battery"}), (200, {"ok": True}))
+        self.assertEqual(self.call("GET", "/icon/activity")[1]["nudges"], ["disk"])
+        self.assertEqual(self.call("POST", "/icon/nudge/dismiss", {"kind": []})[0], 400)
+        self.assertEqual(self.call("POST", "/icon/nudge/dismiss", {"kind": "other"})[0], 400)
+
     def test_quick_results_reminders_and_routine_units_go_through_the_daemon(self) -> None:
         from unittest import mock
 

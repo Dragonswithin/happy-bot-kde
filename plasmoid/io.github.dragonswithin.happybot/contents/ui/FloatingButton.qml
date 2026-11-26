@@ -55,12 +55,13 @@ Window {
     property int heightInGridUnits: 26
     property bool expanded: false
 
-    readonly property int size: Kirigami.Units.iconSizes.large + Kirigami.Units.largeSpacing
+    readonly property real shortcutScale: (session.ui.floating_size ?? 100) / 100
+    readonly property int size: Math.round((Kirigami.Units.iconSizes.large + Kirigami.Units.largeSpacing) * shortcutScale)
     readonly property int screenWidth: screen ? screen.width : 1280
     readonly property int screenHeight: screen ? screen.height : 720
     // -1 means "never placed": near the bottom right, clear of a bottom panel.
-    readonly property int placedX: posX < 0 ? screenWidth - size - Kirigami.Units.gridUnit * 2 : clampX(posX)
-    readonly property int placedY: posY < 0 ? screenHeight - size - Kirigami.Units.gridUnit * 5 : clampY(posY)
+    readonly property int placedX: clampX(posX < 0 ? screenWidth - size - Kirigami.Units.gridUnit * 2 : posX)
+    readonly property int placedY: clampY(posY < 0 ? screenHeight - size - Kirigami.Units.gridUnit * 5 : posY)
     // Open, the window grows away from the screen edge the button is near.
     readonly property bool growLeft: placedX + size / 2 > screenWidth / 2
     readonly property bool growUp: placedY + size / 2 > screenHeight / 2
@@ -100,7 +101,11 @@ Window {
 
     /** Puts the window's top left at x, y (logical pixels, from the screen's top left) and redraws. */
     function place(x, y) {
-        floating.LayerShell.Window.margins = ({ left: Math.max(0, x), top: Math.max(0, y), right: 0, bottom: 0 });
+        floating.LayerShell.Window.margins = ({
+            left: Math.max(0, Math.min(x, screenWidth - width)),
+            top: Math.max(0, Math.min(y, screenHeight - height)),
+            right: 0, bottom: 0
+        });
         floating.requestUpdate();
     }
 
@@ -160,6 +165,7 @@ Window {
     LayerShell.Window.exclusionZone: -1
 
     Component.onCompleted: layout()
+    onSizeChanged: layout()
     onWidthChanged: layout()
     onHeightChanged: layout()
     onPlacedXChanged: layout()
@@ -234,7 +240,7 @@ Window {
         MascotIcon {
             id: robot
             anchors.centerIn: parent
-            width: Kirigami.Units.iconSizes.medium
+            width: Math.round(Kirigami.Units.iconSizes.medium * floating.shortcutScale)
             height: width
             activity: floating.activity
             mascot: floating.useRobotMascot
@@ -283,7 +289,7 @@ Window {
 
             Accessible.role: Accessible.Button
             Accessible.name: i18n("Ask Happy Bot about this application")
-            Accessible.description: floating.activity.recording ? i18n("Recording microphone") : ""
+            Accessible.description: floating.activity.description()
             Accessible.onPressAction: floating.clicked()
 
             onPressed: event => {

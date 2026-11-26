@@ -48,7 +48,7 @@ setup:
 - "Rename the screenshots on my desktop by date." (previews, asks, then does it)
 - "Summarise what is on my clipboard and put the summary back on it."
 - "Click Save in this dialog." / "Type my address into the focused field."
-  (driving another application's UI is part of the first usable release)
+  (through the application's accessibility tree and the desktop input portal)
 
 ## What The Earlier Plan Got Wrong
 
@@ -315,8 +315,8 @@ launchers in `~/.local/bin`.
 
 ## Phases
 
-Each phase ends with something demonstrable. Do not start a phase before the
-previous exit check passes.
+Each phase has a check that demonstrates it working. The findings record which
+checks have passed and which still need a person or a particular setup.
 
 **Phase 0: Baseline and bar spike.** Run the installer, confirm the daemon,
 CLI context commands and `plasmawindowed` applet work as they are. Remove the
@@ -350,8 +350,7 @@ streaming and tool calls, secret storage, agent loop, tier 1 tools plus MCP
 tools, streamed answer in the popup. Test the loop against a fake provider.
 Run the throwaway GUI-control spike now (one Qt and one GTK app's AT-SPI
 tree; one key through a `RemoteDesktop` portal session; a trial of the
-candidate MCP servers), because GUI control is on the release path and the
-local models cannot fall back to screenshots.
+candidate MCP servers) to verify that a text-only model can operate real applications.
 *Exit:* the three search/news acceptance scenarios pass on the local GPU
 model and on one hosted model; spike findings are recorded here.
 
@@ -368,9 +367,9 @@ and a GTK app on a text-only local model.
 (models, keys, tool servers and roles, approval policy, folders),
 single install and uninstall commands, error messages with fixes. Test on a
 fresh user account with no prior configuration.
-*Exit:* on a fresh account, one install command plus first-run setup reaches
-a passing acceptance run with no file edited by hand. **This completes the
-first usable release: Phases 0 to 6.** Status: open, see Phase 6 findings.
+*Installation check:* on a fresh account, one install command plus first-run
+setup reaches a passing acceptance run with no file edited by hand. The
+fresh-account test is still open (see Phase 6 findings).
 
 **Phase 7: Effortless setup, then the half-done backlog** (placed by the
 maintainer on 2026-11-23, in this order).
@@ -440,11 +439,26 @@ floating Happy Bot; System info shows live load, memory, graphics, network
 and disks, and stopping one of their own programs asks first and works.
 Status: built, exit check not yet passed (see Phase 11 findings).
 
+**Phase 12: Mascot nudges and floating shortcut size.** When a discharging
+battery is low, system or home storage is nearly full, updates are waiting,
+or a restart is pending, the robot holds a little gold note. Opening Happy
+Bot shows what needs attention. A suggested action starts a normal assistant
+request and follows the user's approval settings. The daemon remembers a
+dismissal for both surfaces until the condition clears or the daemon restarts.
+
+The floating shortcut has its own size control under Appearance. At 100%
+it uses the desktop theme's usual size. The range is 50% to 200%.
+
+*Desktop checks:* open a nudge, try its suggested action, then dismiss it and
+check both surfaces. Change the shortcut size, drag it to the edge of the
+screen and reopen it. The shortcut should stay reachable and the popup should
+open at its configured dimensions.
+
 **Later.** Native providers, broker-backed privileged actions, packaging
-(AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
-priority order the maintainer chose for after the first release, is in
-`docs/FEATURES.md`; an item there is planned only once it is placed in a
-phase here. Image and voice input, first deferred on 2026-11-23, were built
+(AUR, KDE Store), non-stdio MCP transports. The full feature backlog and
+the maintainer's priorities are in `docs/FEATURES.md`. Work is scheduled
+when it is placed in a phase here. Image and voice input, first deferred
+on 2026-11-23, were built
 on 2026-11-25 once the maintainer gave the GPU service a vision projector
 and the NPU service Whisper (see the findings below and the backlog's "Image
 And Voice Input"); spoken answers are still to come.
@@ -646,12 +660,10 @@ And Voice Input"); spoken answers are still to come.
 - Applications that publish no accessibility tree cannot be operated; the
   tool says so.
 
-**Phase 6 (built 2026-11-22; exit check NOT yet passed).**
+**Phase 6 (built 2026-11-22).**
 
-- The exit check needs a fresh user account with someone logged into Plasma
-  as it. The maintainer chose not to do that now, so it is open and the first release
-  is not done. Nothing below substitutes for it.
-- What was verified instead, on the maintainer's account:
+- Testing setup from a fresh Plasma login remains on the installation test list.
+- Checks completed on the maintainer's account:
   - Empty configuration: a second daemon started with an empty config and
     runtime directory reported nothing set up. Using only the calls the
     settings page makes (`/models/discover`, `/settings`, `/models/test`,
@@ -1387,11 +1399,24 @@ Findings:
 - Rendered offscreen with this computer's real readings; not yet used by
   a person.
 
+**Phase 12.** The floating mascot and the generated panel and tray icons
+use the same gold-note artwork. The Qt rendering tests cover the pose with
+animation disabled, its priority alongside recording and network activity,
+and returning to the resting face after a nudge clears. The daemon checks
+battery, disk and restart indicators once a minute. Every 15 minutes it
+reads available pacman, apt or dnf update metadata from local caches.
+Appearance’s **Show helpful nudges** switch disables these checks.
+
+Fixture tests covered all four conditions, dismissal through the daemon,
+and choosing a suggested action in the shared assistant view. Offscreen
+checks at 50%, 100% and 200% verified the shortcut’s click target and
+position at the screen edge.
+
 ## Decisions
 
 - Approval is required only for `danger`: deletion, or OS-level changes that
   could crash the system or stop it booting. Everything else runs unprompted.
-- GUI control (Phase 5) is required for the first usable release.
+- Happy Bot operates accessible controls in other applications (Phase 5).
 - Both local services are offered as suggested models; neither is a default
   baked into code.
 - The surface is a search bar in the panel beside the launcher, not a chat

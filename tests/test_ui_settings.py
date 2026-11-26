@@ -75,6 +75,17 @@ class ChangeUiRouteTests(unittest.TestCase):
                           "instant_results": 5, "robot_mascot": True})
         self.assertEqual(ui, {**UI_DEFAULTS, "robot_mascot": True})
 
+    def test_floating_shortcut_size_defaults_and_limits(self) -> None:
+        daemon = FakeDaemon()
+        self.assertEqual(validate_ui({"floating_x": 420})["floating_size"], 100)
+        for size in (50, 200):
+            status, reply = daemon_routes.change_ui(daemon, {}, {"changes": {"floating_size": size}})
+            self.assertEqual((status, reply["ui"]["floating_size"]), (200, size))
+        for invalid in (49, 201, True):
+            status, _ = daemon_routes.change_ui(daemon, {}, {"changes": {"floating_size": invalid}})
+            self.assertEqual(status, 400)
+            self.assertEqual(daemon.settings["ui"]["floating_size"], 200)
+
     def test_changes_merge_and_a_refused_one_changes_nothing(self) -> None:
         daemon = FakeDaemon()
         status, reply = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_mascot": True, "floating_x": 300}})

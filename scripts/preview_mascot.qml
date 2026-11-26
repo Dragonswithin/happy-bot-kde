@@ -20,6 +20,7 @@ ApplicationWindow {
         downloading: down.checked
         uploading: up.checked
         recording: mic.checked
+        nudges: note.checked ? ["battery"] : []
     }
     HappyBot.IconActivity {
         id: tray
@@ -29,6 +30,7 @@ ApplicationWindow {
         downloading: demo.trayPose === "download" || demo.trayPose === "transfer"
         uploading: demo.trayPose === "upload" || demo.trayPose === "transfer"
         recording: demo.recording
+        nudges: demo.trayPose === "nudge" ? demo.nudges : []
     }
 
     ColumnLayout {
@@ -76,6 +78,7 @@ ApplicationWindow {
             CheckBox { id: memory; text: "Low memory" }
             CheckBox { id: down; text: "Downloading" }
             CheckBox { id: up; text: "Uploading" }
+            CheckBox { id: note; text: "Mascot nudge" }
             CheckBox { id: motion; text: "Animate"; checked: true }
         }
     }

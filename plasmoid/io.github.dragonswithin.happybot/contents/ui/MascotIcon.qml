@@ -14,7 +14,8 @@ Item {
     readonly property bool moving: visible && animate && Kirigami.Units.longDuration > 1
     readonly property string expression: mascot ? activity.expression : ""
     readonly property bool hot: expression === "hot"
-    readonly property string transfer: mascot && !activity.recording ? activity.transfer : ""
+    // The nudge's note uses the same corner as the network arrows.
+    readonly property string transfer: mascot && !activity.recording && expression !== "nudge" ? activity.transfer : ""
     readonly property real unit: Math.min(width, height) / 48
 
     // One nod as the CPU gets busy, or one squeeze as memory gets tight.
