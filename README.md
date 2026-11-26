@@ -290,6 +290,9 @@ panel widget always look and behave the same.
   The preview button plays it in settings.
   Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the
   usual size. **Popup size** controls the window that opens when you click.
+  Turn on **Dock to screen edge** to tuck the shortcut into a small tab on
+  the nearest left or right edge. Hover over the tab to reveal the shortcut,
+  then click to open Happy Bot. Drag the shortcut to change sides or height.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.

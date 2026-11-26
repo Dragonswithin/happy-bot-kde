@@ -139,6 +139,21 @@ class ChangeUiRouteTests(unittest.TestCase):
             self.assertEqual(status, 400)
             self.assertEqual(daemon.settings["ui"]["floating_size"], 200)
 
+    def test_docking_an_existing_shortcut_persists_its_mode_and_position(self) -> None:
+        position = {"floating_x": 420, "floating_y": 160}
+        daemon = FakeDaemon()
+        daemon.replace_settings({"ui": position})
+        self.assertFalse(daemon.settings["ui"]["floating_docked"])
+        status, _ = daemon_routes.change_ui(daemon, {}, {"changes": {"floating_docked": True}})
+        self.assertEqual(status, 200)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            save_settings(daemon.settings, path)
+            self.assertEqual(load_settings(path)["ui"], {**UI_DEFAULTS, **position, "floating_docked": True})
+        status, _ = daemon_routes.change_ui(daemon, {}, {"changes": {"floating_docked": "false"}})
+        self.assertEqual(status, 400)
+        self.assertTrue(daemon.settings["ui"]["floating_docked"])
+
     def test_changes_merge_and_a_refused_one_changes_nothing(self) -> None:
         daemon = FakeDaemon()
         status, reply = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_mascot": True, "floating_x": 300}})

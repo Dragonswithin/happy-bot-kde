@@ -448,6 +448,9 @@ dismissal for both surfaces until the condition clears or the daemon restarts.
 
 The floating shortcut has its own size control under Appearance. At 100%
 it uses the desktop theme's usual size. The range is 50% to 200%.
+With **Dock to screen edge** on, a small tab marks its position on the
+nearest left or right edge. Hover reveals the shortcut. Clicking it opens
+the assistant, and dragging it changes the side or height.
 
 *Desktop checks:* open a nudge, try its suggested action, then dismiss it and
 check both surfaces. Change the shortcut size, drag it to the edge of the

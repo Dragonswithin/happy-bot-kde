@@ -334,6 +334,7 @@ PlasmoidItem {
             busy: session.busy
             useRobotMascot: session.ui.robot_mascot
             holdOpen: session.capturing
+            menuOpen: floatingMenu.status !== PlasmaExtras.Menu.Closed
             widthInGridUnits: session.ui.popup_width
             heightInGridUnits: session.ui.popup_height
             onClicked: root.openForApplication()

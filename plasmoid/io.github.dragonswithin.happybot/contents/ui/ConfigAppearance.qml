@@ -225,13 +225,19 @@ KCM.SimpleKCM {
             enabled: page.ui !== null
             title: i18n("Floating Happy Bot")
             iconName: "window-keep-above"
-            description: i18n("Open Happy Bot over the app you’re using. Drag the floating button to move it.")
+            description: i18n("Drag the button to move it. When docked, hover over the tab at the screen edge to reveal the button.")
 
             QQC2.CheckBox {
                 text: i18n("Start Happy Bot at login")
                 checked: page.appAutostart
                 onToggled: client.request("POST", "/app", { autostart: checked },
                                           data => page.appAutostart = data.autostart === true, () => page.readApp())
+            }
+
+            QQC2.CheckBox {
+                text: i18n("Dock to screen edge")
+                checked: page.ui?.floating_docked === true
+                onToggled: page.save({ floating_docked: checked })
             }
 
             Kirigami.FormLayout {

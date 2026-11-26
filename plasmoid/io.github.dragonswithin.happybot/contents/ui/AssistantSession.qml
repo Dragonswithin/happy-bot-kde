@@ -190,7 +190,7 @@ Item {
     property var ui: ({
         robot_mascot: true, robot_style: "pip", mascot_animations: true, mascot_nudges: true, robot_sounds: false,
         popup_width: 30, popup_height: 26,
-        floating_size: 100, floating_opacity: 40, floating_x: -1, floating_y: -1,
+        floating_docked: false, floating_size: 100, floating_opacity: 40, floating_x: -1, floating_y: -1,
         imported: [], start_screen: ["files", "web", "help"]
     })
     property var nudges: []  // Active conditions from the shared icon activity stream.
