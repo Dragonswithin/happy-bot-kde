@@ -175,6 +175,29 @@ Rectangle {
     Item {
         id: titleBar
 
+        readonly property var heading: {
+            if (view.fixVisible)
+                return { text: i18n("Fix selected text"), icon: "document-edit" };
+            if (view.articleVisible)
+                return { text: i18n("Wikipedia"), icon: "documentation" };
+            if (view.systemVisible)
+                return { text: i18n("System info"), icon: "speedometer" };
+            if (view.filesVisible) {
+                return view.session.finder === "web"
+                    ? { text: i18n("Search the web"), icon: "globe" }
+                    : { text: i18n("Find a file"), icon: "folder-open-symbolic" };
+            }
+            if (view.helpVisible || view.session.helpChat) {
+                const app = view.session.helpWindow?.app;
+                return { text: app ? i18n("Help with %1", app) : i18n("Desktop help"), icon: "help-contents" };
+            }
+            if (view.session.hasTranscript) {
+                const chat = view.session.history.find(item => item.id === view.session.conversationId);
+                return { text: chat?.title || i18n("Chat with Happy Bot"), icon: view.assistantIcon };
+            }
+            return { text: i18n("Start screen"), icon: view.assistantIcon };
+        }
+
         anchors.left: parent.left
         anchors.right: parent.right
         // Placed by y, not by switching anchors (see inputBar).
@@ -196,17 +219,18 @@ Rectangle {
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
-                source: view.filesVisible ? "folder-documents-symbolic" : view.assistantIcon
+                source: titleBar.heading.icon
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
             }
 
             PlasmaComponents3.Label {
+                objectName: "viewHeading"
                 Layout.maximumWidth: view.width * 0.5
                 elide: Text.ElideRight
-                text: view.helpVisible ? (view.session.helpWindow?.app
-                    ? i18n("Help with %1", view.session.helpWindow.app) : i18n("Desktop help"))
-                    : view.filesVisible ? i18n("Find a file") : i18n("Happy Bot")
+                text: titleBar.heading.text
+                textFormat: Text.PlainText
+                Accessible.role: Accessible.Heading
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
                 font.weight: Font.DemiBold
             }
