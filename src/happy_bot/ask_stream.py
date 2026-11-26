@@ -181,17 +181,25 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
                                                 agent["confirm_plans"], settings.get("routines"), wikipedia_tool)))
         policy = agent.get("app_context", app_context.DEFAULT_POLICY)
         # Read the application only when some AI in the chain may be told about it.
-        note = app_context.background_note(body.get("about_window"), full=body.get("full_context") is True) \
-            if any(app_context.shows_context(policy, is_local_address(model["base_url"])) for _, model, _ in chain) else ""
+        can_share_context = any(app_context.shows_context(policy, is_local_address(model["base_url"]))
+                                for _, model, _ in chain)
+        full = body.get("full_context") is True and body.get("cropped_screenshot") is not True
+        note = app_context.background_note(body.get("about_window"), full=full) if can_share_context else ""
         shot = ""
-        if body.get("full_context") is True:
+        if body.get("full_context") is True and body.get("include_screenshot", True) is True:
             if "screenshot_id" in body:
                 if any(model.get("vision") and app_context.shows_context(policy, is_local_address(model["base_url"]))
                        for _, model, _ in chain):
                     shot = app_context.preview_path(server.runtime_dir, body["screenshot_id"])
             elif note:  # older clients associate their pending capture with the window
                 shot = app_context.take_screenshot(body.get("about_window"))
-        conversation.history.append(Message("user", message, context=note, images=(shot,) if shot else ()))
+        # Help attachments selected per request never become replayable conversation history.
+        turn_image = shot if "include_screenshot" in body else None
+        stored_images = (shot,) if shot and turn_image is None else ()
+        error_text = body.get("help_error_text")
+        if can_share_context and isinstance(error_text, str) and error_text.strip() and body.get("full_context") is True:
+            note += "\n[Text reviewed in the Help preview, quoted from the application]\n" + error_text.strip()[:4000]
+        conversation.history.append(Message("user", message, context=note, images=stored_images))
         server.conversations.begin_turn(conversation, message)
         server.state.update(status="thinking", last_error="")
 
@@ -218,7 +226,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         if is_local_address(first["base_url"]) and model_busy(first["base_url"]):
             emit({"type": "notice", "message": "The model is busy with another program; your request will start "
                                                "when it is free."})
-        _run_chain(chain, conversation, registry, emit, gate, agent)
+        _run_chain(chain, conversation, registry, emit, gate, agent, turn_image, body.get("walkthrough") is True)
     finally:
         if body.get("ephemeral") is True:
             server.conversations.forget(conversation.id)
@@ -274,14 +282,15 @@ def _usable(settings: dict[str, Any], names: list[str]) -> tuple[list[tuple[str,
     return chain, skipped
 
 
-def _run_chain(chain, conversation, registry, emit, gate, agent) -> None:
+def _run_chain(chain, conversation, registry, emit, gate, agent, turn_image=None, walkthrough=False) -> None:
     """Give the request to each model in turn until one finishes it (see the module docstring)."""
     carried: list[dict[str, str]] = []
     forward = emit
     for index, (name, model, provider) in enumerate(chain):
         last = index == len(chain) - 1
         held = _attempt(provider, name, model, conversation, registry, forward, gate, agent,
-                        hold_first_error=not last, hand_over=model.get("hand_over_long", False) and not last)
+                        hold_first_error=not last, hand_over=model.get("hand_over_long", False) and not last,
+                        turn_image=turn_image, walkthrough=walkthrough)
         if held is None:
             return
         following = chain[index + 1][0]
@@ -295,7 +304,8 @@ def _run_chain(chain, conversation, registry, emit, gate, agent) -> None:
 
 
 def _attempt(provider, name: str, model: dict[str, Any], conversation, registry, emit, gate, agent,
-             hold_first_error: bool, hand_over: bool = False) -> dict[str, Any] | None:
+             hold_first_error: bool, hand_over: bool = False, turn_image: str | None = None,
+             walkthrough: bool = False) -> dict[str, Any] | None:
     """Run the turn on one model; return a held event, or None when the turn ended here.
 
     With ``hold_first_error``, an error before anything happened is returned instead of shown, so the
@@ -322,9 +332,17 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
 
     local = is_local_address(model["base_url"])
     policy = agent.get("app_context", app_context.DEFAULT_POLICY)
+
+    def prepare(history):
+        prepared = app_context.for_model(history, policy, local, bool(model.get("vision")), turn_image)
+        if walkthrough:
+            prepared[0] = Message("system", prepared[0].text + "\nThe user chose a walkthrough. Give one action "
+                                  "they can take now and what they should see. Wait for their reply before continuing.")
+        return prepared
+
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
              max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate, redact=not local,
-             prepare=lambda history: app_context.for_model(history, policy, local, bool(model.get("vision"))))
+             prepare=prepare)
     return held[0] if held else None
 
 

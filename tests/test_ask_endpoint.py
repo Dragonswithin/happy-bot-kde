@@ -12,6 +12,7 @@ built-in tools and the conversation store.
 from __future__ import annotations
 
 import http.client
+import importlib.util
 import json
 import sys
 import tempfile
@@ -218,6 +219,60 @@ class AskEndpointTests(unittest.TestCase):
         settings["agent"]["app_context"] = "off"
         self.call("PUT", "/settings", {"settings": settings})
         self.assertEqual(ask_with(first["id"]), "what is this?")
+
+    @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow enables Help screenshot edits")
+    def test_edit_preview_then_send_or_omit_it_for_one_turn(self) -> None:
+        from PIL import Image
+        from happy_bot.providers.base import image_data_url
+
+        self.configure()
+        settings = self.call("GET", "/settings")["settings"]
+        settings["models"]["m"]["vision"] = True
+        self.call("PUT", "/settings", {"settings": settings})
+        folder = self.server.runtime_dir / "screenshots"
+        folder.mkdir()
+        original = folder / ("c" * 32 + ".png")
+        with Image.new("RGB", (200, 100), "green") as sample:
+            sample.save(original)
+
+        def edit(ident, action, coords):
+            return self.call("POST", "/context/screenshot/edit", {"id": ident, "action": action, "coordinates": coords})
+
+        self.assertFalse(edit("../x", "read", [])["ok"])
+        self.assertFalse(edit(original.stem, "crop", [0, 0, 3, 1])["ok"])
+        marked = edit(original.stem, "point", [0.5, 0.5])["id"]
+        crop = edit(marked, "crop", [0.25, 0, 0.75, 1])["id"]
+        path = folder / (crop + ".png")
+        with Image.open(path) as image:
+            self.assertEqual(image.size, (100, 100))
+            self.assertIn((209, 44, 66), [color for _, color in image.getcolors()])
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        with mock.patch("happy_bot.help_screenshot.text_from_image", return_value="File menu\n\nError 42\nAccess denied") as read:
+            self.assertEqual(edit(crop, "read", [])["text"], "Error 42\nAccess denied")
+            read.assert_called_once_with({"path": str(path)})
+
+        def turn(conversation_id="", **options):
+            self.model.replies.append(chunks_for("ok"))
+            response = self.request("POST", "/ask", {"message": "help", "conversation_id": conversation_id,
+                                    "full_context": True, **options})
+            events = [json.loads(line[5:]) for line in response.read().decode().splitlines() if line.startswith("data:")]
+            return events[0]["conversation_id"], self.model.requests[-1]["messages"]
+
+        cid, _ = turn(screenshot_id=original.stem)  # legacy saved chat contains an earlier image
+        _, sent = turn(cid, screenshot_id=crop, include_screenshot=True, walkthrough=True)
+        self.assertIn("one action", sent[0]["content"])
+        self.assertIsInstance(sent[1]["content"], str)
+        self.assertEqual(sent[-1]["content"][1]["image_url"]["url"], image_data_url(str(path)))
+        _, sent = turn(cid, screenshot_id=crop, include_screenshot=False, help_error_text="Error 42")
+        self.assertTrue(all(isinstance(msg["content"], str) for msg in sent))
+        self.assertIn("Error 42", sent[-1]["content"])
+        self.assertNotIn("user chose a walkthrough", sent[0]["content"])
+
+        settings["agent"]["app_context"] = "off"
+        self.call("PUT", "/settings", {"settings": settings})
+        self.assertFalse(edit(crop, "read", [])["ok"])
+        _, sent = turn(cid, screenshot_id=crop, include_screenshot=True, help_error_text="Secret from app")
+        self.assertEqual(sent[-1]["content"], "help")
 
     def test_errors_are_events_not_broken_streams(self) -> None:
         self.assertEqual(self.ask("hi")[0]["code"], "not_configured")

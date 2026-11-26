@@ -25,6 +25,8 @@ The history itself is never changed, so a later local model still sees everythin
 
 The Help button captures a local preview on click unless app context is off. The popup names that
 specific capture with its question. Only models with vision and permission receive the image.
+The current Help client chooses an image for one turn only. An empty choice also suppresses
+images from older clients' saved conversation history for that turn.
 Older clients request an attachment by window ID without displaying a preview.
 """
 
@@ -57,28 +59,28 @@ def shows_private_results(policy: str, local_model: bool) -> bool:
 
 
 _screenshots: dict[str, str] = {}  # KWin window id -> the PNG taken when Happy Bot opened from it
-_screenshots_lock = threading.Lock()
+screenshot_lock = threading.Lock()
 
 
 def screenshots_wanted(settings: dict[str, Any]) -> bool:
-    return bool(screenshot_models(settings))
+    return bool(context_models(settings, vision=True))
 
 
-def screenshot_models(settings: dict[str, Any]) -> list[str]:
-    """Models in the user's order allowed to see a Help screenshot."""
+def context_models(settings: dict[str, Any], vision: bool = False) -> list[str]:
+    """Models in the user's order allowed to see Help text or, with vision, screenshots."""
     agent = settings.get("agent") or {}
     policy = agent.get("app_context", DEFAULT_POLICY)
     names = []
     for name in settings.get("model_order") or []:
         model = (settings.get("models") or {}).get(name) or {}
         local = is_local_address(str(model.get("base_url") or ""))
-        if model.get("vision") and shows_context(policy, local) and (local or not agent.get("local_only")):
+        if (not vision or model.get("vision")) and shows_context(policy, local) and (local or not agent.get("local_only")):
             names.append(name)
     return names
 
 
 def preview_screenshot(window_id: str, desktop: bool, runtime_dir: Path) -> str:
-    with _screenshots_lock:
+    with screenshot_lock:
         folder = runtime_dir / "screenshots"
         if desktop and not window_id:
             # Give the compositor time to draw the desktop without the Help popup.
@@ -98,7 +100,7 @@ def remember_screenshot(settings: dict[str, Any], window_id: str, runtime_dir: P
     """Capture the window the user asked help with, when a screenshot could be used; whether one was taken."""
     if not window_id or not screenshots_wanted(settings):
         return False
-    with _screenshots_lock:
+    with screenshot_lock:
         path = app_snapshot.capture_window(window_id, runtime_dir / "screenshots")
         if path:
             _screenshots[window_id] = path
@@ -106,13 +108,13 @@ def remember_screenshot(settings: dict[str, Any], window_id: str, runtime_dir: P
 
 
 def capture_desktop(runtime_dir: Path) -> dict[str, Any]:
-    with _screenshots_lock:
+    with screenshot_lock:
         return desktop_context.take_screenshot(runtime_dir)
 
 
 def clear_screenshots(runtime_dir: Path) -> None:
     """Forget pending attachments and remove Happy Bot's temporary context pictures."""
-    with _screenshots_lock:
+    with screenshot_lock:
         clear_cache_files(runtime_dir / "screenshots", r"(?:[0-9a-f]{32}|desktop-context-[0-9]+)\.png")
         _screenshots.clear()
 
@@ -120,7 +122,7 @@ def clear_screenshots(runtime_dir: Path) -> None:
 def take_screenshot(about: Any) -> str:
     """The screenshot kept for the window ``about`` names, once; "" when there is none."""
     window_id = str(about.get("window") or "") if isinstance(about, dict) else ""
-    with _screenshots_lock:
+    with screenshot_lock:
         return _screenshots.pop(window_id, "") if window_id else ""
 
 
@@ -170,10 +172,12 @@ def _window(window_id: str) -> dict[str, Any] | None:
         return None
 
 
-def for_model(history: list[Message], policy: str, local_model: bool, vision: bool = False) -> list[Message]:
+def for_model(history: list[Message], policy: str, local_model: bool, vision: bool = False,
+              turn_image: str | None = None) -> list[Message]:
     """The history as one model may see it (see the module docstring); ``history`` is not changed."""
     context, private = shows_context(policy, local_model), shows_private_results(policy, local_model)
     pictures = vision and context
+    current_user = next((m for m in reversed(history) if m.role == "user"), None) if turn_image else None
     prepared = []
     for message in history:
         text = message.text
@@ -184,6 +188,8 @@ def for_model(history: list[Message], policy: str, local_model: bool, vision: bo
         if not local_model and (message.role == "tool" or (message.context and context)):
             text = redact(text)
         images = message.images if pictures else ()
+        if turn_image is not None:
+            images = (turn_image,) if pictures and turn_image and message is current_user else ()
         if text == message.text and not message.context and not message.private and images == message.images:
             prepared.append(message)
         else:

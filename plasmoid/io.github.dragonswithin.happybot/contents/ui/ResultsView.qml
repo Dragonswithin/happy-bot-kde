@@ -112,7 +112,7 @@ Rectangle {
         ? maximumHeight
         : filesVisible
         ? fileResults.naturalHeight
-        : view.session.entries.count === 0
+        : helpVisible || view.session.entries.count === 0
             ? welcomeArea.contentHeight
             : transcriptColumn.implicitHeight + view.inset * 2
     readonly property real bodyHeight: sidebarVisible
@@ -365,12 +365,12 @@ Rectangle {
                         icon.width: Kirigami.Units.iconSizes.sizeForLabels
                         icon.height: Kirigami.Units.iconSizes.sizeForLabels
                         text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
-                        enabled: field.text.trim().length > 0 && !view.session.capturing
+                        enabled: field.text.trim().length > 0 && !view.session.helpPending
                         onClicked: view.accepted(field.text.trim())
                     }
                     FieldButton {
                         visible: view.session.voiceEnabled
-                        enabled: !view.session.capturing
+                        enabled: !view.session.helpPending
                         text: view.session.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
                         Accessible.name: text
                         Accessible.checkable: true
@@ -723,7 +723,7 @@ Rectangle {
             PlasmaComponents3.ScrollView {
                 id: transcriptView
                 anchors.fill: parent
-                visible: view.conversationVisible && view.session.entries.count > 0
+                visible: view.conversationVisible && !view.helpVisible && view.session.entries.count > 0
                 // Keep the line width stable when the first overflowing line reveals the scrollbar.
                 leftPadding: mirrored ? QQC2.ScrollBar.vertical.implicitWidth : 0
                 rightPadding: mirrored ? 0 : QQC2.ScrollBar.vertical.implicitWidth
@@ -789,13 +789,37 @@ Rectangle {
                                 onSettingsRequested: view.settingsRequested()
                             }
                         }
+                        Flow {
+                            width: parent.width
+                            visible: view.session.helpChat && !view.session.busy && view.session.hasTranscript
+                            spacing: Kirigami.Units.smallSpacing
+                            PlasmaComponents3.Button {
+                                text: i18n("Next step")
+                                visible: view.session.walkthrough
+                                onClicked: view.askRequested(text)
+                            }
+                            PlasmaComponents3.Button {
+                                text: i18n("I don’t see that")
+                                visible: view.session.walkthrough
+                                onClicked: {
+                                    if (!view.inputText.trim()) view.setInput(text);
+                                    view.session.captureForHelp();
+                                    view.focusInput();
+                                }
+                            }
+                            PlasmaComponents3.Button {
+                                text: i18n("Update screenshot")
+                                icon.name: "camera-photo"
+                                onClicked: { view.session.captureForHelp(); view.focusInput(); }
+                            }
+                        }
                     }
                 }
             }
 
             PlasmaComponents3.ScrollView {
                 anchors.fill: parent
-                visible: view.conversationVisible && view.session.entries.count === 0
+                visible: view.conversationVisible && (view.helpVisible || view.session.entries.count === 0)
 
                 Flickable {
                     id: welcomeArea
@@ -809,8 +833,12 @@ Rectangle {
                         y: view.inset
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
                         visible: view.helpVisible
-                        draft: view.session.helpDraft
-                        chatModel: view.session.chatModel
+                        session: view.session
+                        onFocusQuestion: view.focusInput()
+                        onExplainRequested: {
+                            if (!view.inputText.trim()) view.setInput(i18n("What does this error mean and how can I fix it?"));
+                            view.focusInput();
+                        }
                     }
 
                     AssistantWelcome {

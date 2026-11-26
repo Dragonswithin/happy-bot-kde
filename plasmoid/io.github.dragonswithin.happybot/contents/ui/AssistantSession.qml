@@ -179,7 +179,14 @@ Item {
     property int applicationLookup: 0
     property var helpWindow: null  // the target chosen on the tile, retained for follow-up questions
     property var helpDraft: null  // the capture in progress or the preview awaiting a question
+    property bool includeHelpScreenshot: true
+    property bool walkthrough: false
+    property string helpAction: ""  // point/crop selection, applying an edit, or reading text
+    property bool reviewingError: false
+    property string helpErrorText: ""
+    property string helpEditProblem: ""
     readonly property bool capturing: helpDraft?.loading === true
+    readonly property bool helpPending: capturing || helpAction !== ""
     property var ui: ({
         robot_mascot: true, robot_style: "pip", mascot_animations: true, mascot_nudges: true, robot_sounds: false,
         popup_width: 30, popup_height: 26,
@@ -718,6 +725,8 @@ Item {
             session.conversationId = data.id;
             session.conversationCreatedAt = Number(data.created || 0);
             session.helpChat = false;
+            session.walkthrough = false;
+            session.helpWindow = null;
             session.chatModel = session.models.some(item => item.name === data.model) ? data.model : "";
             session.replay(data.events || []);
         }, function(data) {
@@ -768,16 +777,21 @@ Item {
 
     /** Open Help immediately. Ignore a late reply if the user already left this draft. */
     function captureForHelp() {
-        if (session.capturing) return;
+        if (session.capturing || session.busy) return;
+        if (!session.helpChat || (session.helpWindow?.["class"]
+                && session.helpWindow["class"] === session.helpWith?.["class"])) {
+            session.helpWindow = session.helpWith;
+        }
+        if (!session.helpDraft) session.includeHelpScreenshot = true;
         session.helpChat = true;
-        session.helpWindow = session.helpWith;
+        resetHelpEditor();
         session.helpDraft = { loading: true };
         const draft = session.helpDraft;
         const target = session.helpWindow;
         function finish(data) {
             if (session.helpDraft !== draft) return;
             session.helpDraft = {
-                url: data.url || "", id: data.id || "", models: data.models || [],
+                url: data.url || "", id: data.id || "", models: data.models || [], textModels: data.text_models || [],
                 problem: data.url ? "" : data.reason === "disabled"
                     ? i18n("Screenshots are turned off in Behaviour settings. You can still ask a question.")
                     : i18n("Couldn’t capture the screenshot. You can still describe what you see.")
@@ -787,11 +801,47 @@ Item {
                 finish, finish);
     }
 
+    function resetHelpEditor() {
+        session.helpAction = "";
+        session.reviewingError = false;
+        session.helpErrorText = "";
+        session.helpEditProblem = "";
+    }
+
+    function editHelp(action, coordinates) {
+        const draft = session.helpDraft;
+        if (!draft?.id || session.helpAction === "applying" || session.helpAction === "reading") return;
+        const reading = action === "read";
+        session.helpAction = reading ? "reading" : "applying";
+        session.helpEditProblem = "";
+        if (reading) session.reviewingError = true;
+        request("POST", "/context/screenshot/edit", { id: draft.id, action, coordinates },
+            function(data) {
+                if (session.helpDraft !== draft) return;
+                session.helpAction = "";
+                if (reading) {
+                    session.helpErrorText = data.text || "";
+                } else {
+                    session.resetHelpEditor();
+                    session.helpDraft = Object.assign({}, draft, { id: data.id, url: data.url, previous: draft,
+                        cropped: draft.cropped || action === "crop" });
+                }
+            }, function(data) {
+                if (session.helpDraft !== draft) return;
+                session.helpAction = "";
+                session.helpEditProblem = data.error || i18n("Couldn’t update the screenshot.");
+            });
+    }
+
     function dismissHelpDraft() {
         if (!session.helpDraft) return;
         session.helpDraft = null;
-        session.helpWindow = null;
-        session.helpChat = false;
+        resetHelpEditor();
+        if (!session.hasTranscript) {
+            session.helpWindow = null;
+            session.helpChat = false;
+            session.walkthrough = false;
+        }
     }
 
     function newChat() {
@@ -811,15 +861,20 @@ Item {
         session.helpDraft = null;
         session.helpWindow = null;
         session.helpChat = false;
+        session.walkthrough = false;
+        resetHelpEditor();
         session.entries.clear();
     }
 
     /** Sends one request to the assistant. Returns false if it was not sent. */
     function ask(message) {
-        const text = (message || "").trim();
-        if (!text || session.busy || session.capturing) {
+        let text = (message || "").trim();
+        if (!text || session.busy || session.helpPending) {
             return false;
         }
+        // With capture off, the user can still type an error message themselves.
+        if (session.reviewingError && !session.helpDraft?.id && session.helpErrorText.trim())
+            text += "\n\n" + session.helpErrorText.trim();
         session.showingSystem = false;  // the answer must show, not System info
         session.busy = true;
         if (!session.conversationId) session.conversationCreatedAt = Date.now() / 1000;
@@ -829,9 +884,14 @@ Item {
                        buttons: true, about_window: session.helpChat ? session.helpWindow : session.helpWith };
         if (session.helpChat) {
             body.full_context = true;
-            body.screenshot_id = session.helpDraft?.id || "";
+            body.include_screenshot = !!session.helpDraft?.id && session.includeHelpScreenshot;
+            body.screenshot_id = body.include_screenshot ? session.helpDraft.id : "";
+            body.cropped_screenshot = session.helpDraft?.cropped === true;
+            body.walkthrough = session.walkthrough;
+            if (session.reviewingError && session.helpDraft?.id) body.help_error_text = session.helpErrorText.trim();
         }
         session.helpDraft = null;
+        resetHelpEditor();
         const xhr = new XMLHttpRequest();
         session.activeStream = xhr;
         client.withToken(() => {

@@ -38,6 +38,8 @@ Endpoints:
   see it; ``taken`` says whether one was. With ``preview: true``, capture for
   local display even with a text-only AI. Return its file URL, attachment ID
   and eligible model names. ``desktop: true`` requests the whole desktop.
+- ``POST /context/screenshot/edit``: mark a point, crop a rectangle or read text from a
+  preview by ID. Edits return a new private preview; coordinates are fractions of its image.
 - ``GET /search?q=...``: instant file search through the ``file_search`` role;
   ``GET /search/web?q=...`` the web finder's pages through ``web_search``.
 - ``GET /settings`` / ``PUT /settings``: read (redacted) and replace settings.
@@ -153,7 +155,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
-from . import settings as settings_store
+from . import help_screenshot, settings as settings_store
 from .agent_loop import user_folders
 from .mcp_client import McpError
 from .providers import ProviderError
@@ -352,9 +354,32 @@ def capture_screenshot(server: "AssistantServer", query: dict[str, list[str]], b
         if not path:
             return 200, {"ok": True, "taken": False}
         return 200, {"ok": True, "taken": True, "url": Path(path).as_uri(), "id": Path(path).stem,
-                     "models": app_context.screenshot_models(server.settings)}
+                     "models": app_context.context_models(server.settings, vision=True),
+                     "text_models": app_context.context_models(server.settings)}
     taken = app_context.remember_screenshot(server.settings, window, server.runtime_dir)
     return 200, {"ok": True, "taken": taken}
+
+
+def edit_help_screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    if (server.settings.get("agent") or {}).get("app_context") == "off":
+        return _error(403, "Help screenshots are turned off in Behaviour settings.", "disabled")
+    path = app_context.preview_path(server.runtime_dir, body.get("id"))
+    if not path:
+        return _error(404, "This screenshot is no longer available. Take it again.", "not_found")
+    try:
+        if body.get("action") == "read":
+            return 200, {"ok": True, "text": help_screenshot.read_text(Path(path))}
+        with app_context.screenshot_lock:
+            edited = help_screenshot.edit(Path(path), str(body.get("action")), body.get("coordinates"))
+        return 200, {"ok": True, "id": edited.stem, "url": edited.as_uri()}
+    except ImportError:
+        return _error(503, "Install Python Pillow to crop or mark screenshots.", "unavailable")
+    except ValueError as error:
+        return _error(400, str(error), "invalid")
+    except ToolFailure as error:
+        return _error(422, str(error), "tool_failed")
+    except OSError:
+        return _error(422, "The screenshot could not be edited. Try taking it again.", "tool_failed")
 
 
 def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -815,6 +840,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/context"): context,
     ("GET", "/context/app"): current_application,
     ("POST", "/context/screenshot"): capture_screenshot,
+    ("POST", "/context/screenshot/edit"): edit_help_screenshot,
     ("POST", "/ui"): change_ui,
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,

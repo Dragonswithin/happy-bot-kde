@@ -15,13 +15,16 @@ Item {
         session: HappyBot.AssistantSession {
             id: session
             property var capture
+            property var edit
             property var sent
             function request(method, path, body, success, failure) {
                 if (path === "/context/screenshot") capture = { body, success, failure };
+                if (path === "/context/screenshot/edit") edit = { body, success, failure };
             }
             function startStream(body, mayReload, xhr) { sent = body; }
         }
         onAccepted: text => session.ask(text)
+        onAskRequested: text => session.ask(text)
     }
 
     TestCase {
@@ -43,14 +46,87 @@ Item {
             session.resetTranscript();
             session.helpWith = { app: "Kate", window: "{kate}" };
             session.capture = null;
+            session.edit = null;
             session.sent = null;
             view.clearInput();
         }
 
         function clickTile(label) {
+            wait(35);  // Flow and the popup resize on the next frame.
             const button = findVisible(view, item => item.text === label && typeof item.clicked === "function");
             verify(!!button);
             mouseClick(button);
+        }
+
+        function ready(id) {
+            session.capture.success({ id, url: Qt.resolvedUrl(
+                "../plasmoid/io.github.dragonswithin.happybot/contents/images/happy-bot.svg").toString(), models: ["Vision"] });
+            tryVerify(() => !!findVisible(view, item => item.Accessible.name === "Screenshot preview" && item.status === Image.Ready));
+        }
+
+        function test_retakeErrorAndPerRequestChoice() {
+            clickTile("Help with Kate");
+            ready("one");
+            view.setInput("Why did this fail?");
+            clickTile("Include screenshot with this request");
+            clickTile("Retake");
+            ready("two");
+            compare(view.inputText, "Why did this fail?");
+            compare(session.includeHelpScreenshot, false);
+            clickTile("Walk me through it");
+            clickTile("Explain this error");
+            compare(session.edit.body.id, "two");
+            session.edit.success({ text: "Permission denied" });
+            const editor = findVisible(view, item => item.Accessible.name === "Error text to explain"
+                && typeof item.selectAll === "function");
+            verify(!!editor);
+            editor.forceActiveFocus();
+            editor.selectAll();
+            keyClick(Qt.Key_X);
+            compare(view.inputText, "Why did this fail?");
+            view.accepted(view.inputText);
+            tryVerify(() => !!session.sent);
+            compare(session.sent.screenshot_id, "");
+            compare(session.sent.include_screenshot, false);
+            compare(session.sent.help_error_text, "x");
+            verify(session.sent.walkthrough);
+            session.busy = false;
+            view.clearInput();
+            clickTile("I don’t see that");
+            ready("three");
+            verify(session.includeHelpScreenshot);
+            compare(view.inputText, "I don’t see that");
+            clickTile("Back");
+            verify(session.walkthrough);
+            clickTile("Next step");
+            tryVerify(() => session.sent.message === "Next step");
+            verify(!session.sent.include_screenshot);
+        }
+
+        function test_pointCropAndUndo() {
+            clickTile("Help with Kate");
+            ready("original");
+            clickTile("Point");
+            const picture = findVisible(view, item => item.Accessible.name === "Screenshot preview");
+            mouseClick(picture, picture.width / 2, picture.height / 2);
+            compare(session.edit.body.action, "point");
+            fuzzyCompare(session.edit.body.coordinates[0], 0.5, 0.01);
+            fuzzyCompare(session.edit.body.coordinates[1], 0.5, 0.01);
+            session.edit.success({ id: "marked", url: session.helpDraft.url });
+            clickTile("Crop");
+            const x = picture.width / 2, y = picture.height / 2;
+            mousePress(picture, x, y);
+            mouseMove(picture, x + 20, y + 25);
+            mouseRelease(picture, x + 20, y + 25);
+            compare(session.edit.body.action, "crop");
+            compare(session.edit.body.id, "marked");
+            session.edit.success({ id: "smaller", url: session.helpDraft.url });
+            verify(session.helpDraft.cropped);
+            clickTile("Undo edit");
+            compare(session.helpDraft.id, "marked");
+            view.accepted("What is circled?");
+            tryVerify(() => !!session.sent);
+            compare(session.sent.screenshot_id, "marked");
         }
 
         function test_clickPreviewThenAsk() {

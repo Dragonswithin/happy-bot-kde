@@ -170,8 +170,15 @@ used.
   has open and, for an AI marked as seeing pictures, a screenshot of the
   window. Click "Help with …" to capture the window and see its preview,
   then type your question and press Enter. "Desktop help" previews the
-  desktop when there’s no app window. Back discards the draft. Text-only
-  models can answer your description. Behaviour settings control who
+  desktop when there’s no app window. **Retake** keeps your question.
+  **Point** circles a detail and **Crop** keeps the area you drag over
+  (both use Python Pillow). Clear **Include screenshot with this request**
+  to leave images out of that turn. You can still include reviewed error text. Follow-ups can
+  include a new picture through **Update screenshot**.
+  **Explain this error** uses local Tesseract OCR and lets you correct
+  the text before sending. **Walk me through it** asks for one step at
+  a time. Choose **Next step** to continue or **I don’t see that** to
+  review a fresh screenshot. Back discards the draft. Behaviour settings control who
   may see app details. Choosing "No models" also turns off Help captures.
   "Close chat" goes back
   to the welcome screen; the chat stays in your saved ones.
@@ -508,7 +515,9 @@ Plasma 6 on Wayland, Python 3.11 or newer, and PyGObject (`python-gobject`
 or `python3-gi`) with `at-spi2-core`, which the window and application
 control tools use to talk to KWin, the accessibility bus and the desktop
 portal. The optional greeting sound uses Qt Multimedia (`qt6-multimedia` on Arch).
-Everything else in the daemon is the Python standard library.
+Editing Help screenshots uses Python Pillow (`python-pillow` on Arch or
+`python3-pil` on Debian). Recognizing text in them uses Tesseract with English
+language data. Both are optional for asking questions and previewing screenshots.
 
 ## Notes
 

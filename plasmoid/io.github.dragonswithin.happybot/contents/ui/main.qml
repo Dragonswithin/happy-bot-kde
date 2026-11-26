@@ -297,10 +297,9 @@ PlasmoidItem {
         onSettingsRequested: root.openSettings()
         onDismissed: {
             searchDelay.stop();
-            session.dismissHelpDraft();
             session.stopFinding();
             root.cancelTalking();
-            popup.clearInput();  // the bar stays empty too: what was typed is not kept after clicking away
+            if (!session.helpDraft) popup.clearInput();
         }
     }
 
@@ -354,10 +353,9 @@ PlasmoidItem {
             onSettingsRequested: root.openSettings()
             onDismissed: {
                 searchDelay.stop();
-                session.dismissHelpDraft();
                 session.stopFinding();
                 root.cancelTalking();
-                clearInput();
+                if (!session.helpDraft) clearInput();
             }
         }
     }
@@ -632,7 +630,7 @@ PlasmoidItem {
         if (popup.visible) {
             return;
         }
-        if (root.barMode && root.fullRepresentationItem) {
+        if (!session.helpDraft && root.barMode && root.fullRepresentationItem) {
             const draft = root.fullRepresentationItem.text;
             root.fullRepresentationItem.setText("");
             popup.setInput(draft);
@@ -643,6 +641,7 @@ PlasmoidItem {
     }
 
     function closePopup() {
+        session.dismissHelpDraft();
         session.stopFinding();
         if (!session.replacing) {
             session.stopFixing();  // kept while pasting, so a failure can be shown again
