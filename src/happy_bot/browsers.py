@@ -30,6 +30,7 @@ result per address. The history stays in memory only and never leaves the comput
 
 from __future__ import annotations
 
+import base64
 import json
 from collections import Counter
 from contextlib import closing
@@ -125,6 +126,80 @@ def _with_copy(database: Path, query: str, parameters: tuple = ()) -> list[tuple
                 return connection.execute(query, parameters).fetchall()
         except (OSError, sqlite3.Error):
             return []
+
+
+def _favicon_data_url(data: bytes) -> str:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime = "image/png"
+    elif data.startswith(b"\x00\x00\x01\x00"):
+        mime = "image/x-icon"
+    elif data.startswith((b"GIF87a", b"GIF89a")):
+        mime = "image/gif"
+    elif data.startswith(b"\xff\xd8\xff"):
+        mime = "image/jpeg"
+    elif data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        mime = "image/webp"
+    else:
+        return ""
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def _icon_origins(homepage: str) -> tuple[str, ...]:
+    parts = urlsplit(homepage)
+    alternate_scheme = "http" if parts.scheme == "https" else "https"
+    if parts.port is not None:
+        return (homepage,)
+    origins = [homepage, f"{alternate_scheme}://{parts.netloc}/"]
+    alias = parts.netloc.removeprefix("www.") if parts.netloc.startswith("www.") else f"www.{parts.netloc}"
+    identity = site_identity(homepage)
+    for scheme in (parts.scheme, alternate_scheme):
+        origin = f"{scheme}://{alias}/"
+        variant = site_identity(origin)
+        if identity and variant and variant[0] == identity[0]:
+            origins.append(origin)
+    return tuple(origins)
+
+
+def _profile_favicons(profile: Profile, sites: dict[str, str]) -> dict[str, str]:
+    firefox = profile.family == "firefox"
+    path = profile.folder / ("favicons.sqlite" if firefox else "Favicons")
+    if not path.is_file():
+        return {}
+    # Prefer an icon assigned to the homepage, then one used by another
+    # page on that origin. Firefox can also store a separate root icon.
+    if firefox:
+        candidates = """
+            SELECT p.page_url AS url, i.width, i.data AS image
+            FROM moz_pages_w_icons p JOIN moz_icons_to_pages link ON link.page_id = p.id
+            JOIN moz_icons i ON i.id = link.icon_id
+            WHERE p.page_url >= :origin AND p.page_url < :end
+            UNION ALL
+            SELECT :origin, width, data FROM moz_icons
+            WHERE root = 1 AND icon_url >= :origin AND icon_url < :end
+        """
+    else:
+        candidates = """
+            SELECT m.page_url AS url, b.width, b.image_data AS image
+            FROM icon_mapping m JOIN favicon_bitmaps b ON b.icon_id = m.icon_id
+            WHERE m.page_url >= :origin AND m.page_url < :end
+        """
+    query = f"""SELECT image FROM ({candidates}) WHERE length(image) BETWEEN 1 AND 65536
+                ORDER BY url != :origin, abs(width - 48) LIMIT 8"""
+    found = {}
+    try:
+        # A read-only connection can see the browser's current WAL. If the
+        # profile is locked or unavailable, the site still has its monogram.
+        with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.05)) as db:
+            for host, homepage in sites.items():
+                for origin in _icon_origins(homepage):
+                    rows = db.execute(query, {"origin": origin, "end": origin[:-1] + "0"})
+                    icons = (_favicon_data_url(data) for (data,) in rows if isinstance(data, bytes))
+                    if icon := next(filter(None, icons), ""):
+                        found[host] = icon
+                        break
+    except (OSError, sqlite3.Error):
+        pass
+    return found
 
 
 def chromium_bookmarks(path: Path) -> list[tuple[str, str]]:
@@ -257,6 +332,19 @@ class BrowserIndex:
                 titles[host] = max(titles.get(host, (0.0, "")), (page.visited, page.title.strip()[:160]))
         ranked = sorted(counts, key=lambda host: (-counts[host], -latest[host][0], host))
         return [{"host": host, "title": titles.get(host, (0, host))[1], "location": latest[host][1]} for host in ranked]
+
+    def favicons(self, rows: list[dict[str, Any]]) -> dict[str, str]:
+        """Read icons for these displayed sites from local browser caches only."""
+        pending = {row["host"]: row["location"] for row in rows}
+        if not pending:
+            return {}
+        icons = {}
+        for profile in profiles(self._home, self._config):
+            icons.update(_profile_favicons(profile, pending))
+            pending = {host: url for host, url in pending.items() if host not in icons}
+            if not pending:
+                break
+        return icons
 
     def search(self, text: str, bookmarks: bool, history: bool, most: int = 4) -> tuple[list[Page], list[Page]]:
         """``(bookmarks, history)`` matching every word of ``text``, at most ``most`` of each."""

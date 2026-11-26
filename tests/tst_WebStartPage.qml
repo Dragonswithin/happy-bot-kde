@@ -41,6 +41,15 @@ Item {
             waitForRendering(page);
         }
 
+        function test_cachedFavicon() {
+            const sites = page.sites.slice();
+            sites[0].favicon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMwaDgAAAJUAXHIMWMAAAAAAElFTkSuQmCC";
+            page.sites = sites;
+            const icon = findChild(tile(0), "siteFavicon");
+            tryCompare(icon, "status", Image.Ready);
+            compare(findChild(tile(1), "siteFavicon").status, Image.Null);
+        }
+
         function test_contextMenu() {
             mouseClick(tile(0), 15, 15, Qt.RightButton);
             tryCompare(menu(), "opened", true);

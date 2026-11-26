@@ -424,8 +424,11 @@ Item {
                                 : results.web ? i18n("Web search is not responding. Try again in a moment.")
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
-                            PlasmaComponents3.ToolTip.text: results.session.searchError
-                            PlasmaComponents3.ToolTip.visible: errorHover.hovered && results.session.searchErrorCode !== "not_configured"
+                            AssistantToolTip {
+                                accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
+                                text: results.session.searchError
+                                visible: errorHover.hovered && results.session.searchErrorCode !== "not_configured"
+                            }
 
                             HoverHandler {
                                 id: errorHover

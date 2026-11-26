@@ -83,6 +83,31 @@ class BrowserTests(unittest.TestCase):
         found = [(profile.browser, profile.folder.name) for profile in browsers.profiles(self.home, self.home / ".config")]
         self.assertEqual(found, [("Firefox", "abc.default-release"), ("Firefox", "xyz.default"), ("Chromium", "Default")])
 
+    def test_website_icons_come_from_the_local_browser_caches(self) -> None:
+        firefox = self.home / ".mozilla/firefox/abc.default-release/favicons.sqlite"
+        chromium = self.home / ".config/chromium/Default/Favicons"
+        png = b"\x89PNG\r\n\x1a\n"
+        with closing(sqlite3.connect(firefox)) as db, db:
+            db.executescript("""
+                CREATE TABLE moz_pages_w_icons (id, page_url);
+                CREATE TABLE moz_icons_to_pages (page_id, icon_id);
+                CREATE TABLE moz_icons (id, width, icon_url, root, data);
+                INSERT INTO moz_icons_to_pages VALUES (1, 1);
+                INSERT INTO moz_pages_w_icons VALUES (1, 'https://www.kde.org/download/');
+            """)
+            db.execute("INSERT INTO moz_icons VALUES (1, 32, 'https://kde.org/icon.png', 0, ?)", (png,))
+        with closing(sqlite3.connect(chromium)) as db, db:
+            db.executescript("""
+                CREATE TABLE icon_mapping (page_url, icon_id);
+                CREATE TABLE favicon_bitmaps (icon_id, width, image_data);
+                INSERT INTO icon_mapping VALUES ('https://planet.kde.org/', 1);
+            """)
+            db.execute("INSERT INTO favicon_bitmaps VALUES (1, 48, ?)", (png,))
+        sites = [{"host": host, "location": f"https://{host}/"}
+                 for host in ("kde.org", "planet.kde.org", "missing.example")]
+        icons = self.index.favicons(sites)
+        self.assertEqual(icons, {site["host"]: "data:image/png;base64,iVBORw0KGgo=" for site in sites[:2]})
+
     def test_search_bookmarks_then_history_by_visits_without_repeats(self) -> None:
         self.index.build(history=True)
         marked, visited = self.index.search("kde", bookmarks=True, history=True)

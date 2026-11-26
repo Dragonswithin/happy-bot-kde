@@ -199,9 +199,10 @@ Item {
         Accessible.name: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
         Accessible.onPressAction: bar.micClicked()
 
-        QQC2.ToolTip.text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
-        QQC2.ToolTip.visible: containsMouse
-        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+        AssistantToolTip {
+            text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
+            visible: containsMouse
+        }
     }
 
     // The logo is a button of its own, above the click-to-type areas; right
@@ -220,8 +221,9 @@ Item {
         Accessible.description: bar.iconDescription
         Accessible.onPressAction: bar.iconClicked()
 
-        QQC2.ToolTip.text: bar.iconDescription || i18n("Open Happy Bot")
-        QQC2.ToolTip.visible: containsMouse
-        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+        AssistantToolTip {
+            text: bar.iconDescription || i18n("Open Happy Bot")
+            visible: containsMouse
+        }
     }
 }

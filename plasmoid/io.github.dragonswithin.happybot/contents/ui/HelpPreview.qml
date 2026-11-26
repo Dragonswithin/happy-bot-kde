@@ -70,9 +70,11 @@ ColumnLayout {
                     component EditButton: PC3.ToolButton {
                         enabled: !preview.working
                         display: controls.width < Kirigami.Units.gridUnit * 29 ? QQC2.AbstractButton.IconOnly : QQC2.AbstractButton.TextBesideIcon
-                        PC3.ToolTip.text: text
-                        PC3.ToolTip.visible: hovered
-                        PC3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                        AssistantToolTip {
+                            accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
+                            text: parent.text
+                            visible: parent.hovered
+                        }
                     }
                     EditButton {
                         text: i18n("Retake")
@@ -112,8 +114,11 @@ ColumnLayout {
                         display: QQC2.AbstractButton.IconOnly
                         visible: preview.hasImage
                         enabled: screenshot.zoom > 1
-                        PC3.ToolTip.text: text
-                        PC3.ToolTip.visible: hovered
+                        AssistantToolTip {
+                            accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
+                            text: parent.text
+                            visible: parent.hovered
+                        }
                         onClicked: screenshot.zoomAt(1 / 1.3, screenshot.width / 2, screenshot.height / 2)
                     }
                     PC3.ToolButton {
@@ -122,8 +127,11 @@ ColumnLayout {
                         display: QQC2.AbstractButton.IconOnly
                         visible: preview.hasImage
                         enabled: screenshot.zoom < screenshot.maximumZoom
-                        PC3.ToolTip.text: text
-                        PC3.ToolTip.visible: hovered
+                        AssistantToolTip {
+                            accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
+                            text: parent.text
+                            visible: parent.hovered
+                        }
                         onClicked: screenshot.zoomAt(1.3, screenshot.width / 2, screenshot.height / 2)
                     }
                     PC3.ToolButton {
@@ -131,8 +139,11 @@ ColumnLayout {
                         text: i18n("Fit")
                         visible: preview.hasImage
                         Accessible.name: i18n("Fit screenshot to window")
-                        PC3.ToolTip.text: i18n("Fit the entire screenshot. Scroll over the picture to zoom.")
-                        PC3.ToolTip.visible: hovered
+                        AssistantToolTip {
+                            accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
+                            text: i18n("Fit the entire screenshot. Scroll over the picture to zoom.")
+                            visible: parent.hovered
+                        }
                         onClicked: screenshot.fit()
                     }
                     PC3.Label {

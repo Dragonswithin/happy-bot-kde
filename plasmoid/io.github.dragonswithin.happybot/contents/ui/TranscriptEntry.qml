@@ -264,8 +264,10 @@ Item {
                         icon.name: "edit-copy"
                         text: i18n("Copy answer")
                         display: PlasmaComponents3.AbstractButton.IconOnly
-                        PlasmaComponents3.ToolTip.text: text
-                        PlasmaComponents3.ToolTip.visible: hovered
+                        AssistantToolTip {
+                            text: parent.text
+                            visible: parent.hovered
+                        }
                         onClicked: answerText.copyAll()
                     }
 

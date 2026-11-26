@@ -132,9 +132,11 @@ ColumnLayout {
                 Accessible.description: modelData.help ? (welcome.appName
                     ? i18n("Preview a screenshot of this window, then ask a question.")
                     : i18n("Preview a screenshot of your desktop, then ask a question.")) : ""
-                PlasmaComponents3.ToolTip.text: Accessible.description
-                PlasmaComponents3.ToolTip.visible: modelData.help === true && hovered
-                PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                AssistantToolTip {
+                    accent: welcome.accent
+                    text: shortcut.Accessible.description
+                    visible: modelData.help === true && parent.hovered
+                }
                 onClicked: modelData.help ? welcome.helpChosen()
                     : modelData.web ? welcome.webSearchChosen()
                     : modelData.system ? welcome.systemInfoChosen()

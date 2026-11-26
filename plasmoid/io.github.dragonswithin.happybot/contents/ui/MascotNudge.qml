@@ -68,8 +68,11 @@ Rectangle {
                 text: i18n("Dismiss this nudge")
                 icon.name: "dialog-close"
                 display: QQC2.AbstractButton.IconOnly
-                PlasmaComponents3.ToolTip.text: text
-                PlasmaComponents3.ToolTip.visible: hovered || visualFocus
+                AssistantToolTip {
+                    accent: card.accent
+                    text: parent.text
+                    visible: parent.hovered || parent.visualFocus
+                }
                 onClicked: card.dismissRequested(card.kind)
             }
         }

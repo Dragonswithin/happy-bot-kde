@@ -145,9 +145,11 @@ Item {
                             highlighted: page.selectedIndex === index
                             Accessible.name: text
                             Accessible.description: modelData.pinned ? i18n("Pinned site. Open the context menu for options.") : i18n("Open the context menu to pin or hide this site.")
-                            PlasmaComponents3.ToolTip.text: text === domain ? domain : text + "\n" + domain
-                            PlasmaComponents3.ToolTip.visible: hovered
-                            PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            AssistantToolTip {
+                                accent: page.accent
+                                text: tile.text === tile.domain ? tile.domain : tile.text + "\n" + tile.domain
+                                visible: parent.hovered
+                            }
                             function openMenu() {
                                 siteMenu.site = modelData;
                                 siteMenu.popup(tile, 0, tile.height);
@@ -194,8 +196,22 @@ Item {
                                     radius: Kirigami.Units.cornerRadius * 2
                                     color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(tile.tint, 0.24))
                                     border.color: Qt.alpha(tile.tint, 0.4)
+                                    Image {
+                                        id: favicon
+                                        objectName: "siteFavicon"
+                                        anchors.centerIn: parent
+                                        width: Kirigami.Units.iconSizes.medium
+                                        height: width
+                                        source: tile.modelData.favicon ?? ""
+                                        fillMode: Image.PreserveAspectFit
+                                        asynchronous: true
+                                        sourceSize.width: width
+                                        sourceSize.height: height
+                                        Accessible.ignored: true
+                                    }
                                     PlasmaComponents3.Label {
                                         anchors.centerIn: parent
+                                        visible: favicon.status !== Image.Ready
                                         text: tile.text.charAt(0).toLocaleUpperCase()
                                         font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.35
                                         font.weight: Font.DemiBold

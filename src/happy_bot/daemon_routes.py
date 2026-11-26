@@ -447,7 +447,12 @@ def web_start(server: "AssistantServer", query: dict[str, list[str]], body: dict
     current = server.search_history.index
     if index is not current or not ui["search_history"]:
         ranked = []
-    return 200, {"ok": True, "sites": web_preferences.site_rows(ranked, ui), "history_enabled": ui["search_history"],
+    sites = web_preferences.site_rows(ranked, ui)
+    favicons = current.favicons(sites)
+    for site in sites:
+        if site["host"] in favicons:
+            site["favicon"] = favicons[site["host"]]
+    return 200, {"ok": True, "sites": sites, "history_enabled": ui["search_history"],
                  "searches": server.search_history.web_queries(), "search_clear_revision": current.history_since}
 
 

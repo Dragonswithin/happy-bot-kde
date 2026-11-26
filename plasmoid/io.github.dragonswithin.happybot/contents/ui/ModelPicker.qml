@@ -97,8 +97,11 @@ T.ComboBox {
     }
 
     Accessible.name: i18n("AI for this chat")
-    QQC2.ToolTip.text: session.chatModel === ""
-        ? i18n("Automatic: your AIs are asked in the order set on the AI Model page")
-        : i18n("This chat uses %1 only", session.chatModel)
-    QQC2.ToolTip.visible: hovered && !picker.popup.visible
+    AssistantToolTip {
+        accent: picker.accent
+        text: session.chatModel === ""
+            ? i18n("Automatic: your AIs are asked in the order set on the AI Model page")
+            : i18n("This chat uses %1 only", session.chatModel)
+        visible: picker.hovered && !picker.popup.visible
+    }
 }

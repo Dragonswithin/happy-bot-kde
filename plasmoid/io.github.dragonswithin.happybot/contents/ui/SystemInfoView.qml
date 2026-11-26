@@ -391,8 +391,10 @@ ColumnLayout {
                     icon.name: "process-stop"
                     enabled: program.modelData.mine && !program.modelData.protected
                     opacity: enabled ? 1 : 0
-                    PlasmaComponents3.ToolTip.text: i18n("Stop %1", program.modelData.name)
-                    PlasmaComponents3.ToolTip.visible: hovered
+                    AssistantToolTip {
+                        text: i18n("Stop %1", program.modelData.name)
+                        visible: parent.hovered
+                    }
                     Accessible.name: i18n("Stop %1", program.modelData.name)
                     onClicked: view.confirmPid = program.modelData.pid
                 }

@@ -105,9 +105,10 @@ ColumnLayout {
                             highlighted: chip.position === chips.selectedIndex
                             Accessible.name: Look.hitWhere(chip.modelData).length > 0
                                 ? i18n("%1, in %2", chip.modelData.title, Look.hitWhere(chip.modelData)) : chip.modelData.title
-                            PlasmaComponents3.ToolTip.text: Look.hitWhere(chip.modelData)
-                            PlasmaComponents3.ToolTip.visible: hovered && chip.modelData.kind !== "quick"
-                            PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            AssistantToolTip {
+                                text: Look.hitWhere(chip.modelData)
+                                visible: parent.hovered && chip.modelData.kind !== "quick"
+                            }
                             onClicked: chips.activated(chip.modelData)
 
                             contentItem: RowLayout {

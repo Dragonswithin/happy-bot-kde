@@ -188,8 +188,10 @@ ColumnLayout {
                 text: i18n("Replace")
                 icon.name: "edit-paste"
                 visible: card.session.fixReplaces && !card.fixing.terminal && (card.fixing.window || "").length > 0
-                PlasmaComponents3.ToolTip.text: i18n("Put this in place of the selected text in %1", card.fixing.app || "")
-                PlasmaComponents3.ToolTip.visible: hovered
+                AssistantToolTip {
+                    text: i18n("Put this in place of the selected text in %1", card.fixing.app || "")
+                    visible: parent.hovered
+                }
                 onClicked: card.session.replaceSelection()
             }
 

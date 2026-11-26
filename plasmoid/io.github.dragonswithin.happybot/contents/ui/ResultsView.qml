@@ -321,8 +321,11 @@ Rectangle {
                 icon.name: "window-close"
                 text: i18n("Close (Esc)")
                 display: QQC2.AbstractButton.IconOnly
-                PlasmaComponents3.ToolTip.text: text
-                PlasmaComponents3.ToolTip.visible: hovered
+                AssistantToolTip {
+                    accent: view.accent
+                    text: parent.text
+                    visible: parent.hovered
+                }
                 onClicked: view.closeRequested()
             }
         }
@@ -353,8 +356,11 @@ Rectangle {
             || view.helpVisible || view.articleVisible || view.session.hasTranscript
         icon.name: "go-previous"
         text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
-        PlasmaComponents3.ToolTip.text: text
-        PlasmaComponents3.ToolTip.visible: hovered
+        AssistantToolTip {
+            accent: view.accent
+            text: parent.text
+            visible: parent.hovered
+        }
         onClicked: {
             if (view.helpVisible) {
                 view.session.dismissHelpDraft();
@@ -440,9 +446,11 @@ Rectangle {
                         height: fieldButtons.height
                         width: implicitHeight
                         focusPolicy: Qt.TabFocus
-                        PlasmaComponents3.ToolTip.text: text
-                        PlasmaComponents3.ToolTip.visible: hovered || activeFocus
-                        PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                        AssistantToolTip {
+                            accent: view.accent
+                            text: parent.text
+                            visible: parent.hovered || parent.activeFocus
+                        }
                     }
                     FieldButton {
                         display: QQC2.AbstractButton.IconOnly
@@ -625,9 +633,11 @@ Rectangle {
                                     view.session.openConversation(modelData.id);  // leaves a search or article first
                                     view.setInput("");
                                 }
-                                PlasmaComponents3.ToolTip.text: modelData.title
-                                PlasmaComponents3.ToolTip.visible: hovered && titleLabel.truncated
-                                PlasmaComponents3.ToolTip.delay: Kirigami.Units.toolTipDelay
+                                AssistantToolTip {
+                                    accent: view.accent
+                                    text: saved.modelData.title
+                                    visible: parent.hovered && titleLabel.truncated
+                                }
 
                                 contentItem: RowLayout {
                                     spacing: Kirigami.Units.smallSpacing
@@ -672,8 +682,11 @@ Rectangle {
                                         visible: saved.hovered || saved.highlighted || checked
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                                        PlasmaComponents3.ToolTip.text: text
-                                        PlasmaComponents3.ToolTip.visible: hovered
+                                        AssistantToolTip {
+                                            accent: view.accent
+                                            text: parent.text
+                                            visible: parent.hovered
+                                        }
                                         onToggled: view.session.pinConversation(saved.modelData.id, checked)
                                     }
 
@@ -684,8 +697,11 @@ Rectangle {
                                         visible: saved.hovered || saved.highlighted
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                                        PlasmaComponents3.ToolTip.text: text
-                                        PlasmaComponents3.ToolTip.visible: hovered
+                                        AssistantToolTip {
+                                            accent: view.accent
+                                            text: parent.text
+                                            visible: parent.hovered
+                                        }
                                         onClicked: view.session.deleteConversation(saved.modelData.id)
                                     }
                                 }
