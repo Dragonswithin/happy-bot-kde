@@ -188,6 +188,7 @@ Item {
 
     // The microphone is a button of its own too, at the right end: talk instead of typing.
     MouseArea {
+        id: micButton
         visible: mic.visible
         x: field.x + field.width - width
         width: mic.width + Kirigami.Units.smallSpacing * 2
@@ -203,7 +204,7 @@ Item {
         AssistantToolTip {
             accent: bar.accent
             text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
-            visible: containsMouse
+            visible: micButton.containsMouse
         }
     }
 
@@ -226,7 +227,7 @@ Item {
         AssistantToolTip {
             accent: bar.accent
             text: bar.iconDescription || i18n("Open Happy Bot")
-            visible: containsMouse
+            visible: logoButton.containsMouse
         }
     }
 }
