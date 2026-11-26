@@ -52,8 +52,10 @@ Every event is also recorded on the conversation, and the conversation is
 saved when the turn ends however it ends, so it can be reopened later (see
 ``conversations``).
 
-The user's ``agent`` settings shape the turn: their instructions and the
-abilities they switched off go into a new conversation's system prompt, the
+The user's ``agent`` settings shape the turn: their instructions, the
+abilities they switched off and, when offline Wikipedia's question tool is
+lent to the AI, a note to look facts up there before the web go into a new
+conversation's system prompt, the
 switched-off tool groups are left out of the registry, and ``max_steps``
 caps the model requests. A turn that takes longer than
 ``notify_after_seconds`` (0: never; the settings page's "Notify me when a
@@ -109,6 +111,7 @@ from .tools import app_visibility
 from .providers import ProviderError, create_provider
 from .tools.catalog import GROUP_DESCRIPTIONS, build_registry
 from .tools.choices import choice_tools
+from .tools.mcp_bridge import bridged_name
 
 if TYPE_CHECKING:
     from .daemon_http import AssistantServer
@@ -169,9 +172,14 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             message = (DRY_RUN_PREFIX + message)[:MAX_MESSAGE_CHARS]
         if not conversation.history:
             unavailable = [GROUP_DESCRIPTIONS[group] for group in agent["disabled_tool_groups"]]
+            # Offline Wikipedia, when set up and its question tool is lent to the AI: looked in before the web.
+            wikipedia = settings.get("wikipedia") or {}
+            reader = settings["tool_servers"].get(wikipedia.get("server") or "") or {}
+            lent = reader.get("enabled", True) and (reader.get("tools") is None or "zim_query" in reader["tools"])
+            wikipedia_tool = bridged_name(wikipedia["server"], "zim_query") if reader and lent else ""
             conversation.history.append(
                 Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
-                                                agent["confirm_plans"], settings.get("routines"))))
+                                                agent["confirm_plans"], settings.get("routines"), wikipedia_tool)))
         policy = agent.get("app_context", app_context.DEFAULT_POLICY)
         # Read the application only when some AI in the chain may be told about it.
         note = app_context.background_note(body.get("about_window"), full=body.get("full_context") is True) \

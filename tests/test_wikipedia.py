@@ -420,6 +420,18 @@ class SetupTests(unittest.TestCase):
         self.assertEqual((self.server.settings["wikipedia"]["book"], self.server.settings["wikipedia"]["auto_update"]),
                          ("wikipedia_en_all_nopic", True))
 
+    def test_an_older_reader_gets_the_raised_limit_and_others_are_left_alone(self) -> None:
+        entry = {"command": "/usr/bin/openzim-mcp", "args": ["--mode", "advanced", "/zim"],
+                 "env": {"OPENZIM_MCP_RATE_LIMIT__BURST_SIZE": "50"}}
+        settings = {"wikipedia": {"server": "wikipedia"}, "tool_servers": {"wikipedia": entry, "other": {"command": "x"}}}
+        upgraded = wikipedia_setup.upgraded_settings(settings)
+        self.assertEqual(upgraded["tool_servers"]["wikipedia"]["env"],
+                         {**wikipedia_setup.READER_ENV, "OPENZIM_MCP_RATE_LIMIT__BURST_SIZE": "50"})  # the user's value kept
+        self.assertEqual(upgraded["tool_servers"]["other"], {"command": "x"})
+        self.assertIsNone(wikipedia_setup.upgraded_settings(upgraded))
+        self.assertIsNone(wikipedia_setup.upgraded_settings({"wikipedia": {"server": "other"},
+                                                             "tool_servers": settings["tool_servers"]}))
+
     def test_the_timer_job_updates_only_what_happy_bot_keeps(self) -> None:
         kept = {"wikipedia": {"server": "w", "folder": str(self.folder), "book": "wikipedia_en_all_maxi",
                               "auto_update": True}}

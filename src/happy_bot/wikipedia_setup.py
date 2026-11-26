@@ -213,6 +213,23 @@ def turn_off(server: "AssistantServer") -> dict[str, Any]:
     return {"ok": True, "message": "Offline Wikipedia is off." + where}
 
 
+def upgraded_settings(settings: dict[str, Any]) -> dict[str, Any] | None:
+    """``settings`` with ``READER_ENV`` added to the reader Happy Bot set up, when it lacks any of it; else None.
+
+    Readers set up before the limit was raised (2026-11-25) still had openzim-mcp's own limit, which
+    made pages load slowly. Only the reader named in the ``wikipedia`` settings and started from
+    openzim-mcp is changed; a value the user set is kept. The daemon applies this when it starts.
+    """
+    name = (settings.get("wikipedia") or {}).get("server") or ""
+    entry = (settings.get("tool_servers") or {}).get(name)
+    if not entry or "openzim-mcp" not in " ".join([entry.get("command", ""), *entry.get("args", [])]):
+        return None
+    env = {**READER_ENV, **(entry.get("env") or {})}
+    if env == (entry.get("env") or {}):
+        return None
+    return {**settings, "tool_servers": {**settings["tool_servers"], name: {**entry, "env": env}}}
+
+
 def scheduled_update(settings: dict[str, Any]) -> dict[str, Any]:
     """What the monthly timer does: download a newer build of the kept book, when Happy Bot keeps it."""
     wikipedia = settings.get("wikipedia") or {}

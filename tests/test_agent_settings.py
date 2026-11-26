@@ -92,6 +92,8 @@ class PromptTests(unittest.TestCase):
 
     def test_plan_confirmation_is_asked_for_only_when_chosen(self) -> None:
         self.assertIn("short numbered plan", system_prompt(None, "", [], confirm_plans=True))
+        self.assertIn("first with wikipedia__zim_query", system_prompt(None, "", [], wikipedia_tool="wikipedia__zim_query"))
+        self.assertNotIn("Wikipedia", system_prompt(None, "", []))
         self.assertNotIn("numbered plan", system_prompt(None, "", []))
         with self.assertRaisesRegex(SettingsError, "'confirm_plans' must be true or false"):
             validate_settings({"agent": {"confirm_plans": "yes"}})

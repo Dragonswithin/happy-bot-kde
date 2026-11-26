@@ -123,6 +123,7 @@ def system_prompt(
     unavailable: list[str] | None = None,
     confirm_plans: bool = False,
     routines: dict[str, Any] | None = None,
+    wikipedia_tool: str = "",
 ) -> str:
     """Instructions given to the model at the start of every conversation.
 
@@ -137,7 +138,11 @@ def system_prompt(
     (``tools.catalog.GROUP_DESCRIPTIONS``). ``confirm_plans`` (the user's
     ``agent.confirm_plans`` setting) asks for a plan before multi-step
     changes. ``routines`` (the ``routines`` setting) are listed so the
-    user can run one by name (``routines.prompt_lines``).
+    user can run one by name (``routines.prompt_lines``). ``wikipedia_tool``
+    is the bridged name of the offline Wikipedia's question tool when it is
+    set up (``wikipedia``): the model is told to look facts up there before
+    the web, as the web finder lists it first; left to itself the local model
+    searched the web and read the same article from wikipedia.org.
     """
     now = datetime.datetime.now().astimezone().strftime("%A, %d %B %Y, %H:%M %Z")
     lines = [
@@ -182,6 +187,11 @@ def system_prompt(
         "Folders: " + ", ".join(f"{name} is {path}" for name, path in user_folders(folder_overrides).items()) + ".",
     ]
     lines += prompt_lines(routines or {})
+    if wikipedia_tool:
+        lines += ["", f"The user keeps Wikipedia on this computer. For facts about people, places, history, science, "
+                  f"words and the like, look in it first with {wikipedia_tool}: it needs no internet and keeps the "
+                  "question on this computer. Use the web for news, recent events, prices and anything the offline "
+                  "Wikipedia does not have."]
     if confirm_plans:
         lines += ["", "Before a request that will change more than one thing, first reply with a short numbered "
                   "plan of the changes and ask the user to confirm. Look things up first if needed, but change "

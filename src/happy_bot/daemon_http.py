@@ -213,6 +213,12 @@ class AssistantServer(ThreadingHTTPServer):
         self.conversations = ConversationStore(ConversationArchive(history_dir, self.settings["history_days"]))
         self.conversations.archive.prune()
         self.sync_routines()
+        upgraded = wikipedia_setup.upgraded_settings(self.settings)  # an older offline Wikipedia reader
+        if upgraded is not None and not self.settings_error:
+            try:
+                self.replace_settings(upgraded)
+            except settings_store.SettingsError:
+                pass
         write_private_file(token_path(self.runtime_dir), self.auth_token)
         self.state.persist()
 

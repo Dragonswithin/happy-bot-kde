@@ -1342,6 +1342,15 @@ Findings:
   the Detroit page with its infobox and every picture.
 - Opening a chat in the sidebar during a search showed it behind the search;
   it now leaves the search first.
+- In a normal chat the local model had the Wikipedia tools but searched the
+  web and read the same article from wikipedia.org. The system prompt now
+  says, when the reader's question tool is lent to the AI, to look facts up
+  in the offline Wikipedia first and use the web for news and what it lacks
+  (`agent_loop.system_prompt`, `wikipedia_tool`). Checked live on the GPU
+  model: "When was the Eiffel Tower built?" took one offline lookup and no
+  web search; "latest KDE Plasma news this week" still searched the web.
+- Readers set up before the read limit was raised get it when the daemon
+  starts (`wikipedia_setup.upgraded_settings`); the maintainer's did.
 
 ## Decisions
 
