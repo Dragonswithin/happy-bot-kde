@@ -480,7 +480,7 @@ PlasmoidItem {
             text: i18n("Send feedback…")
             icon: "tools-report-bug"
             visible: root.feedbackUrl.length > 0
-            onClicked: Qt.openUrlExternally(root.feedbackUrl)
+            onClicked: root.openLocation(root.feedbackUrl)
         }
 
         PlasmaExtras.MenuItem {
@@ -515,7 +515,7 @@ PlasmoidItem {
             text: i18n("Send feedback…")
             icon: "tools-report-bug"
             visible: root.feedbackUrl.length > 0
-            onClicked: Qt.openUrlExternally(root.feedbackUrl)
+            onClicked: root.openLocation(root.feedbackUrl)
         }
 
         PlasmaExtras.MenuItem {
@@ -639,6 +639,7 @@ PlasmoidItem {
     }
 
     function openPopup() {
+        browserHandoff.stop();
         if (popup.visible) {
             return;
         }
@@ -653,6 +654,7 @@ PlasmoidItem {
     }
 
     function closePopup() {
+        browserHandoff.stop();
         session.dismissHelpDraft();
         session.stopFinding();
         if (!session.replacing) {
@@ -694,6 +696,7 @@ PlasmoidItem {
     /** The floating button and the hotkey: open Happy Bot noting the application the user is in.
      *  With the floating button on, it opens right there; otherwise in the panel bar or popup. */
     function openForApplication() {
+        browserHandoff.stop();
         session.captureApplication();
         if (root.floating) {
             popup.visible = false;
@@ -875,8 +878,34 @@ PlasmoidItem {
         root.surface.selectedIndex = next === count ? -1 : next;
     }
 
+    Timer {
+        id: browserHandoff
+        property string scheme
+        // A layer-shell popup must keep its surface alive until Qt has
+        // requested a Wayland activation token for the clicked link.
+        interval: 250
+        onTriggered: {
+            // Some browsers open a new tab in an existing window without using
+            // the token. If Happy Bot still has focus, ask KWin to bring it forward.
+            if (root.assistantOpen || root.fullRepresentationItem?.inputFocused) {
+                session.request("POST", "/open/browser-focus", {scheme: scheme}, () => {}, () => {});
+            }
+            root.closePopup();
+            if (root.barFocused) {
+                root.barFocused = false;
+                root.wantsInput = false;
+            }
+        }
+    }
+
     function openLocation(location) {
-        session.openLocation(location);
+        const target = String(location || "").trim();
+        if (/^https?:\/\//i.test(target) && Qt.openUrlExternally(target)) {
+            browserHandoff.scheme = target.substring(0, target.indexOf(":")).toLowerCase();
+            browserHandoff.restart();
+            return;
+        }
+        session.openLocation(target);
         root.closePopup();
     }
 
@@ -889,6 +918,10 @@ PlasmoidItem {
             return;
         }
         if (hit.kind === "quick") {
+            if (hit.action.type === "bookmark" || hit.action.type === "visited") {
+                root.openLocation(hit.action.target);
+                return;
+            }
             // An instant command that fails is shown in the popup, since nothing else would show it.
             session.activateQuick(hit, hit.action.type === "command" ? () => root.openPopup() : null);
             if (hit.action.type === "conversation") {

@@ -54,6 +54,8 @@ Endpoints:
   role proposals. This starts the servers, so it
   can take seconds.
 - ``POST /open``: open a file, folder or link (``desktop_actions``).
+- ``POST /open/browser-focus``: bring forward the existing default-browser
+  window for a clicked ``http`` or ``https`` link if it needs a focus handoff.
 - ``POST /models/discover``: find model services running on this computer.
 - ``POST /tools/scan``: start each discovered, not yet configured tool
   server briefly to report its tools and the roles it could fill. Slow by
@@ -567,6 +569,13 @@ def open_location(server: "AssistantServer", query: dict[str, list[str]], body: 
     return 200, {"ok": True}
 
 
+def focus_browser(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    scheme = body.get("scheme")
+    if scheme not in ("http", "https"):
+        return _error(400, "Only web browsers can be focused here.", "invalid")
+    return 200, {"ok": True, "focused": desktop_actions.focus_default_browser(scheme)}
+
+
 def screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     return 200, app_context.capture_desktop(server.runtime_dir)
 
@@ -940,6 +949,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/tools/import"): import_tool_server,
     ("GET", "/tools/servers"): list_tool_servers,
     ("POST", "/open"): open_location,
+    ("POST", "/open/browser-focus"): focus_browser,
     ("POST", "/screenshot"): screenshot,
     ("POST", "/models/probe"): probe_models,
     ("POST", "/models/discover"): discover_models,

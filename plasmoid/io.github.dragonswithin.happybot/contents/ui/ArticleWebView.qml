@@ -40,6 +40,15 @@ WebEngineView {
     }
 
     signal shown(string title, string path)
+    signal externalLinkRequested(string url)
+
+    function openExternal(url) {
+        const target = String(url);
+        if (/^https?:\/\//i.test(target))
+            web.externalLinkRequested(target);
+        else
+            Qt.openUrlExternally(url);
+    }
 
     url: web.pageUrl
     settings.javascriptCanOpenWindows: false
@@ -50,10 +59,10 @@ WebEngineView {
         const target = String(request.url);
         if (web.base.length > 0 && !target.startsWith(web.base) && !target.startsWith("data:")) {
             request.reject();
-            Qt.openUrlExternally(request.url);
+            web.openExternal(request.url);
         }
     }
-    onNewWindowRequested: request => Qt.openUrlExternally(request.requestedUrl)
+    onNewWindowRequested: request => web.openExternal(request.requestedUrl)
     onTitleChanged: {
         const address = String(web.url);
         if (web.base.length > 0 && address.startsWith(web.base) && web.title.length > 0) {

@@ -19,6 +19,7 @@ widget id is looked up through the Plasma shell's scripting interface.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -73,3 +74,40 @@ def open_location(location: str) -> None:
         )
     except OSError as exc:
         raise DesktopActionError(f"could not open {target}: {exc}") from exc
+
+
+def focus_default_browser(scheme: str) -> bool:
+    """Bring an existing default-browser window forward after an explicit link click."""
+    from . import kwin_bridge
+
+    if scheme not in ("http", "https"):
+        return False
+    try:
+        desktop = _run(["xdg-mime", "query", "default", f"x-scheme-handler/{scheme}"]).strip()
+        if not desktop.endswith(".desktop"):
+            return False
+        app_id = desktop.removesuffix(".desktop").lower()
+        alias = app_id.rsplit(".", 1)[-1]
+        result = kwin_bridge.shared().run(fr"""
+            const appId = {json.dumps(app_id)};
+            const alias = {json.dumps(alias)};
+            function isBrowser(w) {{
+                if (!w || !w.normalWindow) return false;
+                const desktop = String(w.desktopFileName || "").toLowerCase().replace(/\.desktop$/, "");
+                const resource = String(w.resourceClass || "").toLowerCase();
+                return desktop === appId || resource === appId
+                    || ((!desktop || desktop === alias) && resource === alias);
+            }}
+            if (isBrowser(workspace.activeWindow)) return true;
+            const browsers = workspace.stackingOrder.filter(isBrowser).reverse();
+            const window = browsers.find(w => w.onAllDesktops || w.desktops.includes(workspace.currentDesktop))
+                || browsers[0];
+            if (!window) return false;
+            window.minimized = false;
+            workspace.activeWindow = window;
+            return true;
+        """, timeout=1.0)
+        return result is True
+    except (DesktopActionError, OSError, subprocess.TimeoutExpired,
+            kwin_bridge.KWinUnavailable, kwin_bridge.KWinScriptError):
+        return False

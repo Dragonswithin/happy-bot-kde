@@ -105,6 +105,17 @@ class InputTests(unittest.TestCase):
 
 
 class PopupTests(unittest.TestCase):
+    def test_browser_focus_uses_the_default_handler_for_the_clicked_scheme(self) -> None:
+        with mock.patch.object(desktop_actions, "_run", return_value="org.ladybird.Ladybird.desktop\n") as command:
+            with mock.patch("happy_bot.kwin_bridge.shared") as bridge:
+                bridge.return_value.run.return_value = True
+                self.assertTrue(desktop_actions.focus_default_browser("https"))
+                command.assert_called_once_with(["xdg-mime", "query", "default", "x-scheme-handler/https"])
+                script = bridge.return_value.run.call_args.args[0]
+                self.assertIn('"org.ladybird.ladybird"', script)
+                self.assertFalse(desktop_actions.focus_default_browser("file"))
+                bridge.return_value.run.assert_called_once()
+
     def test_popup_is_opened_through_the_applets_shortcut_action(self) -> None:
         calls = []
         with mock.patch.object(desktop_actions, "_run", side_effect=lambda command: calls.append(command) or "192 "):

@@ -117,6 +117,9 @@ ColumnLayout {
     Connections {
         target: page.item
         ignoreUnknownSignals: true
+        function onExternalLinkRequested(url) {
+            view.linkActivated(url);
+        }
         function onShown(title, path) {
             view.session.articleShown(title, path);
         }
