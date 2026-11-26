@@ -76,7 +76,7 @@ used.
 ## What Works Today
 
 - The panel icon or widget shortcut opens the full assistant next to the
-  panel. Under **Show in panel → Search bar**, the bar is a search like the
+  panel. Under **Appearance → Panel widget → Search bar**, the bar is a search like the
   application launcher's (below); click the bar's logo, or press Enter on
   an empty bar, to open the assistant. Vertical panels always show the icon.
 - **Happy Bot the app**: "Happy Bot" in the application menu starts the
@@ -99,7 +99,7 @@ used.
   launcher: right above the bar it lists installed applications, System
   Settings pages, quick answers (sums, conversions, dates),
   saved chats and files (through a search tool you already have), with no
-  AI model involved, in a list that scrolls. Under Appearance → Search you
+  AI model involved, in a list that scrolls. Under Search & Tools → Browser results you
   can add your browsers' bookmarks and recently visited websites (Firefox,
   Chrome, Chromium, Brave, Vivaldi, Edge, Opera and others), read on this
   computer only. The top result is selected and
@@ -141,7 +141,7 @@ used.
   the selection (Undo in that application brings the old text back);
   Copy copies it. It uses the first AI in your order that your privacy
   setting lets see text from your applications.
-- **Talk to it**: switch on the microphone under AI Model → Voice ("Find on
+- **Talk to it**: switch on the microphone under AI Model → Voice input ("Find on
   this computer" finds a local Whisper), then click the microphone in the
   panel bar, the popup or the floating Happy Bot, or press the "Talk to Happy
   Bot" shortcut you set in System Settings. Talk and pause: what you said
@@ -242,7 +242,8 @@ panel widget always look and behave the same.
   argument gets the text and how many results yourself; connected tool servers, each with an on/off switch, a
   "look-up only" mark, its start command, environment values such as API
   keys, and which of its tools the assistant may use; a scan for servers
-  set up for other AI programs; connecting one by hand.
+  set up for other AI programs; connecting one by hand. **Setup check** tests the model,
+  search tools and desktop connections together.
 - **Behaviour:** when to ask for approval; which AI may see the app you are
   in (only AIs on this computer, any AI, or off); **Allow…** next to *Typing into
   other apps*, which asks Plasma's permission once; which kinds of action the
@@ -253,10 +254,13 @@ panel widget always look and behave the same.
 - **History & Folders:** how long conversations are kept, deleting them
   all, and where Desktop, Documents, Downloads, Pictures, Music and Videos
   are.
-- **Appearance:** the robot mascot or the wand, the hotkey, starting
+- **Appearance:** the robot mascot or the wand, mascot animations, an optional
+  greeting sound, start-screen buttons and their order, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
   back in its corner, the popup's size, and in the panel Happy Bot's icon
-  or a search bar, and the bar's width.
+  or a search bar, and the bar's width. New setups start with the animated robot.
+  Enable **Play a greeting sound** to hear a short chirp when the assistant opens.
+  The preview button plays it in settings.
 
 API keys and other secrets typed there are stored in the daemon's settings
 file (mode 0600) and never shown again.
@@ -481,7 +485,8 @@ which it refuses if they contain a key or personal details).
 Plasma 6 on Wayland, Python 3.11 or newer, and PyGObject (`python-gobject`
 or `python3-gi`) with `at-spi2-core`, which the window and application
 control tools use to talk to KWin, the accessibility bus and the desktop
-portal. Everything else is the Python standard library.
+portal. The optional greeting sound uses Qt Multimedia (`qt6-multimedia` on Arch).
+Everything else in the daemon is the Python standard library.
 
 ## Notes
 

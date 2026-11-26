@@ -212,7 +212,7 @@ Automation and help:
   results, in the panel bar's list, under headings; open windows were
   dropped as odd among search results)
 - ● Browser bookmarks and recently visited websites in those results, each
-  switched on under Appearance → Search (off by default): Firefox-family and
+  switched on under Search & Tools → Browser results (off by default): Firefox-family and
   Chromium-family browsers, native or Flatpak, read from private copies of
   their databases into memory (``browsers``), refreshed every minute; a
   click opens the page in the default browser. (asked for by the maintainer

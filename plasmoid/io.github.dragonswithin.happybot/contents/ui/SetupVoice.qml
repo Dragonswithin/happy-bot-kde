@@ -28,12 +28,22 @@ import org.kde.kirigami as Kirigami
  * System Settings (desktop/happy-bot-shortcuts.desktop). The section keeps
  * only `busy`, while a Find or Test is running.
  */
-Kirigami.FormLayout {
+SettingsSection {
     id: section
+    title: i18n("Voice input")
+    iconName: "audio-input-microphone"
+    description: i18n("Click the microphone and speak. Pausing, or clicking it again, sends your words to the AI.")
 
     required property var page
     readonly property var voice: page.settings && page.settings.voice ? page.settings.voice : null
     property bool busy: false
+    property string result: ""
+    property bool resultIsError: false
+
+    function showResult(text, isError) {
+        section.result = text;
+        section.resultIsError = isError;
+    }
 
     function set(key, value) {
         if (section.voice && section.voice[key] !== value) {
@@ -48,56 +58,52 @@ Kirigami.FormLayout {
 
     function find() {
         section.busy = true;
-        section.page.report(i18n("Looking for a speech-to-text service on this computer…"), false);
+        section.showResult(i18n("Looking for a speech-to-text service on this computer…"), false);
         section.page.client.request("POST", "/voice/find", {}, function(data) {
             section.busy = false;
             address.text = data.base_url;
             section.set("base_url", data.base_url);
+            section.showResult(i18n("Found a speech service on this computer."), false);
         }, function(data) {
             section.busy = false;
-            section.page.report(data.error || i18n("No speech-to-text service answered on this computer."), true);
+            section.showResult(data.error || i18n("No speech-to-text service answered on this computer."), true);
         });
     }
 
     function test() {
+        section.showResult(i18n("Testing the speech service…"), false);
         section.busy = true;
         section.page.client.request("POST", "/voice/check", { voice: section.typed() }, function(data) {
             section.busy = false;
-            section.page.report(i18n("The speech service answers. Click the microphone and talk."), false);
+            section.showResult(i18n("The speech service answers. Click the microphone and talk."), false);
         }, function(data) {
             section.busy = false;
-            section.page.report(data.error || i18n("The speech service did not answer."), true);
+            section.showResult(data.error || i18n("The speech service did not answer."), true);
         });
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Voice")
     }
 
     QQC2.CheckBox {
         id: micShown
-        Kirigami.FormData.label: i18n("Microphone:")
-        text: i18n("Show a microphone to talk to Happy Bot")
+        text: i18n("Show the microphone")
         checked: section.voice ? section.voice.enabled : false
         onToggled: section.set("enabled", checked)
     }
 
-    QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-        wrapMode: Text.Wrap
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
-        text: i18n("Click it, talk, and pause: what you said goes to the AI. Click it again to send at once. For a key, set \"Talk to Happy Bot\" in System Settings > Shortcuts > Happy Bot Shortcuts.")
+    QQC2.Button {
+        id: serviceSettings
+        text: i18n("Speech service settings")
+        icon.name: checked ? "arrow-down" : "arrow-right"
+        checkable: true
     }
 
-    RowLayout {
-        Kirigami.FormData.label: i18n("Speech to text:")
-        spacing: Kirigami.Units.smallSpacing
+    Kirigami.FormLayout {
+        visible: serviceSettings.checked
+        Layout.fillWidth: true
 
         QQC2.TextField {
             id: address
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 14
+            Kirigami.FormData.label: i18n("Service address:")
+            Layout.fillWidth: true
             placeholderText: "http://127.0.0.1:52625/v1"
             text: section.voice ? section.voice.base_url : ""
             onEditingFinished: section.set("base_url", text.trim())
@@ -109,40 +115,45 @@ Kirigami.FormLayout {
             enabled: !section.busy
             onClicked: section.find()
         }
-    }
 
-    QQC2.TextField {
-        id: model
-        Kirigami.FormData.label: i18n("Model:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 14
-        placeholderText: i18n("Optional, e.g. whisper-v3:turbo")
-        text: section.voice ? section.voice.model : ""
-        onEditingFinished: section.set("model", text.trim())
-    }
-
-    RowLayout {
-        Kirigami.FormData.label: i18n("Language:")
-        spacing: Kirigami.Units.smallSpacing
+        QQC2.TextField {
+            id: model
+            Kirigami.FormData.label: i18n("Speech model:")
+            Layout.fillWidth: true
+            placeholderText: i18n("Optional, e.g. whisper-v3:turbo")
+            text: section.voice ? section.voice.model : ""
+            onEditingFinished: section.set("model", text.trim())
+        }
 
         QQC2.TextField {
             id: language
-            Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-            placeholderText: "en"
+            Kirigami.FormData.label: i18n("Language code:")
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+            placeholderText: i18n("e.g. en or de")
             text: section.voice ? section.voice.language : "en"
             onEditingFinished: section.set("language", text.trim())
         }
 
-        QQC2.Label {
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("Two letters, such as en or de")
+        QQC2.Button {
+            text: i18n("Test speech service")
+            icon.name: "media-playback-start"
+            enabled: !section.busy && address.text.trim().length > 0
+            onClicked: section.test()
         }
     }
 
-    QQC2.Button {
-        text: section.busy ? i18n("Testing…") : i18n("Test")
-        icon.name: "media-playback-start"
-        enabled: !section.busy && address.text.trim().length > 0
-        onClicked: section.test()
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        visible: serviceSettings.checked && section.result.length > 0
+        type: section.resultIsError ? Kirigami.MessageType.Error : Kirigami.MessageType.Information
+        text: section.result
+    }
+
+    QQC2.Label {
+        visible: serviceSettings.checked
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        font: Kirigami.Theme.smallFont
+        text: i18n("Set a key for “Talk to Happy Bot” in System Settings → Shortcuts → Happy Bot Shortcuts.")
     }
 }

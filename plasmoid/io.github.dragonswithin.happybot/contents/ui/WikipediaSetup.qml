@@ -114,20 +114,20 @@ ColumnLayout {
     }
 
     QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+        Layout.fillWidth: true
         wrapMode: Text.Wrap
         text: wiki.info.set_up && wiki.info.archives.length > 0
             ? i18n("Using %1 (%2, %3 GB, from %4) in %5.", wiki.info.archives[0].book.replace(/_/g, " "),
                    wiki.flavourName(wiki.info.archives[0].flavour), wiki.gigabytes(wiki.info.archives[0].size),
                    wiki.info.archives[0].build, wiki.info.folder)
-            : i18n("Read Wikipedia without the internet: in Happy Bot's Wikipedia search, and for the AI's answers.")
+            : i18n("Use an archive on this computer to find Wikipedia articles and answer questions offline.")
     }
 
     RowLayout {
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.Button {
-            text: i18n("Set up…")
+            text: wiki.info.set_up ? i18n("Choose archive…") : i18n("Set up…")
             icon.name: "run-build-configure"
             checkable: true
             checked: wiki.choosing
@@ -151,7 +151,7 @@ ColumnLayout {
 
     QQC2.CheckBox {
         visible: wiki.info.set_up
-        text: i18n("Keep it up to date (Happy Bot checks once a month)")
+        text: i18n("Check for updates each month")
         checked: wiki.info.auto_update === true
         enabled: !(wiki.info.updated_elsewhere || "").length && wiki.busyId === ""
         onToggled: wiki.call("/wikipedia/auto-update", { enabled: checked }, "auto")
@@ -159,7 +159,7 @@ ColumnLayout {
 
     QQC2.Label {
         visible: wiki.info.set_up && (wiki.info.updated_elsewhere || "").length > 0
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+        Layout.fillWidth: true
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
@@ -169,7 +169,7 @@ ColumnLayout {
     // A download under way, or how the last one ended.
     ColumnLayout {
         visible: wiki.downloading || (wiki.info.download || {}).state === "failed"
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+        Layout.fillWidth: true
         spacing: Kirigami.Units.smallSpacing
 
         RowLayout {
@@ -212,7 +212,6 @@ ColumnLayout {
     }
 
     Kirigami.InlineMessage {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
         Layout.fillWidth: true
         visible: wiki.problem.length > 0
         type: Kirigami.MessageType.Error
@@ -222,12 +221,12 @@ ColumnLayout {
     // The choices, under "Set up…".
     ColumnLayout {
         visible: wiki.choosing
-        Layout.leftMargin: Kirigami.Units.gridUnit
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+        Layout.fillWidth: true
         spacing: Kirigami.Units.largeSpacing
 
         RowLayout {
             visible: wiki.loadingChoices
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
             QQC2.BusyIndicator {
@@ -237,6 +236,8 @@ ColumnLayout {
             }
 
             QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
                 text: i18n("Looking for Wikipedia on this computer and what Kiwix offers…")
             }
         }
@@ -258,7 +259,11 @@ ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
 
                 RowLayout {
+                    Layout.fillWidth: true
+
                     Kirigami.Heading {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
                         level: 4
                         text: i18n("Already on this computer")
                     }
@@ -266,9 +271,6 @@ ColumnLayout {
                         text: i18n("Recommended")
                         color: Kirigami.Theme.positiveTextColor
                         font: Kirigami.Theme.smallFont
-                    }
-                    Item {
-                        Layout.fillWidth: true
                     }
                     QQC2.Button {
                         text: wiki.busyId === found.modelData.id ? i18n("Setting up…") : i18n("Use this")
@@ -309,7 +311,11 @@ ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
 
                 RowLayout {
+                    Layout.fillWidth: true
+
                     Kirigami.Heading {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
                         level: 4
                         text: download.modelData.title
                     }
@@ -318,9 +324,6 @@ ColumnLayout {
                         text: i18n("Recommended")
                         color: Kirigami.Theme.positiveTextColor
                         font: Kirigami.Theme.smallFont
-                    }
-                    Item {
-                        Layout.fillWidth: true
                     }
                     QQC2.Button {
                         text: i18n("Download %1 GB", wiki.gigabytes(download.modelData.size))

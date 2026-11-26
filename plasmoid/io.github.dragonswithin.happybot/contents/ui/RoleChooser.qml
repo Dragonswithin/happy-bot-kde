@@ -127,13 +127,16 @@ ColumnLayout {
             readonly property bool busy: chooser.usingId === modelData.id
             readonly property string error: chooser.errors[modelData.id] || ""
 
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
             RowLayout {
+                Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
 
                 Kirigami.Heading {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
                     level: 4
                     text: option.modelData.title
                 }
@@ -143,10 +146,6 @@ ColumnLayout {
                     text: i18n("Recommended")
                     color: Kirigami.Theme.positiveTextColor
                     font: Kirigami.Theme.smallFont
-                }
-
-                Item {
-                    Layout.fillWidth: true
                 }
 
                 QQC2.BusyIndicator {
@@ -185,6 +184,7 @@ ColumnLayout {
 
                 RowLayout {
                     id: input
+                    Layout.fillWidth: true
 
                     required property var modelData
                     readonly property string key: option.modelData.id + "/" + modelData.name
@@ -192,7 +192,7 @@ ColumnLayout {
                     spacing: Kirigami.Units.smallSpacing
 
                     QQC2.TextField {
-                        Layout.minimumWidth: Kirigami.Units.gridUnit * 14
+                        Layout.fillWidth: true
                         placeholderText: input.modelData.label
                         echoMode: input.modelData.secret ? TextInput.Password : TextInput.Normal
                         text: chooser.typed[input.key] || ""

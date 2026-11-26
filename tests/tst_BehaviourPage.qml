@@ -3,8 +3,8 @@
 // unusable:
 // - Its two sets of choices, "Ask before it" (approval_policy) and "The app you're in"
 //   (agent.app_context), must be separate. Qt Quick radio buttons with the same parent are one
-//   exclusive set unless given a ButtonGroup, and every row of the page is a child of its form,
-//   so the two once acted as one and choosing one setting cleared the other.
+//   exclusive set unless given a ButtonGroup, so the two once acted as one in a shared form
+//   and choosing one setting cleared the other.
 // - The "Your instructions" box must keep its height when the text is long and scroll inside,
 //   with the character count below it: it once grew with the text and drew it over the count
 //   and the buttons.
@@ -27,6 +27,7 @@ Item {
     HappyBot.SetupBehavior {
         id: behaviour
         page: ({
+            client: { request: function() {} },
             terminals: [], suggestedInstructions: "", save: function(change) {},
             settings: { approval_policy: "danger", agent: {
                 app_context: "local", local_only: false, notify_after_seconds: 60, max_steps: 20,

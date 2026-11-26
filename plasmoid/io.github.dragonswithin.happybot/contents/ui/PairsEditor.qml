@@ -53,20 +53,23 @@ ColumnLayout {
 
         RowLayout {
             id: row
+            Layout.fillWidth: true
 
             required property string modelData
 
             spacing: Kirigami.Units.smallSpacing
 
             QQC2.Label {
-                Layout.minimumWidth: Kirigami.Units.gridUnit * 7
+                Layout.fillWidth: true
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
                 text: row.modelData
                 elide: Text.ElideMiddle
             }
 
             Kirigami.PasswordField {
                 id: replacement
-                Layout.minimumWidth: Kirigami.Units.gridUnit * 10
+                Layout.fillWidth: true
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 10
                 placeholderText: editor.pairs[row.modelData] === null ? i18n("Stored; type to replace") : editor.valuePlaceholder
                 text: editor.pairs[row.modelData] === null ? "" : (editor.pairs[row.modelData] || "")
                 onEditingFinished: {
@@ -89,17 +92,20 @@ ColumnLayout {
     }
 
     RowLayout {
+        Layout.fillWidth: true
         spacing: Kirigami.Units.smallSpacing
 
         QQC2.TextField {
             id: newName
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 7
+            Layout.fillWidth: true
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 7
             placeholderText: editor.namePlaceholder
         }
 
         Kirigami.PasswordField {
             id: newValue
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 10
+            Layout.fillWidth: true
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 10
             placeholderText: editor.valuePlaceholder
         }
 

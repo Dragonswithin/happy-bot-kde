@@ -21,6 +21,8 @@ QtObject {
     readonly property string homePath: String(QtCore.StandardPaths.writableLocation(
         QtCore.StandardPaths.HomeLocation)).replace(/^file:\/\//, "")
 
+    readonly property color mascotAccent: "#72c8bf"
+
     readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
 
     readonly property url activeMicrophoneIcon: Qt.resolvedUrl("../images/microphone-active.svg")

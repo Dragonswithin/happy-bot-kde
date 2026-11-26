@@ -3,14 +3,16 @@
 Happy Bot runs as an app (the floating Happy Bot, ``app_control``) and, optionally, as a panel
 widget: two copies of the same widget, which Plasma would give separate settings. Its settings
 belong to the app: these live in the daemon's settings (``settings.py`` stores them, under ``ui``),
-the app's Appearance page changes them (``POST /ui``) and both copies read them (``GET /health``),
+the app's Appearance and Search & Tools pages change them (``POST /ui``) and both copies read them (``GET /health``),
 so the panel's popup looks and behaves like the app's. Only what concerns the panel widget alone
 (search bar or icon, the bar's width) and the daemon's address stay with each copy in Plasma.
 
 ``UI_DEFAULTS`` lists every key with its default; ``UI_RANGES`` the whole-number ranges::
 
     "ui": {
-      "robot_mascot": false,      # the robot picture instead of the wand, on the panel and in replies
+      "robot_mascot": true,      # the robot picture instead of the wand, on the panel and in replies
+      "mascot_animations": true,  # animate the greeting and activity poses
+      "robot_sounds": false,       # a short chirp when the assistant opens
       "popup_width": 30,          # the popup's size, in grid units: width 20 to 70,
       "popup_height": 26,         #   height 12 to 50
       "floating_opacity": 40,     # how visible the floating Happy Bot is while not in use, 15 to 100 percent
@@ -42,7 +44,8 @@ from __future__ import annotations
 from typing import Any
 
 UI_DEFAULTS: dict[str, Any] = {
-    "robot_mascot": False, "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
+    "robot_mascot": True, "mascot_animations": True, "robot_sounds": False,
+    "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
     "floating_opacity": 40, "floating_x": -1, "floating_y": -1, "imported": [], "start_screen": ["files", "web", "help"],
 }
 START_BUTTONS = ("files", "web", "help", "system")

@@ -34,10 +34,8 @@ import org.kde.plasma.plasmoid
  * the local copy stays as it was, so the controls snap back. After any save
  * the settings are read again, so other changes show up.
  *
- * Visually it is the status line: a message strip for the last outcome, a
- * "Try again" button while the daemon cannot be reached, and "Check
- * everything", which runs the daemon's self-check (`GET /check`,
- * src/happy_bot/self_check.py) and lists any problem with its fix.
+ * The status strip appears while loading and when there is feedback to show.
+ * ConfigTools.qml groups the app-wide self-check with the connections it tests.
  */
 ColumnLayout {
     id: store
@@ -49,10 +47,10 @@ ColumnLayout {
     property string message: ""
     property bool messageIsError: false
     property bool offline: false
-    property bool checking: false
     readonly property bool ready: settings !== null
     readonly property alias client: daemon
 
+    visible: !ready || offline || message.length > 0
     spacing: Kirigami.Units.smallSpacing
 
     DaemonClient {
@@ -69,6 +67,7 @@ ColumnLayout {
 
     function reload() {
         daemon.request("GET", "/settings", null, function(data) {
+            if (store.offline) store.report("", false);
             store.offline = false;
             store.settings = data.settings;
             store.effectiveFolders = data.effective_folders || {};
@@ -77,20 +76,6 @@ ColumnLayout {
         }, function(data) {
             store.offline = true;
             store.report(data.error || i18n("The assistant is not running"), true);
-        });
-    }
-
-    /** Runs the daemon's self-check and shows the problems (and fixes), or that all is well. */
-    function check() {
-        store.checking = true;
-        daemon.request("GET", "/check", null, function(data) {
-            store.checking = false;
-            const problems = data.checks.filter(item => !item.ok);
-            store.report(problems.length === 0 ? i18n("Everything works.")
-                : problems.map(item => item.name + ": " + item.detail + " " + item.fix).join("\n"), problems.length > 0);
-        }, function(data) {
-            store.checking = false;
-            store.report(data.error || i18n("The check could not run"), true);
         });
     }
 
@@ -123,29 +108,20 @@ ColumnLayout {
         onVisibleChanged: if (!visible) store.message = ""
     }
 
+    QQC2.Button {
+        visible: store.offline
+        text: i18n("Try again")
+        icon.name: "view-refresh"
+        onClicked: store.reload()
+    }
+
     RowLayout {
-        spacing: Kirigami.Units.smallSpacing
-
-        QQC2.Button {
-            visible: store.offline
-            text: i18n("Try again")
-            icon.name: "view-refresh"
-            onClicked: store.reload()
-        }
-
-        QQC2.Button {
-            visible: !store.offline
-            text: i18n("Check everything")
-            icon.name: "checkmark"
-            enabled: !store.checking
-            onClicked: store.check()
-        }
-
+        visible: !store.ready && !store.offline
         QQC2.BusyIndicator {
-            running: store.checking
-            visible: running
+            running: parent.visible
             Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
             Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
         }
+        QQC2.Label { text: i18n("Loading settings…") }
     }
 }

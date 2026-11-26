@@ -35,15 +35,10 @@ KCM.SimpleKCM {
         configuredUrl: page.cfg_daemonUrl || ""
     }
 
-    ColumnLayout {
-        spacing: Kirigami.Units.largeSpacing
-
-        QQC2.Label {
-            Layout.fillWidth: true
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            text: i18n("All of Happy Bot's settings, including whether the panel shows an icon or a search bar, are in Happy Bot's own settings.")
-        }
+    SettingsSection {
+        title: i18n("Panel widget")
+        iconName: "preferences-desktop-plasma"
+        description: i18n("Choose an icon or a search bar for this panel in Happy Bot’s Appearance settings.")
 
         QQC2.Button {
             text: i18n("Open Happy Bot settings…")

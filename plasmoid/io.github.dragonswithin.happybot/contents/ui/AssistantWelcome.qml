@@ -38,6 +38,7 @@ ColumnLayout {
 
     required property string assistantIcon
     required property color accent
+    property bool animateGreeting: false
     // The application Happy Bot was opened from ({app, class, title}), or null.
     property var helpWith: null
     property string helpWithIcon: ""
@@ -112,37 +113,13 @@ ColumnLayout {
             height: Math.min(parent.height - hero.inset, width)
             Accessible.ignored: true
 
-            Rectangle {
-                id: orbit
+            GreetingPortrait {
                 anchors.centerIn: parent
                 width: Math.min(parent.height, parent.width * 0.85)
                 height: width
-                radius: width / 2
-                color: "transparent"
-                border.color: Qt.alpha(welcome.accent, 0.25)
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: parent.width * 0.76
-                    height: width
-                    radius: width / 2
-                    color: Qt.alpha(welcome.accent, 0.10)
-                    border.color: Qt.alpha(welcome.accent, 0.19)
-                }
-                Rectangle {
-                    x: parent.width * 0.15 - width / 2
-                    y: parent.height * 0.145 - height / 2
-                    width: Kirigami.Units.smallSpacing * 1.6
-                    height: width
-                    radius: width / 2
-                    color: welcome.accent
-                }
-                Kirigami.Icon {
-                    anchors.centerIn: parent
-                    width: parent.width * 0.55
-                    height: width
-                    source: welcome.assistantIcon
-                }
+                iconSource: welcome.assistantIcon
+                accent: welcome.accent
+                animate: welcome.animateGreeting
             }
         }
     }

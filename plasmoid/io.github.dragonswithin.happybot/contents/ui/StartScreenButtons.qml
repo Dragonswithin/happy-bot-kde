@@ -29,8 +29,8 @@ ColumnLayout {
     readonly property var all: [
         { id: "files", label: i18n("Find a file"), icon: "folder-open-symbolic" },
         { id: "web", label: i18n("Search the web"), icon: "globe" },
-        { id: "help", label: i18n("Help with the application in use"), icon: "help-contents" },
-        { id: "system", label: i18n("System info (live readings and programs)"), icon: "speedometer" }
+        { id: "help", label: i18n("Help with the current app"), icon: "help-contents" },
+        { id: "system", label: i18n("System info"), icon: "speedometer" }
     ]
     // Shown buttons in their order, then the rest.
     readonly property var rows: list.shown.map(id => list.all.find(item => item.id === id)).filter(item => !!item)
@@ -67,10 +67,12 @@ ColumnLayout {
             required property var modelData
             readonly property int position: list.shown.indexOf(modelData.id)
 
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
             QQC2.CheckBox {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: row.modelData.label
                 icon.name: row.modelData.icon
                 checked: row.position >= 0
@@ -83,7 +85,7 @@ ColumnLayout {
                 opacity: row.position >= 0 ? 1 : 0
                 Accessible.name: i18n("Move %1 up", row.modelData.label)
                 QQC2.ToolTip.text: i18n("Earlier on the start screen")
-                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.visible: hovered || visualFocus
                 onClicked: list.move(row.modelData.id, -1)
             }
 
@@ -93,7 +95,7 @@ ColumnLayout {
                 opacity: row.position >= 0 ? 1 : 0
                 Accessible.name: i18n("Move %1 down", row.modelData.label)
                 QQC2.ToolTip.text: i18n("Later on the start screen")
-                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.visible: hovered || visualFocus
                 onClicked: list.move(row.modelData.id, 1)
             }
         }

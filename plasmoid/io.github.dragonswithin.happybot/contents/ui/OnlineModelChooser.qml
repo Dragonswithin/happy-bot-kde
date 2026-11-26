@@ -144,6 +144,8 @@ ColumnLayout {
 
     ColumnLayout {
         visible: chooser.selected !== null
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
         Layout.maximumWidth: Kirigami.Units.gridUnit * 26
         spacing: Kirigami.Units.smallSpacing
 
@@ -162,6 +164,8 @@ ColumnLayout {
         }
 
         QQC2.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
             Layout.topMargin: Kirigami.Units.largeSpacing
             text: i18n("2. Get your API key and paste it here")
             font.weight: Font.Bold
@@ -202,6 +206,10 @@ ColumnLayout {
 
             QQC2.RadioButton {
                 required property var modelData
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                QQC2.ToolTip.text: text
+                QQC2.ToolTip.visible: hovered && width < implicitWidth
                 text: i18n("%1 (%2)", modelData.id, modelData.label)
                 checked: !chooser.otherModel && chooser.chosenId === modelData.id
                 onToggled: if (checked) {

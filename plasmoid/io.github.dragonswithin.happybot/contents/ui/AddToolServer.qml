@@ -45,13 +45,15 @@ ColumnLayout {
 
     QQC2.TextField {
         id: name
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+        Layout.fillWidth: true
         placeholderText: i18n("For example notes-search")
         validator: RegularExpressionValidator { regularExpression: /[A-Za-z0-9_.-]{0,64}/ }
     }
 
     QQC2.Label {
         visible: form.nameTaken
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
         text: i18n("A tool server with this name is already connected.")
         color: Kirigami.Theme.negativeTextColor
     }
@@ -62,17 +64,18 @@ ColumnLayout {
 
     QQC2.TextField {
         id: commandLine
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+        Layout.fillWidth: true
         placeholderText: i18n("For example npx -y some-mcp-server, or https://example.com/mcp")
     }
 
     QQC2.CheckBox {
         id: readOnly
-        text: i18n("It only looks things up and never changes anything")
+        text: i18n("This server only reads information")
     }
 
     QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7

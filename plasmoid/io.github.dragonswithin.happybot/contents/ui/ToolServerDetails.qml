@@ -78,13 +78,14 @@ ColumnLayout {
     }
 
     QQC2.CheckBox {
-        text: i18n("It only looks things up and never changes anything")
+        text: i18n("This server only reads information")
         checked: details.entry.read_only
         onToggled: details.update(server => { server.read_only = checked; })
     }
 
     QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
@@ -100,7 +101,6 @@ ColumnLayout {
     QQC2.TextField {
         visible: details.remote
         Layout.fillWidth: true
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         text: details.entry.url || ""
         onEditingFinished: {
             const wanted = text.trim();
@@ -113,7 +113,6 @@ ColumnLayout {
     QQC2.TextField {
         visible: !details.remote
         Layout.fillWidth: true
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         text: CommandLine.join(details.entry.command, details.entry.args)
         onEditingFinished: {
             const words = CommandLine.split(text);
@@ -129,6 +128,7 @@ ColumnLayout {
     }
 
     PairsEditor {
+        Layout.fillWidth: true
         visible: !details.remote
         pairs: details.entry.env
         namePlaceholder: i18n("Variable")
@@ -136,6 +136,7 @@ ColumnLayout {
     }
 
     PairsEditor {
+        Layout.fillWidth: true
         visible: details.remote
         pairs: details.entry.headers || ({})
         namePlaceholder: i18n("Header, e.g. Authorization")
@@ -161,6 +162,8 @@ ColumnLayout {
 
     QQC2.Label {
         visible: !details.entry.enabled
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
         text: i18n("Switch it on to choose which of its tools the assistant may use.")
         opacity: 0.7
     }
@@ -174,7 +177,8 @@ ColumnLayout {
 
     QQC2.Label {
         visible: details.loadError.length > 0
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
         wrapMode: Text.Wrap
         text: details.loadError
         color: Kirigami.Theme.negativeTextColor

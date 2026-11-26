@@ -78,7 +78,7 @@ Rectangle {
 
     required property var session
     property bool useRobotMascot: false
-    readonly property color accent: useRobotMascot ? "#72c8bf" : Kirigami.Theme.highlightColor
+    readonly property color accent: useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
     readonly property int inset: Kirigami.Units.largeSpacing * 1.5
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
     property bool fieldAtBottom: false
@@ -350,7 +350,7 @@ Rectangle {
                         display: QQC2.AbstractButton.IconOnly
                         icon.name: "go-next"
                         icon.width: Kirigami.Units.iconSizes.sizeForLabels
-                        icon.height: icon.width
+                        icon.height: Kirigami.Units.iconSizes.sizeForLabels
                         text: view.selectedIndex >= 0 ? i18n("Open selected result") : i18n("Send request")
                         enabled: field.text.trim().length > 0
                         onClicked: view.accepted(field.text.trim())
@@ -772,6 +772,7 @@ Rectangle {
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
                         assistantIcon: view.assistantIcon
                         accent: view.accent
+                        animateGreeting: view.useRobotMascot && view.session.ui.mascot_animations !== false
                         helpWith: view.session.helpWith
                         helpWithIcon: view.session.helpWithIcon
                         onFindFilesChosen: {

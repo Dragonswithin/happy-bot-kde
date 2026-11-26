@@ -48,8 +48,9 @@ import org.kde.kirigami as Kirigami
  * from `typingAllowed`, the section holds no state of its own; every
  * settings change goes through `page.save`.
  */
-Kirigami.FormLayout {
+ColumnLayout {
     id: section
+    spacing: Kirigami.Units.largeSpacing
 
     required property var page
 
@@ -64,8 +65,8 @@ Kirigami.FormLayout {
         { name: "system", label: i18n("Change sound, network, Bluetooth, displays, appearance and power") },
         { name: "files", label: i18n("Create, move, write and trash files") },
         { name: "shell", label: i18n("Run commands and open a terminal") },
-        { name: "phone", label: i18n("Use your phone through KDE Connect (ring it, send to it, text messages)") },
-        { name: "schedule", label: i18n("Set reminders and timers, keep notes and to-dos, and change your routines") },
+        { name: "phone", label: i18n("Ring your phone, send files and text through KDE Connect") },
+        { name: "schedule", label: i18n("Manage reminders, timers, notes, to-dos and routines") },
     ]
 
     property bool typingAllowed: false
@@ -107,320 +108,350 @@ Kirigami.FormLayout {
     }
 
     component Hint: QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
     }
 
-    // Radio buttons with the same parent are one exclusive set unless grouped; every row here is a
-    // child of this form, so each setting's choices get their own group, or choosing the app
-    // context would clear the approval choice and the other way round.
+    component Choice: QQC2.RadioButton {
+        id: choice
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+
+        // The desktop style elides radio labels, including the approval policy.
+        Binding {
+            target: choice.contentItem as Text
+            property: "wrapMode"
+            value: Text.Wrap
+        }
+    }
+
     readonly property QQC2.ButtonGroup approvalChoices: QQC2.ButtonGroup {}
     readonly property QQC2.ButtonGroup appContextChoices: QQC2.ButtonGroup {}
 
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Approvals")
-    }
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Approvals")
+        iconName: "security-high"
+        description: i18n("Choose when Happy Bot asks before acting. The first option is recommended.")
 
-    QQC2.RadioButton {
-        Kirigami.FormData.label: i18n("Ask before it:")
-        text: i18n("Deletes something or changes the operating system")
-        QQC2.ButtonGroup.group: section.approvalChoices
-        checked: section.policy === "danger"
-        onToggled: if (checked) section.setPolicy("danger")
-    }
+        Choice {
+            text: i18n("Before deletions or operating system changes")
+            QQC2.ButtonGroup.group: section.approvalChoices
+            checked: section.policy === "danger"
+            onToggled: if (checked) section.setPolicy("danger")
+        }
 
-    QQC2.RadioButton {
-        text: i18n("Changes anything at all")
-        QQC2.ButtonGroup.group: section.approvalChoices
-        checked: section.policy === "changes"
-        onToggled: if (checked) section.setPolicy("changes")
-    }
+        Choice {
+            text: i18n("Before any change")
+            QQC2.ButtonGroup.group: section.approvalChoices
+            checked: section.policy === "changes"
+            onToggled: if (checked) section.setPolicy("changes")
+        }
 
-    QQC2.RadioButton {
-        text: i18n("Does anything, including looking things up")
-        QQC2.ButtonGroup.group: section.approvalChoices
-        checked: section.policy === "everything"
-        onToggled: if (checked) section.setPolicy("everything")
-    }
+        Choice {
+            text: i18n("Before every action, including lookups")
+            QQC2.ButtonGroup.group: section.approvalChoices
+            checked: section.policy === "everything"
+            onToggled: if (checked) section.setPolicy("everything")
+        }
 
-    Hint {
-        text: i18n("The first choice is recommended: everything else happens at once and is listed in the conversation as it runs.")
-    }
+        Kirigami.Separator { Layout.fillWidth: true }
 
-    QQC2.CheckBox {
-        Kirigami.FormData.label: i18n("Privacy:")
-        text: i18n("Local only: nothing leaves this computer")
-        checked: section.agent !== null && section.agent.local_only === true
-        onToggled: section.setAgent("local_only", checked)
-    }
-
-    Hint {
-        text: i18n("A hosted model is not used, and the assistant does not search the web or read web pages.")
-    }
-
-    // agent.app_context: which AI may see what is read from the application the user is in.
-    QQC2.RadioButton {
-        Kirigami.FormData.label: i18n("The app you're in:")
-        text: i18n("Only AIs on this computer may see it")
-        QQC2.ButtonGroup.group: section.appContextChoices
-        checked: section.agent !== null && (section.agent.app_context || "local") === "local"
-        onToggled: if (checked) section.setAgent("app_context", "local")
-    }
-
-    QQC2.RadioButton {
-        text: i18n("Any AI may see it, including online ones")
-        QQC2.ButtonGroup.group: section.appContextChoices
-        checked: section.agent !== null && section.agent.app_context === "any"
-        onToggled: if (checked) section.setAgent("app_context", "any")
-    }
-
-    QQC2.RadioButton {
-        text: i18n("Off: don't tell any AI about it")
-        QQC2.ButtonGroup.group: section.appContextChoices
-        checked: section.agent !== null && section.agent.app_context === "off"
-        onToggled: if (checked) section.setAgent("app_context", "off")
-    }
-
-    Hint {
-        text: i18n("Opened from an app, Happy Bot tells the AI which app and window you are in and its version. A chat started with \"Help with …\" also includes the text you selected, the window's buttons and text, and the file it has open. Online AIs never see inside your apps unless you choose \"Any AI\".")
-    }
-
-    QQC2.CheckBox {
-        Kirigami.FormData.label: i18n("Plans:")
-        text: i18n("Show me the plan before changing several things")
-        checked: section.agent !== null && section.agent.confirm_plans === true
-        onToggled: section.setAgent("confirm_plans", checked)
-    }
-
-    Hint {
-        text: i18n("Anything it changes can be undone: ask it to undo, or ask what it did.")
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("What it may do")
-    }
-
-    // Repeated rows go inside one column: a Repeater placed directly in a
-    // FormLayout can insert its rows after later siblings.
-    ColumnLayout {
-        Kirigami.FormData.label: i18n("Allow it to:")
-        Kirigami.FormData.labelAlignment: Qt.AlignTop
-        spacing: 0
-
-        Repeater {
-            model: section.groups
-
-            QQC2.CheckBox {
-                required property var modelData
-
-                text: modelData.label
-                checked: section.disabledGroups.indexOf(modelData.name) === -1
-                onToggled: section.setGroup(modelData.name, checked)
-            }
+        QQC2.CheckBox {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: i18n("Show me the plan before changing several things")
+            checked: section.agent !== null && section.agent.confirm_plans === true
+            onToggled: section.setAgent("confirm_plans", checked)
         }
     }
 
-    Hint {
-        text: i18n("It can always look at your windows, clipboard and files, and use the tools connected under Search & Tools. Switched-off abilities are never offered to the model.")
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Privacy")
+        iconName: "preferences-desktop-user"
+
+        QQC2.CheckBox {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: i18n("Local only")
+            checked: section.agent !== null && section.agent.local_only === true
+            onToggled: section.setAgent("local_only", checked)
+        }
+
+        Hint {
+            text: i18n("Turns off hosted models, web search and web page reading.")
+        }
+
+        Kirigami.Separator { Layout.fillWidth: true }
+
+        QQC2.Label {
+            Layout.fillWidth: true
+            text: i18n("Who can see details from the app you’re in?")
+            font.weight: Font.DemiBold
+            wrapMode: Text.Wrap
+        }
+
+        Choice {
+            text: i18n("Only models on this computer")
+            QQC2.ButtonGroup.group: section.appContextChoices
+            checked: section.agent !== null && (section.agent.app_context || "local") === "local"
+            onToggled: if (checked) section.setAgent("app_context", "local")
+        }
+
+        Choice {
+            text: i18n("Any model, including online services")
+            QQC2.ButtonGroup.group: section.appContextChoices
+            checked: section.agent !== null && section.agent.app_context === "any"
+            onToggled: if (checked) section.setAgent("app_context", "any")
+        }
+
+        Choice {
+            text: i18n("No models")
+            QQC2.ButtonGroup.group: section.appContextChoices
+            checked: section.agent !== null && section.agent.app_context === "off"
+            onToggled: if (checked) section.setAgent("app_context", "off")
+        }
+
+        Hint {
+            text: i18n("App details include the name, version and window title. “Help with…” can also include selected text, visible controls and the open file.")
+        }
     }
 
-    RowLayout {
-        Kirigami.FormData.label: i18n("Typing into other apps:")
-        spacing: Kirigami.Units.smallSpacing
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Allowed actions")
+        iconName: "preferences-desktop-accessibility"
+        description: i18n("Choose what Happy Bot can do. It can always read your windows, clipboard and files and use your connected tools.")
 
-        Kirigami.Icon {
-            source: section.typingAllowed ? "checkmark" : "dialog-information"
-            Layout.preferredWidth: Kirigami.Units.iconSizes.small
-            Layout.preferredHeight: Kirigami.Units.iconSizes.small
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+
+            Repeater {
+                model: section.groups
+
+                QQC2.CheckBox {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+
+                    text: modelData.label
+                    checked: section.disabledGroups.indexOf(modelData.name) === -1
+                    onToggled: section.setGroup(modelData.name, checked)
+                }
+            }
+        }
+
+        Kirigami.Separator { Layout.fillWidth: true }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: section.typingAllowed ? "checkmark" : "dialog-information"
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: section.typingAllowed ? i18n("Keyboard control allowed") : i18n("Keyboard control needs permission")
+            }
+
+            QQC2.Button {
+                visible: !section.typingAllowed
+                text: section.askingTyping ? i18n("Waiting…") : i18n("Allow…")
+                highlighted: true
+                enabled: !section.askingTyping
+                onClicked: section.allowTyping()
+            }
+        }
+
+        Hint {
+            visible: !section.typingAllowed
+            text: i18n("Choose Allow to open Plasma’s keyboard permission dialog.")
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Your instructions")
+        iconName: "document-edit"
+        description: i18n("Write one preference per line. Saved instructions apply to new conversations and follow your approval settings.")
+
+        QQC2.ScrollView {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            implicitHeight: Kirigami.Units.gridUnit * 9
+            clip: true
+            QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff   // the text wraps
+
+            QQC2.TextArea {
+                id: instructions
+                Accessible.name: i18n("Your instructions")
+                wrapMode: TextEdit.Wrap
+                placeholderText: i18n("For example, “Answer in German” or “Use Kate to edit files”.")
+                text: section.agent ? section.agent.instructions : ""
+            }
         }
 
         QQC2.Label {
-            text: section.typingAllowed ? i18n("Allowed") : i18n("Not allowed yet")
+            text: i18n("%1 of 4000 characters", instructions.text.length)
+            font: Kirigami.Theme.smallFont
+            color: instructions.text.length > 4000 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+            opacity: 0.7
         }
 
-        QQC2.Button {
-            visible: !section.typingAllowed
-            text: section.askingTyping ? i18n("Waiting for your answer…") : i18n("Allow…")
-            highlighted: true
-            enabled: !section.askingTyping
-            onClicked: section.allowTyping()
-        }
-    }
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width >= Kirigami.Units.gridUnit * 17 ? 2 : 1
+            columnSpacing: Kirigami.Units.smallSpacing
+            rowSpacing: Kirigami.Units.smallSpacing
 
-    Hint {
-        visible: !section.typingAllowed
-        text: i18n("Plasma will ask whether Happy Bot may control the keyboard. Choose Allow. It is asked only once.")
-    }
-
-    QQC2.CheckBox {
-        Kirigami.FormData.label: i18n("Extras:")
-        text: i18n("Load my own tools from the plugins folder")
-        checked: section.agent !== null && section.agent.load_plugins === true
-        onToggled: section.setAgent("load_plugins", checked)
-    }
-
-    QQC2.CheckBox {
-        text: i18n("Let other AI programs on this computer use these tools")
-        checked: section.agent !== null && section.agent.serve_tools === true
-        onToggled: section.setAgent("serve_tools", checked)
-    }
-
-    Hint {
-        text: i18n("Plugins are Python files in ~/.config/happy-bot/plugins. Other programs connect with the command happy-bot mcp-serve; anything that would need your approval is refused for them.")
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Your instructions")
-    }
-
-    Hint {
-        text: i18n("Preferences the assistant follows in every new conversation, in your own words, one per line. They cannot switch off the approvals above.")
-    }
-
-    // The box keeps one height and long instructions scroll inside it. The form lays rows out by
-    // implicit height and ignores Layout heights, so a bare TextArea (or a ScrollView sized with
-    // Layout.preferredHeight) grew with the text and drew it over the character count and the
-    // buttons below; a fixed implicitHeight is what holds.
-    QQC2.ScrollView {
-        Kirigami.FormData.label: i18n("Always:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 20
-        Layout.preferredWidth: Kirigami.Units.gridUnit * 28
-        implicitHeight: Kirigami.Units.gridUnit * 9
-        clip: true
-        QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff   // the text wraps
-
-        QQC2.TextArea {
-            id: instructions
-            wrapMode: TextEdit.Wrap
-            placeholderText: i18n("For example: Answer in German. I use Dolphin and Kate. Prefer Flatpak when installing.")
-            text: section.agent ? section.agent.instructions : ""
-        }
-    }
-
-    QQC2.Label {
-        text: i18n("%1 of 4000 characters", instructions.text.length)
-        font: Kirigami.Theme.smallFont
-        color: instructions.text.length > 4000 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
-        opacity: 0.7
-    }
-
-    RowLayout {
-        spacing: Kirigami.Units.smallSpacing
-
-        QQC2.Button {
-            text: i18n("Save instructions")
-            icon.name: "document-save"
-            enabled: section.agent !== null && instructions.text.trim() !== section.agent.instructions
-                && instructions.text.length <= 4000
-            onClicked: section.setAgent("instructions", instructions.text.trim())
-        }
-
-        QQC2.Button {
-            text: i18n("Restore suggested")
-            icon.name: "edit-undo"
-            enabled: (section.page.suggestedInstructions || "").length > 0
-                && instructions.text !== section.page.suggestedInstructions
-            onClicked: instructions.text = section.page.suggestedInstructions
-        }
-    }
-
-    Hint {
-        text: i18n("Saved instructions are used from the next new conversation. \"Restore suggested\" puts back the starting text for you to review; it is saved only when you choose Save.")
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Limits")
-    }
-
-    QQC2.SpinBox {
-        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-        Kirigami.FormData.label: i18n("Steps per request:")
-        from: 5
-        to: 200
-        value: section.agent ? section.agent.max_steps : 40
-        onValueModified: section.setAgent("max_steps", value)
-    }
-
-    Hint {
-        text: i18n("How many times it may consult the model for one request. Operating another application takes several steps per click.")
-    }
-
-    QQC2.SpinBox {
-        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-        Kirigami.FormData.label: i18n("Commands may run for:")
-        from: 5
-        to: 1800
-        stepSize: 5
-        value: section.agent ? section.agent.command_timeout_seconds : 60
-        textFromValue: (value, locale) => i18np("%1 second", "%1 seconds", value)
-        valueFromText: (text, locale) => parseInt(text) || 5
-        onValueModified: section.setAgent("command_timeout_seconds", value)
-    }
-
-    Hint {
-        text: i18n("Unless the assistant asks for longer. Installs run in a terminal window and are not limited by this.")
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Notifications")
-    }
-
-    QQC2.CheckBox {
-        id: notifyWhenDone
-        text: i18n("Notify me when a long request finishes")
-        checked: section.agent ? section.agent.notify_after_seconds > 0 : true
-        // Off is stored as 0 seconds; on again starts from the daemon's default, a minute.
-        onToggled: section.setAgent("notify_after_seconds", checked ? 60 : 0)
-    }
-
-    QQC2.SpinBox {
-        wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-        Kirigami.FormData.label: i18n("When it took longer than:")
-        visible: notifyWhenDone.checked
-        from: 1
-        to: 3600
-        stepSize: 10
-        value: section.agent && section.agent.notify_after_seconds > 0 ? section.agent.notify_after_seconds : 60
-        textFromValue: (value, locale) => i18np("%1 second", "%1 seconds", value)
-        valueFromText: (text, locale) => parseInt(text) || 1
-        onValueModified: section.setAgent("notify_after_seconds", value)
-    }
-
-    Hint {
-        visible: notifyWhenDone.checked
-        text: i18n("Its icon is the robot mascot when that is chosen under Appearance, otherwise the wand.")
-    }
-
-    Item {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Terminal")
-    }
-
-    QQC2.ComboBox {
-        id: terminal
-        Kirigami.FormData.label: i18n("Open commands in:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 12
-        readonly property var choices: {
-            const installed = section.page.terminals.slice();
-            const chosen = section.agent ? section.agent.terminal : "";
-            if (chosen && installed.indexOf(chosen) === -1) {
-                installed.push(chosen);
+            QQC2.Button {
+                text: i18n("Save instructions")
+                icon.name: "document-save"
+                enabled: section.agent !== null && instructions.text.trim() !== section.agent.instructions
+                    && instructions.text.length <= 4000
+                onClicked: section.setAgent("instructions", instructions.text.trim())
             }
-            return [""].concat(installed);
+
+            QQC2.Button {
+                text: i18n("Restore suggested")
+                icon.name: "edit-undo"
+                enabled: (section.page.suggestedInstructions || "").length > 0
+                    && instructions.text !== section.page.suggestedInstructions
+                onClicked: instructions.text = section.page.suggestedInstructions
+            }
         }
-        model: choices.map(name => name === "" ? i18n("Automatic (the system's default terminal)") : name)
-        currentIndex: choices.indexOf(section.agent ? section.agent.terminal : "")
-        onActivated: index => section.setAgent("terminal", terminal.choices[index])
+
+        Hint {
+            text: i18n("Restore suggested fills the box with the original instructions for you to review before saving.")
+        }
     }
 
-    Hint {
-        text: i18n("Installs and anything that asks for your password open here, so you can watch and type.")
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Notifications")
+        iconName: "preferences-desktop-notification"
+
+        QQC2.CheckBox {
+            id: notifyWhenDone
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: i18n("Notify me when a long request finishes")
+            checked: section.agent ? section.agent.notify_after_seconds > 0 : true
+            // Off is stored as 0 seconds; on again starts from the daemon's default, a minute.
+            onToggled: section.setAgent("notify_after_seconds", checked ? 60 : 0)
+        }
+
+        Kirigami.FormLayout {
+            Layout.fillWidth: true
+
+            QQC2.SpinBox {
+                wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
+                Kirigami.FormData.label: i18n("After:")
+                visible: notifyWhenDone.checked
+                from: 1
+                to: 3600
+                stepSize: 10
+                value: section.agent && section.agent.notify_after_seconds > 0 ? section.agent.notify_after_seconds : 60
+                textFromValue: (value, locale) => i18np("%1 second", "%1 seconds", value)
+                valueFromText: (text, locale) => parseInt(text) || 1
+                onValueModified: section.setAgent("notify_after_seconds", value)
+            }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Request limits and terminal")
+        iconName: "utilities-terminal"
+
+        Kirigami.FormLayout {
+            Layout.fillWidth: true
+
+            QQC2.SpinBox {
+                wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
+                Kirigami.FormData.label: i18n("Steps per request:")
+                from: 5
+                to: 200
+                value: section.agent ? section.agent.max_steps : 40
+                onValueModified: section.setAgent("max_steps", value)
+            }
+
+            Hint {
+                text: i18n("Each step is one model call. Tasks in other applications can take several steps per click.")
+            }
+
+            QQC2.SpinBox {
+                wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
+                Kirigami.FormData.label: i18n("Commands may run for:")
+                from: 5
+                to: 1800
+                stepSize: 5
+                value: section.agent ? section.agent.command_timeout_seconds : 60
+                textFromValue: (value, locale) => i18np("%1 second", "%1 seconds", value)
+                valueFromText: (text, locale) => parseInt(text) || 5
+                onValueModified: section.setAgent("command_timeout_seconds", value)
+            }
+
+            Hint {
+                text: i18n("A command can request more time. Installs run in the terminal with no time limit.")
+            }
+
+            QQC2.ComboBox {
+                id: terminal
+                Kirigami.FormData.label: i18n("Open commands in:")
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 12
+                readonly property var choices: {
+                    const installed = section.page.terminals.slice();
+                    const chosen = section.agent ? section.agent.terminal : "";
+                    if (chosen && installed.indexOf(chosen) === -1) {
+                        installed.push(chosen);
+                    }
+                    return [""].concat(installed);
+                }
+                model: choices.map(name => name === "" ? i18n("System default") : name)
+                currentIndex: choices.indexOf(section.agent ? section.agent.terminal : "")
+                onActivated: index => section.setAgent("terminal", terminal.choices[index])
+            }
+
+            Hint {
+                text: i18n("Installs and anything that asks for your password open here, so you can watch and type.")
+            }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: i18n("Tool sharing and plugins")
+        iconName: "plugins"
+
+        QQC2.CheckBox {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: i18n("Load my own tools from the plugins folder")
+            checked: section.agent !== null && section.agent.load_plugins === true
+            onToggled: section.setAgent("load_plugins", checked)
+        }
+
+        QQC2.CheckBox {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: i18n("Share tools with other AI programs on this computer")
+            checked: section.agent !== null && section.agent.serve_tools === true
+            onToggled: section.setAgent("serve_tools", checked)
+        }
+
+        Hint {
+            text: i18n("Put Python plugins in ~/.config/happy-bot/plugins. Other programs connect with happy-bot mcp-serve and can only run tools that don’t require approval.")
+        }
     }
 }

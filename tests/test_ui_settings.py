@@ -28,8 +28,8 @@ from happy_bot.ui_settings import MASCOT_ICON, UI_DEFAULTS, WAND_ICON, UiSetting
 
 class NotificationIconTests(unittest.TestCase):
     def test_the_mascot_setting_picks_the_notification_icon(self) -> None:
-        self.assertEqual(assistant_icon({**UI_DEFAULTS, "robot_mascot": True}), MASCOT_ICON)
-        for ui in (UI_DEFAULTS, None, {"robot_mascot": "yes"}):
+        self.assertEqual(assistant_icon(UI_DEFAULTS), MASCOT_ICON)
+        for ui in ({"robot_mascot": False}, None, {"robot_mascot": "yes"}):
             self.assertEqual(assistant_icon(ui), WAND_ICON)
 
     def test_the_finished_notification_shows_the_chosen_icon(self) -> None:
@@ -42,6 +42,12 @@ class NotificationIconTests(unittest.TestCase):
 
 
 class UiSchemaTests(unittest.TestCase):
+    def test_existing_picture_choice_gets_quiet_feedback_defaults(self) -> None:
+        older_ui = validate_ui({"robot_mascot": False})
+        self.assertFalse(older_ui["robot_mascot"])
+        self.assertFalse(older_ui["robot_sounds"])
+        self.assertTrue(older_ui["mascot_animations"])
+
     def test_defaults_fill_in_and_bad_values_are_refused(self) -> None:
         self.assertEqual(validate_ui({}), UI_DEFAULTS)
         self.assertEqual(validate_ui({"robot_mascot": True, "imported": ["app", "app"]})["imported"], ["app"])

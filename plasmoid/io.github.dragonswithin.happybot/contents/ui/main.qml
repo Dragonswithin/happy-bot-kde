@@ -188,6 +188,14 @@ PlasmoidItem {
     readonly property var surface: floatingOpen ? floating : popup
 
     IconActivity { id: iconActivity }
+    RobotFeedback { id: feedback }
+
+    readonly property bool assistantOpen: popup.visible || floatingOpen
+    onAssistantOpenChanged: {
+        if (assistantOpen && session.ui.robot_sounds === true && !session.listening) {
+            feedback.greet();
+        }
+    }
 
     // A capture can be shorter than the normal status refresh. Both applet
     // instances wait independently, including while an assistant request runs.

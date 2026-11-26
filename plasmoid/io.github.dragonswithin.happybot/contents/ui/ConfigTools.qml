@@ -5,6 +5,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 
 import org.kde.kcmutils as KCM
@@ -32,6 +33,46 @@ KCM.SimpleKCM {
             Layout.fillWidth: true
             visible: store.ready
             page: store
+        }
+
+        SettingsSection {
+            id: diagnostics
+            visible: store.ready
+            title: i18n("Setup check")
+            iconName: "preferences-system"
+            description: i18n("Test your AI, search tools and desktop connections.")
+
+            property bool checking: false
+            property string result: ""
+            property bool failed: false
+
+            QQC2.Button {
+                enabled: !diagnostics.checking
+                text: diagnostics.checking ? i18n("Checking…") : i18n("Check everything")
+                icon.name: "checkmark"
+                onClicked: {
+                    diagnostics.checking = true;
+                    diagnostics.result = "";
+                    store.client.request("GET", "/check", null, function(data) {
+                        diagnostics.checking = false;
+                        const problems = data.checks.filter(item => !item.ok);
+                        diagnostics.failed = problems.length > 0;
+                        diagnostics.result = diagnostics.failed
+                            ? problems.map(item => item.name + ": " + item.detail + " " + item.fix).join("\n\n")
+                            : i18n("Everything works.");
+                    }, function(data) {
+                        diagnostics.checking = false;
+                        diagnostics.failed = true;
+                        diagnostics.result = data.error || i18n("The check could not run");
+                    });
+                }
+            }
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: diagnostics.result.length > 0
+                text: diagnostics.result
+                type: diagnostics.failed ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive
+            }
         }
     }
 }

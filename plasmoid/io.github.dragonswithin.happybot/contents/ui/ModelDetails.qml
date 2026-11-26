@@ -52,14 +52,15 @@ Kirigami.FormLayout {
 
     QQC2.Label {
         visible: section.online
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.maximumWidth: Math.min(section.width, Kirigami.Units.gridUnit * 24)
         wrapMode: Text.Wrap
         text: i18n("This AI is online: whatever Happy Bot reads for a request, such as your clipboard or a file, is sent to it.")
     }
 
     QQC2.TextField {
         Kirigami.FormData.label: i18n("Address:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+        Layout.fillWidth: true
         text: section.model ? section.model.base_url : ""
         placeholderText: "https://api.example.com/v1"
         onEditingFinished: section.update("base_url", text.trim())
@@ -67,17 +68,18 @@ Kirigami.FormLayout {
 
     QQC2.TextField {
         Kirigami.FormData.label: i18n("Model:")
-        Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+        Layout.fillWidth: true
         text: section.model ? section.model.model : ""
         onEditingFinished: section.update("model", text.trim())
     }
 
     RowLayout {
+        Layout.fillWidth: true
         Kirigami.FormData.label: i18n("API key:")
         spacing: Kirigami.Units.smallSpacing
 
         Kirigami.PasswordField {
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 14
+            Layout.fillWidth: true
             placeholderText: section.model && section.model.api_key === null
                 ? i18n("Stored; type to replace") : i18n("None")
             onEditingFinished: {
@@ -97,6 +99,7 @@ Kirigami.FormLayout {
     }
 
     PairsEditor {
+        Layout.fillWidth: true
         Kirigami.FormData.label: i18n("Extra headers:")
         Kirigami.FormData.labelAlignment: Qt.AlignTop
         pairs: section.model ? section.model.headers : ({})
@@ -136,7 +139,8 @@ Kirigami.FormLayout {
     }
 
     QQC2.Label {
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.maximumWidth: Math.min(section.width, Kirigami.Units.gridUnit * 24)
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
@@ -185,7 +189,8 @@ Kirigami.FormLayout {
 
     QQC2.Label {
         visible: section.online
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+        Layout.fillWidth: true
+        Layout.maximumWidth: Math.min(section.width, Kirigami.Units.gridUnit * 24)
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7

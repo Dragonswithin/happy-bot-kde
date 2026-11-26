@@ -20,9 +20,8 @@ import org.kde.plasma.plasmoid
  * - Look and feel (the daemon's `ui` settings, src/happy_bot/ui_settings.py):
  *   the mascot or the wand, the floating Happy Bot's look (how faded while
  *   not in use, back to its corner), the popup's size, the start screen's
- *   buttons and their order (StartScreenButtons.qml), and whether search
- *   results include browser bookmarks and recently visited websites
- *   (`search_bookmarks`, `search_history`; src/happy_bot/browsers.py). They are read from `GET /health` and each change is saved
+ *   buttons and their order (StartScreenButtons.qml), mascot motion and sounds.
+ *   They are read from `GET /health` and each change is saved
  *   at once with `POST /ui`, so the panel widget, which reads the same
  *   values, always matches the app.
  * - The app itself (`GET /app`, `POST /app`, src/happy_bot/app_control.py):
@@ -111,212 +110,241 @@ KCM.SimpleKCM {
         onTriggered: page.readApp()
     }
 
-    Kirigami.FormLayout {
-        enabled: page.ui !== null
+    component PictureChoice: QQC2.RadioDelegate {
+        id: choice
+
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        icon.width: Kirigami.Units.iconSizes.medium
+        icon.height: Kirigami.Units.iconSizes.medium
+        padding: Kirigami.Units.largeSpacing
+        bottomPadding: padding
+        leftInset: 0
+        rightInset: 0
+        topInset: 0
+        bottomInset: 0
+
+        background: Rectangle {
+            radius: Kirigami.Units.cornerRadius * 2
+            color: Qt.alpha(Kirigami.Theme.highlightColor, choice.checked ? 0.12 : choice.hovered ? 0.06 : 0)
+            border.color: choice.visualFocus || choice.checked
+                          ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.16)
+            border.width: choice.visualFocus ? 2 : 1
+        }
+    }
+
+    ColumnLayout {
+        spacing: Kirigami.Units.largeSpacing
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true
             visible: page.problem.length > 0
             type: Kirigami.MessageType.Error
             text: page.problem
+            actions: [
+                Kirigami.Action {
+                    visible: page.ui === null
+                    text: i18n("Try again")
+                    icon.name: "view-refresh"
+                    onTriggered: {
+                        page.problem = "";
+                        page.read();
+                        page.readPanel();
+                    }
+                }
+            ]
         }
 
-        RowLayout {
-            Kirigami.FormData.label: i18n("Happy Bot's picture:")
-            spacing: Kirigami.Units.smallSpacing
+        SettingsSection {
+            Layout.fillWidth: true
+            enabled: page.ui !== null
+            title: i18n("Happy Bot’s picture")
+            iconName: "preferences-desktop-icons"
+            description: i18n("Choose the picture you see in the panel, on the floating button and beside replies.")
+            headerArtwork: GreetingPortrait {
+                iconSource: Look.assistantIcon(page.ui?.robot_mascot ?? true)
+                animate: page.ui?.robot_mascot === true && page.ui?.mascot_animations !== false
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: width >= Kirigami.Units.gridUnit * 17 ? 2 : 1
+                uniformCellWidths: true
+                rowSpacing: Kirigami.Units.smallSpacing
+                columnSpacing: Kirigami.Units.largeSpacing
+
+                PictureChoice {
+                    text: i18n("Robot")
+                    icon.source: Look.robotIcon
+                    checked: page.ui !== null && page.ui.robot_mascot
+                    onClicked: if (!page.ui.robot_mascot) page.save({ robot_mascot: true })
+                }
+                PictureChoice {
+                    text: i18n("Wand")
+                    icon.name: "tools-wizard"
+                    checked: page.ui !== null && !page.ui.robot_mascot
+                    onClicked: if (page.ui.robot_mascot) page.save({ robot_mascot: false })
+                }
+            }
 
             QQC2.CheckBox {
-                text: i18n("Use the robot mascot")
-                checked: page.ui !== null && page.ui.robot_mascot
-                onToggled: page.save({ robot_mascot: checked })
+                enabled: page.ui !== null && page.ui.robot_mascot
+                text: i18n("Animate the robot")
+                checked: page.ui !== null && page.ui.mascot_animations !== false
+                onToggled: page.save({ mascot_animations: checked })
             }
 
-            Kirigami.Icon {
-                source: Look.assistantIcon(page.ui !== null && page.ui.robot_mascot)
-                implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                implicitHeight: implicitWidth
-                Accessible.ignored: true
-            }
-        }
+            RowLayout {
+                Layout.fillWidth: true
 
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("Shown on the floating Happy Bot, in the panel and beside Happy Bot's replies.")
-        }
+                QQC2.CheckBox {
+                    text: i18n("Play a greeting sound")
+                    checked: page.ui !== null && page.ui.robot_sounds === true
+                    onToggled: page.save({ robot_sounds: checked })
+                }
 
-        Item {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Floating Happy Bot")
-        }
+                QQC2.ToolButton {
+                    text: i18n("Preview")
+                    Accessible.name: i18n("Preview greeting sound")
+                    icon.name: "media-playback-start"
+                    onClicked: feedback.greet()
+                }
 
-        KeySequenceItem {
-            id: hotkey
-            Kirigami.FormData.label: i18n("Hotkey:")
-            keySequence: Plasmoid.globalShortcut
-            patterns: ShortcutPattern.Modifier | ShortcutPattern.ModifierAndKey
-            onKeySequenceModified: page.unsavedChanges = keySequence !== Plasmoid.globalShortcut
-        }
-
-        QQC2.CheckBox {
-            Kirigami.FormData.label: i18n("At login:")
-            text: i18n("Start Happy Bot when I log in")
-            checked: page.appAutostart
-            onToggled: client.request("POST", "/app", { autostart: checked },
-                                      data => page.appAutostart = data.autostart === true, () => page.readApp())
-        }
-
-        RowLayout {
-            Kirigami.FormData.label: i18n("When not in use:")
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Slider {
-                id: floatingOpacity
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 10
-                from: 15
-                to: 100
-                stepSize: 5
-                value: page.ui !== null ? page.ui.floating_opacity : 40
-                onPressedChanged: if (!pressed) page.save({ floating_opacity: Math.round(value) })
-            }
-
-            QQC2.Label {
-                text: floatingOpacity.value >= 100 ? i18n("fully visible")
-                                                   : i18n("%1% visible", Math.round(floatingOpacity.value))
+                RobotFeedback {
+                    id: feedback
+                    onUnavailable: page.problem = i18n("The greeting could not play. Check your audio output and that Qt Multimedia is installed.")
+                }
             }
         }
 
-        QQC2.Button {
-            enabled: page.ui !== null && (page.ui.floating_x >= 0 || page.ui.floating_y >= 0)
-            text: i18n("Put it back in the corner")
-            icon.name: "edit-undo"
-            onClicked: page.save({ floating_x: -1, floating_y: -1 })
+        SettingsSection {
+            Layout.fillWidth: true
+            enabled: page.ui !== null
+            title: i18n("Start screen")
+            iconName: "view-grid"
+            description: i18n("Choose which buttons appear when Happy Bot opens. Use the arrows to change their order.")
+
+            StartScreenButtons {
+                Layout.fillWidth: true
+                settingsPage: page
+            }
         }
 
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("Press the hotkey or click the floating Happy Bot while using any application, and it opens right there knowing which application you are in. Drag it to move it anywhere; it fades until the pointer is over it.")
+        SettingsSection {
+            Layout.fillWidth: true
+            enabled: page.ui !== null
+            title: i18n("Floating Happy Bot")
+            iconName: "window-keep-above"
+            description: i18n("Open Happy Bot over the app you’re using. Drag the floating button to move it.")
+
+            QQC2.CheckBox {
+                text: i18n("Start Happy Bot at login")
+                checked: page.appAutostart
+                onToggled: client.request("POST", "/app", { autostart: checked },
+                                          data => page.appAutostart = data.autostart === true, () => page.readApp())
+            }
+
+            Kirigami.FormLayout {
+                Layout.fillWidth: true
+
+                KeySequenceItem {
+                    id: hotkey
+                    Kirigami.FormData.label: i18n("Keyboard shortcut:")
+                    keySequence: Plasmoid.globalShortcut
+                    patterns: ShortcutPattern.Modifier | ShortcutPattern.ModifierAndKey
+                    onKeySequenceModified: page.unsavedChanges = keySequence !== Plasmoid.globalShortcut
+                }
+
+                RowLayout {
+                    Kirigami.FormData.label: i18n("Idle opacity:")
+
+                    QQC2.Slider {
+                        id: floatingOpacity
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                        Accessible.name: i18n("Idle opacity")
+                        from: 15
+                        to: 100
+                        stepSize: 5
+                        value: page.ui !== null ? page.ui.floating_opacity : 40
+                        onPressedChanged: if (!pressed) page.save({ floating_opacity: Math.round(value) })
+                    }
+
+                    QQC2.Label { text: i18n("%1%", Math.round(floatingOpacity.value)) }
+                }
+
+                QQC2.Button {
+                    Kirigami.FormData.label: i18n("Position:")
+                    enabled: page.ui !== null && (page.ui.floating_x >= 0 || page.ui.floating_y >= 0)
+                    text: i18n("Return to corner")
+                    icon.name: "edit-undo"
+                    onClicked: page.save({ floating_x: -1, floating_y: -1 })
+                }
+            }
         }
 
-        Item {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Popup")
+        SettingsSection {
+            Layout.fillWidth: true
+            enabled: page.ui !== null
+            title: i18n("Panel widget")
+            iconName: "preferences-desktop-plasma"
+            description: page.onPanel
+                ? i18n("On a horizontal panel you can type directly into a search bar. Vertical panels always show the icon.")
+                : i18n("To add Happy Bot to your panel, right-click the panel, choose Add Widgets… and drag Happy Bot onto it.")
+
+            Kirigami.FormLayout {
+                Layout.fillWidth: true
+                visible: page.onPanel
+
+                QQC2.RadioButton {
+                    Kirigami.FormData.label: i18n("Show:")
+                    text: i18n("Happy Bot’s icon")
+                    checked: page.onPanel && !page.searchBar
+                    onToggled: if (checked) page.changePanel({ search_bar: false })
+                }
+                QQC2.RadioButton {
+                    text: i18n("Search bar")
+                    checked: page.searchBar
+                    onToggled: if (checked) page.changePanel({ search_bar: true })
+                }
+                QQC2.SpinBox {
+                    wheelEnabled: false
+                    visible: page.searchBar
+                    Kirigami.FormData.label: i18n("Width in font units:")
+                    from: 8
+                    to: 60
+                    value: page.onPanel ? page.panelWidgets[0].bar_width : 18
+                    onValueModified: page.changePanel({ bar_width: value })
+                }
+            }
         }
 
-        QQC2.SpinBox {
-            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-            Kirigami.FormData.label: i18n("Width:")
-            from: 20
-            to: 70
-            value: page.ui !== null ? page.ui.popup_width : 30
-            onValueModified: page.save({ popup_width: value })
-        }
+        SettingsSection {
+            Layout.fillWidth: true
+            enabled: page.ui !== null
+            title: i18n("Popup size")
+            iconName: "transform-scale"
+            description: i18n("The floating button and panel open the same size popup. Dimensions scale with your desktop font.")
 
-        QQC2.SpinBox {
-            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-            Kirigami.FormData.label: i18n("Height:")
-            from: 12
-            to: 50
-            value: page.ui !== null ? page.ui.popup_height : 26
-            onValueModified: page.save({ popup_height: value })
-        }
+            Kirigami.FormLayout {
+                Layout.fillWidth: true
 
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("Sizes are in multiples of the desktop's font size. They apply to the floating Happy Bot and to the panel widget's popup.")
-        }
-
-        Item {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Start screen")
-        }
-
-        StartScreenButtons {
-            Kirigami.FormData.label: i18n("Buttons:")
-            Kirigami.FormData.labelAlignment: Qt.AlignTop
-            settingsPage: page
-        }
-
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("What Happy Bot shows when it opens, before you type. Ticked buttons show in this order.")
-        }
-
-        Item {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Search")
-        }
-
-        QQC2.CheckBox {
-            Kirigami.FormData.label: i18n("Also show:")
-            text: i18n("Bookmarks from your web browsers")
-            checked: page.ui !== null && page.ui.search_bookmarks === true
-            onToggled: page.save({ search_bookmarks: checked })
-        }
-
-        QQC2.CheckBox {
-            text: i18n("Websites you visited recently")
-            checked: page.ui !== null && page.ui.search_history === true
-            onToggled: page.save({ search_history: checked })
-        }
-
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: i18n("In the panel's search bar and \"Find a file\", from Firefox, Chrome, Chromium, Brave, Vivaldi, Edge, Opera and similar browsers. They are read on this computer and never sent anywhere.")
-        }
-
-        Item {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: i18n("Panel")
-        }
-
-        QQC2.RadioButton {
-            Kirigami.FormData.label: i18n("In the panel, show:")
-            enabled: page.onPanel
-            text: i18n("Happy Bot's icon")
-            checked: page.onPanel && !page.searchBar
-            onToggled: if (checked) page.changePanel({ search_bar: false })
-        }
-
-        QQC2.RadioButton {
-            enabled: page.onPanel
-            text: i18n("A search bar")
-            checked: page.searchBar
-            onToggled: if (checked) page.changePanel({ search_bar: true })
-        }
-
-        QQC2.SpinBox {
-            wheelEnabled: false  // scrolling the page must not change it (KDE's style turns the wheel on)
-            Kirigami.FormData.label: i18n("Search bar width:")
-            enabled: page.searchBar
-            from: 8
-            to: 60
-            value: page.onPanel ? page.panelWidgets[0].bar_width : 18
-            onValueModified: page.changePanel({ bar_width: value })
-        }
-
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            wrapMode: Text.Wrap
-            font: Kirigami.Theme.smallFont
-            opacity: 0.7
-            text: page.onPanel
-                ? i18n("While you type in the search bar, Plasma outlines the panel in its focus colour; the icon avoids that. A vertical panel always shows the icon. The width is in multiples of the desktop's font size.")
-                : i18n("Happy Bot is not on a panel. To add it, right-click the panel, choose Add Widgets…, and drag Happy Bot onto it.")
+                QQC2.SpinBox {
+                    wheelEnabled: false
+                    Kirigami.FormData.label: i18n("Width:")
+                    from: 20
+                    to: 70
+                    value: page.ui !== null ? page.ui.popup_width : 30
+                    onValueModified: page.save({ popup_width: value })
+                }
+                QQC2.SpinBox {
+                    wheelEnabled: false
+                    Kirigami.FormData.label: i18n("Height:")
+                    from: 12
+                    to: 50
+                    value: page.ui !== null ? page.ui.popup_height : 26
+                    onValueModified: page.save({ popup_height: value })
+                }
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 """The assistant's self-check: is everything it depends on working, and what to do if not.
 
 ``run_checks(server)`` returns a list of ``{"name", "ok", "detail", "fix"}``
-for ``GET /check`` (the settings pages' "Check everything" button and
+for ``GET /check`` (the Search & Tools page's "Check everything" button and
 ``happy-bot doctor``). Each check is quick and read-only:
 
 - the active model answers its model list (or is reachable at all);
