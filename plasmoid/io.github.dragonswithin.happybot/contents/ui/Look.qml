@@ -56,7 +56,6 @@ QtObject {
     }
 
     readonly property url activeMicrophoneIcon: Qt.resolvedUrl("../images/microphone-active.svg")
-    readonly property url microphoneIcon: Qt.resolvedUrl("../images/microphone.svg")
 
     function nudgeTitle(kind: string): string {
         switch (kind) {

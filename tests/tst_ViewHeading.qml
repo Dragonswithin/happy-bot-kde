@@ -110,15 +110,23 @@ Item {
 
         function test_panelAndToolsShareEachMascotPalette() {
             view.useRobotMascot = true;
+            session.voiceEnabled = true;
+            const mic = findChild(view, "themedMicrophone");
+            verify(mic && mic.visible);
             const colors = new Set();
             for (const design of HappyBot.Look.robotStyles) {
                 session.ui = Object.assign({}, session.ui, {robot_style: design.id});
                 compare(view.accent, Qt.color(design.accent));
+                compare(mic.accent, view.accent);
                 compare(panelResults.mainItem.accent, view.accent);
                 compare(panelResults.mainItem.gradient.stops[1].color, view.gradient.stops[1].color);
                 colors.add(String(view.accent));
             }
             compare(colors.size, 10);
+            session.listening = true;
+            verify(mic.recording);
+            session.listening = false;
+            session.voiceEnabled = false;
             view.useRobotMascot = false;
             compare(panelResults.mainItem.accent, view.accent);
             session.ui = Object.assign({}, session.ui, {robot_style: "pip"});

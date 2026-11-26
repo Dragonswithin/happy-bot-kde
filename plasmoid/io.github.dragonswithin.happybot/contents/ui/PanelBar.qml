@@ -148,7 +148,7 @@ Item {
             opacity: bar.offline ? 0.45 : 0.8
         }
 
-        Image {
+        MicrophoneIcon {
             id: mic
             anchors.right: parent.right
             anchors.rightMargin: Kirigami.Units.smallSpacing
@@ -156,8 +156,8 @@ Item {
             width: Kirigami.Units.iconSizes.small
             height: width
             visible: bar.voiceEnabled
-            source: bar.listening ? Look.activeMicrophoneIcon : Look.microphoneIcon
-            fillMode: Image.PreserveAspectFit
+            accent: bar.accent
+            recording: bar.listening
         }
 
         QQC2.BusyIndicator {

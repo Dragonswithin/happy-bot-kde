@@ -461,11 +461,12 @@ AssistantSurface {
                         contentItem: Item {
                             implicitWidth: Kirigami.Units.iconSizes.sizeForLabels
                             implicitHeight: implicitWidth
-                            Image {
+                            MicrophoneIcon {
                                 anchors.centerIn: parent
                                 width: parent.implicitWidth
                                 height: width
-                                source: view.session.listening ? Look.activeMicrophoneIcon : Look.microphoneIcon
+                                accent: view.accent
+                                recording: view.session.listening
                             }
                         }
                     }
