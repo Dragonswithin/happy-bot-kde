@@ -18,6 +18,9 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "search_history": false,    # ... and recently visited websites; both read on this computer only
       "floating_x": -1,           # its place, logical pixels from the screen's top left;
       "floating_y": -1,           #   -1 = near the bottom right
+      "start_screen": ["files", "web", "help"],  # the start screen's buttons, in order (START_BUTTONS:
+                                  #   "files" Find a file, "web" Search the web, "help" Help with the app
+                                  #   in use, "system" System info, off unless added); [] shows none
       "imported": []              # which copies ("panel", "app") have handed over their old Plasma
     }                             #   settings, so each does that only once (widget main.qml)
 
@@ -40,8 +43,9 @@ from typing import Any
 
 UI_DEFAULTS: dict[str, Any] = {
     "robot_mascot": False, "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
-    "floating_opacity": 40, "floating_x": -1, "floating_y": -1, "imported": [],
+    "floating_opacity": 40, "floating_x": -1, "floating_y": -1, "imported": [], "start_screen": ["files", "web", "help"],
 }
+START_BUTTONS = ("files", "web", "help", "system")
 UI_RANGES: dict[str, tuple[int, int]] = {
     "popup_width": (20, 70), "popup_height": (12, 50), "floating_opacity": (15, 100),
     "floating_x": (-1, 100_000), "floating_y": (-1, 100_000),
@@ -74,10 +78,14 @@ def validate_ui(raw: Any) -> dict[str, Any]:
             low, high = UI_RANGES[key]
             if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
                 raise UiSettingsError(f"'ui': '{key}' must be a whole number from {low} to {high}")
+    buttons = ui["start_screen"]
+    if (not isinstance(buttons, list) or any(item not in START_BUTTONS for item in buttons)
+            or len(set(buttons)) != len(buttons)):
+        raise UiSettingsError(f"'ui': 'start_screen' must list some of {', '.join(START_BUTTONS)}, each once")
     imported = ui["imported"]
     if not isinstance(imported, list) or any(item not in COPIES for item in imported):
         raise UiSettingsError(f"'ui': 'imported' may only list {', '.join(COPIES)}")
-    return {**ui, "imported": sorted(set(imported))}
+    return {**ui, "imported": sorted(set(imported)), "start_screen": list(buttons)}
 
 
 def assistant_icon(ui: Any) -> str:

@@ -19,7 +19,8 @@ import org.kde.plasma.plasmoid
  *
  * - Look and feel (the daemon's `ui` settings, src/happy_bot/ui_settings.py):
  *   the mascot or the wand, the floating Happy Bot's look (how faded while
- *   not in use, back to its corner), the popup's size, and whether search
+ *   not in use, back to its corner), the popup's size, the start screen's
+ *   buttons and their order (StartScreenButtons.qml), and whether search
  *   results include browser bookmarks and recently visited websites
  *   (`search_bookmarks`, `search_history`; src/happy_bot/browsers.py). They are read from `GET /health` and each change is saved
  *   at once with `POST /ui`, so the panel widget, which reads the same
@@ -231,6 +232,25 @@ KCM.SimpleKCM {
             font: Kirigami.Theme.smallFont
             opacity: 0.7
             text: i18n("Sizes are in multiples of the desktop's font size. They apply to the floating Happy Bot and to the panel widget's popup.")
+        }
+
+        Item {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Start screen")
+        }
+
+        StartScreenButtons {
+            Kirigami.FormData.label: i18n("Buttons:")
+            Kirigami.FormData.labelAlignment: Qt.AlignTop
+            settingsPage: page
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            text: i18n("What Happy Bot shows when it opens, before you type. Ticked buttons show in this order.")
         }
 
         Item {

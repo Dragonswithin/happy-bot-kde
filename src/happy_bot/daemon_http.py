@@ -24,7 +24,8 @@ clients can find the base URL), the current settings, the conversations, the
 ``selection_fix.SelectionNote`` holding the text noted by the "Fix selected
 text" shortcut, the ``wikipedia_setup.DownloadJob`` of an offline Wikipedia
 download, the ``wikipedia_pages.PageServer`` that serves its pages to the
-article view, and the
+article view, System info's ``system_monitor.History`` (fed by the sensor
+sampler) and ``Programs``, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
 manager and brings the routines' systemd units, and the offline Wikipedia
@@ -34,12 +35,14 @@ it runs with defaults and reports ``settings_error`` in ``/health``.
 
 Requests are served on one thread each (``ThreadingHTTPServer``). What each
 endpoint does lives in ``daemon_routes`` (offline Wikipedia's in
-``wikipedia_routes``, merged into ``ROUTES``); this module only authenticates,
+``wikipedia_routes`` and System info's in ``system_routes``, merged into
+``ROUTES``); this module only authenticates,
 parses and dispatches. The one exception in shape is ``POST /ask``, which
 answers with a server-sent event stream (``text/event-stream``, one
 ``data: <json>`` block per event, connection closed at the end) produced by
 ``ask_stream``. ``serve`` also runs the ``system_sensors.SensorSampler``,
-which feeds ``activity.observe_sensors`` one reading a second; tests that
+which feeds ``activity.observe_sensors`` and ``system_history`` one reading
+a second; tests that
 build an ``AssistantServer`` themselves get no sampler. On shutdown the
 sampler stops, the state file and token are removed and every tool server
 is stopped.
@@ -62,8 +65,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import (desktop_context, routines, selection_fix, user_timers, voice, wikipedia_library, wikipedia_pages,
-               wikipedia_reader, wikipedia_setup)
+from . import (desktop_context, routines, selection_fix, system_monitor, user_timers, voice, wikipedia_library,
+               wikipedia_pages, wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
@@ -72,6 +75,7 @@ from .conversation_archive import ConversationArchive
 from .conversations import ConversationStore
 from .daemon_routes import ROUTES as CORE_ROUTES
 from .wikipedia_routes import ROUTES as WIKIPEDIA_ROUTES
+from .system_routes import ROUTES as SYSTEM_ROUTES
 from .mcp_client import McpManager
 from .krunner_bridge import KRunnerBridge
 from .permissions import ApprovalBroker
@@ -85,7 +89,7 @@ from .runtime_paths import (
 )
 
 SCHEMA = "happy_bot_daemon.v1"
-ROUTES = {**CORE_ROUTES, **WIKIPEDIA_ROUTES}
+ROUTES = {**CORE_ROUTES, **WIKIPEDIA_ROUTES, **SYSTEM_ROUTES}
 MAX_BODY_BYTES = 2_000_000
 
 
@@ -199,6 +203,8 @@ class AssistantServer(ThreadingHTTPServer):
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
         self.wikipedia_download = wikipedia_setup.DownloadJob()  # offline Wikipedia's background download
+        self.system_history = system_monitor.History()  # System info's graphs, fed by the sensor sampler
+        self.programs = system_monitor.Programs()  # System info's busiest programs
         # Offline Wikipedia's own pages for the article view, from a separate loopback server (wikipedia_pages).
         self.wikipedia_pages = wikipedia_pages.PageServer(
             lambda entry: wikipedia_reader.entry(self.mcp, self.settings, entry))
@@ -370,8 +376,13 @@ def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
     print(f"Happy Bot daemon listening on {host}:{server.state.port}", flush=True)
     if not KRunnerBridge(server).start():
         print("KRunner integration unavailable (no PyGObject or session bus)", flush=True)
-    # The mascot's live cues (heat, CPU load, memory pressure, transfers): one reading a second.
-    sensors = SensorSampler(server.activity.observe_sensors)
+    # The mascot's live cues (heat, CPU load, memory pressure, transfers): one reading a second, kept
+    # for a few minutes too, for System info's graphs.
+    def observe(**readings: Any) -> None:
+        server.activity.observe_sensors(**readings)
+        server.system_history.add(readings)
+
+    sensors = SensorSampler(observe)
     sensors.start()
 
     def stop_on_signal(signum: int, frame: Any) -> None:

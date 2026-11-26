@@ -146,6 +146,10 @@ import QtQuick
  * it, as do a new or reopened chat; replies that arrive after that are
  * ignored (`fixSequence`).
  *
+ * System info: `showSystemInfo` (the start screen's optional button) sets
+ * `showingSystem`, which makes the view show SystemInfoView.qml, until
+ * `closeSystemInfo`, a finder, or a chat opened.
+ *
  * Talking: `talk` asks the daemon to listen (`POST /voice/listen`, which
  * records until the user pauses and returns the text Whisper or another
  * speech service heard); `stopListening` ends it early. `voiceEnabled`
@@ -175,8 +179,9 @@ Item {
     property bool capturing: false  // a "Help with …" screenshot is being taken (the app is briefly in front)
     property var ui: ({
         robot_mascot: false, popup_width: 30, popup_height: 26, floating_opacity: 40, floating_x: -1, floating_y: -1,
-        imported: []
+        imported: [], start_screen: ["files", "web", "help"]
     })
+    property bool showingSystem: false  // the start screen's System info view is shown (SystemInfoView.qml)
     property bool uiLoaded: false
     // Talking: the microphone button shows when the user switched voice on and set a speech service
     // (`voice` in /health); `listening` while the daemon records and turns speech into text.
@@ -435,7 +440,18 @@ Item {
         showRecent();
     }
 
+    /** The start screen's "System info": live readings and programs, until `closeSystemInfo`. */
+    function showSystemInfo() {
+        stopFinding();
+        session.showingSystem = true;
+    }
+
+    function closeSystemInfo() {
+        session.showingSystem = false;
+    }
+
     function stopFinding() {
+        session.showingSystem = false;
         session.finder = "";
         session.article = null;
         clearSearch();
@@ -709,6 +725,7 @@ Item {
 
     function newChat() {
         stopFixing();
+        session.showingSystem = false;
         if (session.busy) {
             cancel();
         }
@@ -725,6 +742,7 @@ Item {
         if (!text || session.busy) {
             return false;
         }
+        session.showingSystem = false;  // the answer must show, not System info
         session.busy = true;
         setStatus("thinking", i18n("Thinking"));
         appendEntry("user", text);

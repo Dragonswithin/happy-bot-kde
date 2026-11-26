@@ -26,6 +26,9 @@ import org.kde.plasma.extras as PlasmaExtras
  * - ARTICLE while `session.article` is set (an offline Wikipedia article
  *   opened from "Search the web"'s Wikipedia results): ArticleView.qml. Back returns to the
  *   matches; "Ask about this" starts a request about the article.
+ * - SYSTEM while `session.showingSystem` is true (the start screen's
+ *   System info button): SystemInfoView.qml, which fills the body and
+ *   scrolls. Back or Escape returns to the start screen.
  * - FIX while `session.fixing` is set (the "Fix selected text" shortcut):
  *   SelectionFixCard.qml, the selected text with its rewrite buttons and
  *   the result. The field then takes an instruction for the text (main.qml),
@@ -88,9 +91,10 @@ Rectangle {
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool fixVisible: session.fixing !== null
     readonly property bool articleVisible: !fixVisible && session.article !== null
-    readonly property bool filesVisible: !fixVisible && !articleVisible && (hasHits || hasSearchError || session.finding
+    readonly property bool systemVisible: !fixVisible && !articleVisible && session.showingSystem
+    readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
-    readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible
+    readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible
     readonly property bool sidebarVisible: session.history.length > 0
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
@@ -99,6 +103,8 @@ Rectangle {
         ? fixCard.naturalHeight + inset * 2
         : articleVisible
         ? (articleView.webMode ? maximumHeight : articleView.naturalHeight + inset * 2)
+        : systemVisible
+        ? maximumHeight
         : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
@@ -235,10 +241,12 @@ Rectangle {
             PlasmaComponents3.ToolButton {
                 icon.name: "go-previous"
                 text: i18n("Back")
-                visible: view.session.finding || view.fixVisible
+                visible: view.session.finding || view.fixVisible || view.systemVisible
                 onClicked: {
                     if (view.fixVisible) {
                         view.session.stopFixing();
+                    } else if (view.systemVisible) {
+                        view.session.closeSystemInfo();
                     } else if (view.articleVisible) {
                         if (!articleView.back()) {  // back through the pages followed, then to the matches
                             view.session.closeArticle();
@@ -393,6 +401,8 @@ Rectangle {
                         view.closeRequested();
                     } else if (view.articleVisible) {
                         view.session.closeArticle();
+                    } else if (view.systemVisible) {
+                        view.session.closeSystemInfo();
                     } else if (view.session.finding) {
                         view.session.stopFinding();
                     } else {
@@ -588,6 +598,29 @@ Rectangle {
 
             PlasmaComponents3.ScrollView {
                 anchors.fill: parent
+                visible: view.systemVisible
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                Flickable {
+                    contentWidth: width
+                    contentHeight: systemInfo.implicitHeight + view.inset * 2
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    SystemInfoView {
+                        id: systemInfo
+                        x: view.inset
+                        y: view.inset
+                        width: parent.width - view.inset * 2
+                        visible: view.systemVisible  // it reads the system only while shown
+                        session: view.session
+                    }
+                }
+            }
+
+            PlasmaComponents3.ScrollView {
+                anchors.fill: parent
                 visible: view.articleVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
@@ -746,6 +779,8 @@ Rectangle {
                             view.setInput("");
                             view.focusInput();
                         }
+                        buttons: view.session.ui.start_screen || ["files", "web", "help"]
+                        onSystemInfoChosen: view.session.showSystemInfo()
                         onWebSearchChosen: {
                             view.session.startFinding("web");
                             view.setInput("");

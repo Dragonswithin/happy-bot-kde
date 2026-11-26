@@ -104,6 +104,14 @@ Offline Wikipedia (requested 2026-11-25, Phase 10):
   maintainer's archive through a throwaway daemon; a real download and the
   settings page by a person not yet.)
 
+Start screen and System info (requested 2026-11-25, Phase 11):
+
+- ◐ The start screen's buttons are chosen and ordered on the Appearance
+  page; an optional System info button shows live processor, memory,
+  graphics, network, disk and battery readings with graphs of the last
+  minutes, and the busiest programs with Stop. (Rendered with real
+  readings; not yet used by a person.)
+
 Mascot nudges and a morning card:
 
 - Nudges with a fix button: a calm pose when the battery is low, updates

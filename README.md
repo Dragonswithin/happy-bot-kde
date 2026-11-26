@@ -128,6 +128,11 @@ used.
   with pictures and working links (with Qt WebEngine installed; else as
   plain text), without contacting the internet; the AI can look things up in it
   too, without the internet.
+- **Start screen**: choose which buttons Happy Bot opens with, and their
+  order, under Appearance → Start screen. Switch on **System info** there
+  for live processor, memory, graphics, network, disk and battery readings
+  with small graphs, and the programs using the most CPU or memory, each of
+  yours with a Stop button that asks first.
 - **Fix selected text**: give the "Fix selected text" shortcut a key
   (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any
   application and press it. Happy Bot shows the text with Fix grammar,

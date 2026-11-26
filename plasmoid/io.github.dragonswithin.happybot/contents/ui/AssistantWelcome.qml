@@ -14,11 +14,15 @@ import org.kde.plasma.components as PlasmaComponents3
  * (ResultsView.qml shows it while the conversation is open and empty): a
  * greeting with Happy Bot's picture (`assistantIcon`, tinted with `accent`),
  * a line on what it can do, and a few starting points (find a file, search
- * the web, desktop help). "Find a file" emits `findFilesChosen` and
- * "Search the web" `webSearchChosen`, which ResultsView.qml turns into its
- * finders (`AssistantSession.finder`: matching applications, settings and
- * files, or bookmarks, visited websites and web pages, show as the user
- * types). The others emit `promptChosen`
+ * the web, desktop help, and System info when switched on), which the user
+ * picks and orders in the settings (`buttons`, the `ui.start_screen`
+ * setting); they stay square, in one row of three, or of four once there
+ * are four or more. "Find a file" emits `findFilesChosen` and "Search the
+ * web" `webSearchChosen`, which ResultsView.qml turns into its finders
+ * (`AssistantSession.finder`: matching applications, settings and files, or
+ * bookmarks, visited websites and web pages, show as the user types);
+ * "System info" emits `systemInfoChosen`, which opens SystemInfoView.qml.
+ * The others emit `promptChosen`
  * with the start of a request ("Help me with "), which ResultsView.qml
  * puts in the assistant's composer for them to finish. Nothing is sent until
  * they press Enter. The help shortcut names the application the user was in
@@ -41,6 +45,22 @@ ColumnLayout {
     signal promptChosen(string prompt)
     signal findFilesChosen()
     signal webSearchChosen()
+    signal systemInfoChosen()
+
+    // The start screen's buttons, in the user's order (`ui.start_screen`, src/happy_bot/ui_settings.py).
+    property var buttons: ["files", "web", "help"]
+    readonly property var tiles: welcome.buttons.map(id => {
+        switch (id) {
+        case "files": return { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: "" };
+        case "web": return { label: i18n("Search the web"), icon: "globe", prompt: "", web: true };
+        case "system": return { label: i18n("System info"), icon: "speedometer", prompt: "", system: true };
+        case "help": return welcome.appName
+            ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
+                appIcon: true, help: true, prompt: i18n("In %1, help me", welcome.appName) }
+            : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") };
+        default: return null;
+        }
+    }).filter(tile => tile !== null)
     // "Help with …": like promptChosen, and the chat it starts carries the application's full context.
     signal helpChosen(string prompt)
 
@@ -130,20 +150,15 @@ ColumnLayout {
     GridLayout {
         id: shortcuts
         Layout.fillWidth: true
-        columns: width >= Kirigami.Units.gridUnit * 25 ? 3 : 1
+        // Squares in one row: three columns, four once there are four or more buttons (more wrap), so
+        // fewer buttons leave room instead of stretching wide.
+        columns: width >= Kirigami.Units.gridUnit * 25 ? (welcome.tiles.length > 3 ? 4 : 3) : 1
         rowSpacing: Kirigami.Units.smallSpacing
         columnSpacing: Kirigami.Units.largeSpacing
         uniformCellWidths: true
 
         Repeater {
-            model: [
-                { label: i18n("Find a file"), icon: "folder-open-symbolic", prompt: "" },
-                { label: i18n("Search the web"), icon: "globe", prompt: "", web: true },
-                welcome.appName
-                    ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
-                        appIcon: true, help: true, prompt: i18n("In %1, help me", welcome.appName) }
-                    : { label: i18n("Desktop help"), icon: "computer-symbolic", prompt: i18n("Help me with") }
-            ]
+            model: welcome.tiles
 
             PlasmaComponents3.ItemDelegate {
                 id: shortcut
@@ -155,6 +170,7 @@ ColumnLayout {
                 text: modelData.label
                 onClicked: modelData.help ? welcome.helpChosen(modelData.prompt + " ")
                     : modelData.web ? welcome.webSearchChosen()
+                    : modelData.system ? welcome.systemInfoChosen()
                     : modelData.prompt ? welcome.promptChosen(modelData.prompt + " ") : welcome.findFilesChosen()
 
                 background: Rectangle {

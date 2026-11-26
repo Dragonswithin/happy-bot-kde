@@ -429,6 +429,17 @@ with only a model chosen, Set up downloads the introductions-only archive,
 the finder works, and the monthly timer is on.
 Status: built, exit check not yet passed (see Phase 10 findings).
 
+**Phase 11: Start screen and System info** (requested by the maintainer on
+2026-11-25). The screen Happy Bot opens on is the "start screen"; its
+buttons are chosen and ordered in the settings, and an optional System info
+button shows live readings and the busiest programs so System Monitor is
+rarely needed.
+*Exit:* a person switches System info on and reorders the buttons on the
+Appearance page and sees the start screen follow in the panel popup and the
+floating Happy Bot; System info shows live load, memory, graphics, network
+and disks, and stopping one of their own programs asks first and works.
+Status: built, exit check not yet passed (see Phase 11 findings).
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog, and the
 priority order the maintainer chose for after the first release, is in
@@ -1351,6 +1362,30 @@ Findings:
   web search; "latest KDE Plasma news this week" still searched the web.
 - Readers set up before the read limit was raised get it when the daemon
   starts (`wikipedia_setup.upgraded_settings`); the maintainer's did.
+
+**Phase 11 (built 2026-11-25).**
+
+- The maintainer chose the name "Start screen", a live overview with the
+  programs (not full System Monitor parity), buttons that can be switched
+  on and off and reordered, and one row of smaller squares for four or more.
+  The setting is `ui.start_screen` (`ui_settings`, default the three
+  buttons before, so System info is opt-in), edited by
+  StartScreenButtons.qml on the Appearance page. The start screen uses
+  three columns, four once there are four or more buttons, so fewer buttons
+  leave room rather than stretching wide.
+- System info (`system_monitor`, `system_routes`, SystemInfoView.qml):
+  the graphs reuse the mascot's once-a-second sensor readings, kept for five
+  minutes in memory (`History`, fed from `daemon_http.serve`), so they cost
+  no extra sampling. Graphics come from sysfs (AMD/Intel) or `nvidia-smi`;
+  the maintainer's Radeon 8060S is an APU whose shared memory (GTT) is
+  shown beside its own. Programs are read from `/proc`, their CPU share
+  measured between looks. A program's owner is read from its status file's
+  `Uid:` line: the file's owner is root for KWin (it has extra
+  capabilities). Stop asks first, then sends SIGTERM to the user's own
+  programs only, never the shell, KWin or Happy Bot's daemon, and is
+  logged.
+- Rendered offscreen with this computer's real readings; not yet used by
+  a person.
 
 ## Decisions
 
