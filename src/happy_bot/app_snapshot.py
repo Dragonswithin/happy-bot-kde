@@ -190,7 +190,8 @@ def capture_window(window_id: str, directory: Path) -> str:
     else:
         return ""
     time.sleep(0.15)  # let the window draw itself as active before it is captured
-    return capture_png(directory, ["-a"])
+    # The compositor's shadow can add a wide transparent border around the frame.
+    return capture_png(directory, ["-a", "--no-shadow"])
 
 
 def capture_png(directory: Path, options: list[str]) -> str:

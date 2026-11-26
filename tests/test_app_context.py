@@ -133,6 +133,16 @@ class BackgroundNoteTests(unittest.TestCase):
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_help_window_capture_excludes_the_shadow_but_keeps_the_frame(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(app_snapshot.shutil, "which", return_value="spectacle"), \
+                mock.patch.object(app_snapshot, "_activate"), \
+                mock.patch.object(app_snapshot, "_active_window_id", return_value="w"), \
+                mock.patch.object(app_snapshot.time, "sleep"), \
+                mock.patch.object(app_snapshot, "capture_png", return_value="window.png") as capture:
+            self.assertEqual(app_context.preview_screenshot("w", False, Path(tmp)), "window.png")
+            capture.assert_called_once_with(Path(tmp) / "screenshots", ["-a", "--no-shadow"])
+
     def test_the_open_document_comes_from_recent_files_named_in_the_title(self) -> None:
         xbel = """<?xml version="1.0"?>
 <xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks">
