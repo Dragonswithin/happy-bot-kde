@@ -165,6 +165,7 @@ Item {
             const storage = findChild(view, "systemCard-storage");
             tryVerify(() => processor.visible && storage.visible);
             compare(processor.expanded, false);
+            tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
             compare(session.programRequests, 0);
             waitForRendering(view);
             mouseClick(storage);

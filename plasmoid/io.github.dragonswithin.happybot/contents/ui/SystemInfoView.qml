@@ -186,6 +186,7 @@ ColumnLayout {
         property real bar: -1  // 0..1 to draw a bar
         Layout.fillWidth: true
         Layout.preferredWidth: 1
+        Layout.preferredHeight: expanded ? implicitHeight : width
         implicitHeight: column.implicitHeight + Kirigami.Units.largeSpacing * 2
         radius: Kirigami.Units.cornerRadius * 2
         visible: available && (!view.detailSection || expanded)
@@ -264,7 +265,9 @@ ColumnLayout {
     GridLayout {
         Layout.fillWidth: true
         visible: view.info !== null
-        columns: !view.detailSection && view.width >= Kirigami.Units.gridUnit * 24 ? 2 : 1
+        columns: view.detailSection ? 1 : Math.max(1, Math.min(4,
+            Math.floor((width + columnSpacing) / (Kirigami.Units.gridUnit * 6.5 + columnSpacing))))
+        uniformCellWidths: true
         columnSpacing: Kirigami.Units.smallSpacing
         rowSpacing: Kirigami.Units.smallSpacing
 
