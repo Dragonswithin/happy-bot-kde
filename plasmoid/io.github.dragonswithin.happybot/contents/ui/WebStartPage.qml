@@ -10,6 +10,7 @@ import org.kde.plasma.components as PlasmaComponents3
 // The empty web finder. Sites and searches share the composer's selection order.
 Item {
     id: page
+    property var popup: null
 
     property var sites: []
     property var searches: []
@@ -80,11 +81,14 @@ Item {
         }
     }
 
-    PlasmaComponents3.ScrollView {
+    PopupScrollView {
+        popup: page.popup
         anchors.fill: parent
         QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
         Flickable {
+
+            acceptedButtons: Qt.NoButton
             id: flick
             contentWidth: width
             contentHeight: content.implicitHeight + 2 * page.inset

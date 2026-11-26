@@ -9,6 +9,7 @@ import org.kde.plasma.components as PC3
 
 ColumnLayout {
     id: preview
+    property var popup: null
 
     required property var session
     readonly property var draft: session.helpDraft
@@ -32,7 +33,8 @@ ColumnLayout {
     }
 
     // On short windows the tools can scroll independently of the picture.
-    PC3.ScrollView {
+    PopupScrollView {
+        popup: preview.popup
         Layout.fillWidth: true
         Layout.fillHeight: !screenshot.visible
         Layout.minimumHeight: 0
@@ -40,6 +42,7 @@ ColumnLayout {
                                                    : toolsArea.contentHeight
         QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
         Flickable {
+            acceptedButtons: Qt.NoButton
             id: toolsArea
             contentWidth: width
             contentHeight: controls.implicitHeight + 2 * Kirigami.Units.smallSpacing

@@ -157,7 +157,7 @@ Rectangle {
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
     implicitHeight: fullSizeTool ? maximumHeight : Math.round(Math.min(maximumHeight, inputBar.height
-        + titleBar.implicitHeight + nudge.height + bodyHeight))
+        + viewHeadingRow.implicitHeight + nudge.height + bodyHeight + bottomActions.height))
 
     function focusInput() {
         inputBar.forceFieldFocus();
@@ -190,9 +190,14 @@ Rectangle {
         else accepted(query);
     }
 
-    // --- header band: title, status and actions ---------------------------
+    PopupDragArea {
+        anchors.fill: parent
+        popup: view
+    }
+
+    // The title and window controls sit directly on the popup background.
     Item {
-        id: titleBar
+        id: viewHeadingRow
 
         readonly property var heading: {
             if (view.fixVisible)
@@ -219,57 +224,20 @@ Rectangle {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        // Placed by y, not by switching anchors (see inputBar).
-        y: view.fieldAtBottom ? 0 : inputBar.height
-        implicitHeight: headerRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+        anchors.top: parent.top
         height: implicitHeight
 
-        Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: 1
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
-        }
-        MouseArea {
-            id: titleDrag
-            anchors.fill: parent
-            enabled: view.windowPosition !== null
-            cursorShape: dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-            preventStealing: true
-            property point grabPoint
-            property bool dragging: false
-
-            onPressed: mouse => {
-                grabPoint = mapToItem(null, mouse.x, mouse.y);
-                dragging = false;
-            }
-            onPositionChanged: mouse => {
-                const point = mapToItem(null, mouse.x, mouse.y);
-                const dx = point.x - grabPoint.x;
-                const dy = point.y - grabPoint.y;
-                if (!dragging && Math.abs(dx) + Math.abs(dy) < Qt.styleHints.startDragDistance)
-                    return;
-                dragging = true;
-                const origin = view.windowPosition();
-                view.windowMoved(Qt.point(origin.x + dx, origin.y + dy), false);
-            }
-            onReleased: {
-                if (dragging)
-                    view.windowMoved(view.windowPosition(), true);
-                dragging = false;
-            }
-            onCanceled: dragging = false
-        }
+        implicitHeight: titleActions.implicitHeight + Kirigami.Units.smallSpacing
 
         RowLayout {
-            id: headerRow
+            id: titleActions
             anchors.fill: parent
             anchors.leftMargin: view.inset
-            anchors.rightMargin: Kirigami.Units.largeSpacing
+            anchors.rightMargin: Kirigami.Units.smallSpacing
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
-                source: titleBar.heading.icon
+                source: viewHeadingRow.heading.icon
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
             }
@@ -278,10 +246,10 @@ Rectangle {
                 objectName: "viewHeading"
                 Layout.maximumWidth: view.width * 0.5
                 elide: Text.ElideRight
-                text: titleBar.heading.text
+                text: viewHeadingRow.heading.text
                 textFormat: Text.PlainText
                 Accessible.role: Accessible.Heading
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize
                 font.weight: Font.DemiBold
             }
 
@@ -300,60 +268,14 @@ Rectangle {
                 opacity: 0.7
             }
 
-            // The actions keep their space in Files mode so the band's height
-            // does not change when the body switches.
             PlasmaComponents3.ToolButton {
                 text: i18n("Stop")
-                visible: view.session.busy
-                enabled: view.conversationVisible
-                opacity: view.conversationVisible ? 1 : 0
+                visible: view.session.busy && view.conversationVisible
                 onClicked: view.session.cancel()
             }
 
-            // Leaves this chat for the welcome screen; the chat stays in the saved ones.
             PlasmaComponents3.ToolButton {
-                icon.name: "go-home"
-                text: i18n("Close chat")
-                visible: view.conversationVisible && view.session.hasTranscript
-                PlasmaComponents3.ToolTip.text: i18n("Back to the start. This chat stays in your saved chats.")
-                PlasmaComponents3.ToolTip.visible: hovered
-                onClicked: view.session.newChat()
-            }
-
-            // Leaves the file finder, or fixing selected text, for the welcome screen or the chat.
-            PlasmaComponents3.ToolButton {
-                icon.name: "go-previous"
-                text: i18n("Back")
-                visible: view.session.finding || view.fixVisible || view.systemVisible || view.helpVisible
-                onClicked: {
-                    if (view.helpVisible) {
-                        view.session.dismissHelpDraft();
-                        view.clearInput();
-                        view.focusInput();
-                    } else if (view.fixVisible) {
-                        view.session.stopFixing();
-                    } else if (view.systemVisible) {
-                        view.session.closeSystemInfo();
-                    } else if (view.articleVisible) {
-                        if (!articleView.back()) {  // back through the pages followed, then to the matches
-                            view.session.closeArticle();
-                        }
-                    } else {
-                        view.session.stopFinding();
-                    }
-                }
-            }
-
-            PlasmaComponents3.ToolButton {
-                icon.name: "configure"
-                text: i18n("Settings")
-                display: QQC2.AbstractButton.IconOnly
-                PlasmaComponents3.ToolTip.text: text
-                PlasmaComponents3.ToolTip.visible: hovered
-                onClicked: view.settingsRequested()
-            }
-
-            PlasmaComponents3.ToolButton {
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 1.5
                 icon.name: "window-close"
                 text: i18n("Close (Esc)")
                 display: QQC2.AbstractButton.IconOnly
@@ -364,7 +286,54 @@ Rectangle {
         }
     }
 
-    // --- footer band: the field --------------------------------------------
+    Item {
+        id: bottomActions
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: !view.fieldAtBottom && backButton.visible ? backButton.implicitHeight + Kirigami.Units.smallSpacing : 0
+
+        RowLayout {
+            id: bottomRow
+            anchors.left: parent.left
+            anchors.leftMargin: Kirigami.Units.largeSpacing
+            anchors.verticalCenter: parent.verticalCenter
+        }
+    }
+
+    PlasmaComponents3.ToolButton {
+        id: backButton
+        parent: view.fieldAtBottom ? composer : bottomRow
+        Layout.row: 0
+        Layout.column: 0
+        visible: view.session.finding || view.fixVisible || view.systemVisible
+            || view.helpVisible || view.articleVisible || view.session.hasTranscript
+        icon.name: "go-previous"
+        text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
+        PlasmaComponents3.ToolTip.text: text
+        PlasmaComponents3.ToolTip.visible: hovered
+        onClicked: {
+            if (view.helpVisible) {
+                view.session.dismissHelpDraft();
+                view.clearInput();
+                view.focusInput();
+            } else if (view.fixVisible) {
+                view.session.stopFixing();
+            } else if (view.systemVisible) {
+                view.session.closeSystemInfo();
+            } else if (view.articleVisible) {
+                if (!articleView.back()) {  // back through the pages followed, then to the matches
+                    view.session.closeArticle();
+                }
+            } else if (view.session.finding) {
+                view.session.stopFinding();
+            } else {
+                view.session.newChat();
+            }
+        }
+    }
+
+    // --- composer --------------------------------------------
     Item {
         id: inputBar
 
@@ -381,7 +350,7 @@ Rectangle {
         // (the floating button moving across the screen's middle) left the band anchored to both
         // for a moment: it stretched over the whole view and kept that height, hiding everything
         // but the field (tests/tst_FieldSide.qml).
-        y: view.fieldAtBottom ? view.height - height : 0
+        y: view.fieldAtBottom ? view.height - height : viewHeadingRow.height
         height: implicitHeight
         implicitHeight: composer.implicitHeight + Kirigami.Units.largeSpacing * 2
 
@@ -391,14 +360,17 @@ Rectangle {
             height: 1
             color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
         }
-        RowLayout {
+        GridLayout {
             id: composer
+            rows: 1
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
-            spacing: Kirigami.Units.largeSpacing
+            columnSpacing: Kirigami.Units.largeSpacing
 
             PlasmaExtras.SearchField {
                 id: field
+                Layout.row: 0
+                Layout.column: 1
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 Layout.preferredHeight: Math.max(implicitHeight, Kirigami.Units.gridUnit * 2)
@@ -507,6 +479,8 @@ Rectangle {
 
             // Which AI this chat uses; only when more than one is set up.
             ModelPicker {
+                Layout.row: 0
+                Layout.column: 2
                 session: view.session
             }
         }
@@ -516,7 +490,7 @@ Rectangle {
         id: nudge
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: titleBar.bottom
+        anchors.top: view.fieldAtBottom ? viewHeadingRow.bottom : inputBar.bottom
         kind: view.session.nudges?.[0] || ""
         needsSetup: view.session.needsSetup
         accent: view.accent
@@ -539,7 +513,7 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: nudge.bottom
-        anchors.bottom: view.fieldAtBottom ? inputBar.top : parent.bottom
+        anchors.bottom: view.fieldAtBottom ? inputBar.top : bottomActions.top
         clip: true
 
         // --- sidebar: saved conversations ---------------------------------
@@ -566,7 +540,8 @@ Rectangle {
                 elide: Text.ElideRight
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 anchors.top: historyHeader.bottom
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
@@ -574,6 +549,8 @@ Rectangle {
                 anchors.rightMargin: 1
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     contentWidth: width
                     contentHeight: historyColumn.implicitHeight
                     clip: true
@@ -697,6 +674,7 @@ Rectangle {
 
             FileResults {
                 id: fileResults
+                popup: view
 
                 anchors.fill: parent
                 visible: view.filesVisible && !view.webStartVisible
@@ -712,6 +690,7 @@ Rectangle {
 
             WebStartPage {
                 id: webStart
+                popup: view
                 anchors.fill: parent
                 visible: view.webStartVisible
                 sites: view.session.webStartData.sites ?? []
@@ -737,12 +716,15 @@ Rectangle {
                 onSettingsRequested: view.settingsRequested()
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 anchors.fill: parent
                 visible: view.systemVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     contentWidth: width
                     contentHeight: systemInfo.implicitHeight + view.inset * 2
                     flickableDirection: Flickable.VerticalFlick
@@ -760,12 +742,15 @@ Rectangle {
                 }
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 anchors.fill: parent
                 visible: view.articleVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     id: articleFlick
                     contentWidth: width
                     // The page view scrolls itself and fills the body; the text view scrolls here.
@@ -802,12 +787,15 @@ Rectangle {
                 }
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 anchors.fill: parent
                 visible: view.fixVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     contentWidth: width
                     contentHeight: fixCard.naturalHeight + view.inset * 2
                     flickableDirection: Flickable.VerticalFlick
@@ -824,7 +812,8 @@ Rectangle {
                 }
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 id: transcriptView
                 anchors.fill: parent
                 visible: view.conversationVisible && !view.helpVisible && view.session.entries.count > 0
@@ -834,6 +823,8 @@ Rectangle {
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     id: transcript
 
                     contentWidth: width
@@ -923,6 +914,7 @@ Rectangle {
 
             HelpPreview {
                 id: helpPreview
+                popup: view
                 anchors.fill: parent
                 visible: view.conversationVisible && view.helpVisible
                 session: view.session
@@ -933,11 +925,14 @@ Rectangle {
                 }
             }
 
-            PlasmaComponents3.ScrollView {
+            PopupScrollView {
+                popup: view
                 anchors.fill: parent
                 visible: view.conversationVisible && !view.helpVisible && view.session.entries.count === 0
 
                 Flickable {
+
+                    acceptedButtons: Qt.NoButton
                     id: welcomeArea
                     contentWidth: width
                     contentHeight: welcome.implicitHeight + view.inset * 2

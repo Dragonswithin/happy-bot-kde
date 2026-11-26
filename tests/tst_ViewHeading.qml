@@ -20,6 +20,9 @@ Item {
         }
     }
 
+    SignalSpy { id: moves; target: view; signalName: "windowMoved" }
+    SignalSpy { id: closes; target: view; signalName: "closeRequested" }
+
     TestCase {
         name: "ViewHeading"
         when: windowShown
@@ -32,6 +35,8 @@ Item {
         }
 
         function init() {
+            view.windowPosition = null;
+            view.fieldAtBottom = false;
             session.stopFinding();
             session.stopFixing();
             session.resetTranscript();
@@ -57,6 +62,7 @@ Item {
         }
 
         function test_startScreenTiles(data) {
+            view.fieldAtBottom = data.saved;
             session.history = data.saved ? [{ id: "a", title: "Saved chat", updated: 0 }] : [];
             const width = view.width;
             compare(heading.text, "Start screen");
@@ -67,8 +73,28 @@ Item {
             compare(view.width, width);
             compare(view.height, view.heightInGridUnits * Kirigami.Units.gridUnit);
             waitForRendering(view);
-            mouseClick(button(view, "Back"));
+            const back = button(view, "Back");
+            const position = back.mapToItem(view, 0, 0);
+            verify(position.x < Kirigami.Units.gridUnit * 2);
+            verify(position.y + back.height >= view.height - Kirigami.Units.gridUnit * 1.5);
+            mouseClick(back);
             tryCompare(heading, "text", "Start screen");
+        }
+
+        function test_backgroundDragsButControlsStayClickable() {
+            view.windowPosition = () => Qt.point(40, 80);
+            moves.clear();
+            closes.clear();
+            verify(!button(view, "Settings"));
+            mouseDrag(view, 8, view.height - 11, 45, -5);
+            verify(moves.count > 0);
+            compare(moves.signalArguments[moves.count - 1][1], true);
+
+            moves.clear();
+            mouseDrag(view, Math.round(view.width / 2), 55, 45, 0);
+            compare(moves.count, 0);
+            mouseClick(button(view, "Close (Esc)"));
+            compare(closes.count, 1);
         }
 
         function test_articleAndSelection() {

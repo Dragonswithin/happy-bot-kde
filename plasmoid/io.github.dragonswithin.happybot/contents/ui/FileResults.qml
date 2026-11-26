@@ -49,6 +49,7 @@ import org.kde.plasma.components as PlasmaComponents3
  */
 Item {
     id: results
+    property var popup: null
 
     required property var session
     property string query: ""
@@ -105,7 +106,8 @@ Item {
         }
     }
 
-    PlasmaComponents3.ScrollView {
+    PopupScrollView {
+        popup: results.popup
         id: filesView
 
         anchors.left: parent.left
@@ -115,6 +117,8 @@ Item {
         QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
         Flickable {
+
+            acceptedButtons: Qt.NoButton
             id: filesFlick
 
             contentWidth: width
