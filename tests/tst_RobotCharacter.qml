@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Exercise the motion switch mid-greeting as well as hover and visibility changes
-// on the real rendered character, at the size of the floating shortcut.
+// Exercise the idle face and greeting on the real character at shortcut size.
 import QtQuick
 import QtTest
 import org.kde.kirigami as Kirigami
@@ -52,6 +51,9 @@ Item {
             if (Kirigami.Units.longDuration <= 1) skip("Plasma animations are disabled");
             robot.animate = true;
             waitForPolish(robot);
+            const pose = findChild(robot, "characterPose");
+            verify(pose);
+            return pose;
         }
 
         // At shortcut scale the two gold lights are only a few pixels each.
@@ -77,8 +79,9 @@ Item {
         }
 
         function test_hoverMovesThroughSeveralPosesInsideTheShortcut() {
-            enableMotion();
+            const pose = enableMotion();
             const idle = grabImage(surface);
+            const start = Date.now();
             robot.attentive = true;
             tryVerify(() => {
                 const frame = grabImage(surface);
@@ -86,10 +89,10 @@ Item {
                     && hasGold(frame, 0.71, 0.24, 0.99, 0.55);
             });
             const firstPose = grabImage(surface);
-            tryVerify(() => {
-                const next = grabImage(surface);
-                return !next.equals(firstPose) && !next.equals(idle);
-            });
+            tryVerify(() => pose.wrist > 10, robot.duration(4000));
+            verify(Date.now() - start >= 1000, "The first full sweep should take time to read");
+            const next = grabImage(surface);
+            verify(!next.equals(firstPose) && !next.equals(idle));
             compare(robot.mapToItem(surface, 0, 0), Qt.point(0, 0));
             compare(robot.mapToItem(surface, robot.width, robot.height), Qt.point(32, 32));
 
@@ -97,11 +100,32 @@ Item {
             tryVerify(() => grabImage(surface).equals(grabImage(original)));
         }
 
-        function test_idleFaceMovesThenRestsWithoutHover() {
-            enableMotion();
-            const idle = grabImage(original);
-            tryVerify(() => !grabImage(surface).equals(idle), 8000);
-            tryVerify(() => grabImage(surface).equals(idle));
+        function test_idleLooksBothWaysAndReturnsToTheSameFace() {
+            const pose = enableMotion();
+            const idle = grabImage(surface);
+            tryVerify(() => pose.gaze > 2, robot.duration(8000));
+            const lookingRight = grabImage(surface);
+            verify(!lookingRight.equals(idle));
+            // The antenna, housing and smile must stay still when only the eyes move.
+            for (let y = 0; y < idle.height; ++y) {
+                if (y >= Math.floor(idle.height * 20 / 48) && y < Math.ceil(idle.height * 29 / 48)) continue;
+                for (let x = 0; x < idle.width; ++x)
+                    compare(lookingRight.pixel(x, y), idle.pixel(x, y));
+            }
+            const right = Date.now();
+            tryVerify(() => pose.gaze < -2, robot.duration(4000));
+            verify(Date.now() - right >= 650, "Allow time to look right and travel to the left");
+            verify(!grabImage(surface).equals(lookingRight));
+            tryVerify(() => pose.gaze === 0 && grabImage(surface).equals(idle), robot.duration(4000));
+        }
+
+        function test_hoverDuringGlanceKeepsEyePosition() {
+            const pose = enableMotion();
+            tryVerify(() => pose.gaze > 2, robot.duration(8000));
+            const gaze = pose.gaze;
+            robot.attentive = true;
+            compare(pose.gaze, gaze);
+            tryVerify(() => pose.gaze === 0 && pose.lift > 0, robot.duration(3000));
         }
 
         function test_portraitGreetsWhenShown() {

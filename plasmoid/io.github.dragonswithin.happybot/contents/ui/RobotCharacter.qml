@@ -20,11 +20,12 @@ Item {
     Accessible.ignored: true
 
     function duration(ms: real): int {
-        return Math.round(ms * Kirigami.Units.longDuration / 200);
+        // Give gestures time to read even when Plasma's UI transitions are fast.
+        return Math.round(ms * Math.max(1, Kirigami.Units.longDuration / 200));
     }
 
     function greet() {
-        if (ready && canMove) hello.restart();
+        if (ready && canMove && !hello.running) hello.start();
     }
 
     function syncVisibility() {
@@ -35,11 +36,12 @@ Item {
 
     Component.onCompleted: { ready = true; syncVisibility(); }
     onCanMoveChanged: syncVisibility()
-    onAttentiveChanged: if (attentive && !hello.running) greet()
-    onGreetOnShowChanged: if (greetOnShow && !hello.running) greet()
+    onAttentiveChanged: if (attentive) greet()
+    onGreetOnShowChanged: if (greetOnShow) greet()
 
     QtObject {
         id: pose
+        objectName: "characterPose"
         property real lift: 0       // The hand unfolds as the head makes room beside it.
         property real hop: 0        // Vertical travel, in artwork units.
         property real wrist: 0      // The hand's rotation at its cuff, in degrees.
@@ -59,6 +61,8 @@ Item {
         id: hello
         // Anticipation, spring up, two waves, then tuck the hand back in.
         ParallelAnimation {
+            Beat { property: "eyelid"; to: 1; ms: 180 }
+            Beat { property: "gaze"; to: 0; ms: 180 }
             Beat { property: "hop"; from: 0; to: 2.5; ms: 180 }
             Beat { property: "aerial"; from: 0; to: 10; ms: 180 }
         }
@@ -98,31 +102,38 @@ Item {
                 Beat { property: "hop"; to: 0; ms: 260 }
             }
         }
-        onStopped: { pose.lift = 0; pose.hop = 0; pose.wrist = 0; pose.aerial = 0; }
+        onStopped: {
+            pose.lift = 0;
+            pose.hop = 0;
+            pose.wrist = 0;
+            pose.aerial = 0;
+            pose.eyelid = 1;
+            pose.gaze = 0;
+        }
     }
 
     SequentialAnimation {
         running: robot.ready && robot.canMove && !hello.running && !robot.expressionSource
         loops: Animation.Infinite
         PauseAnimation { duration: 2800 }
-        Beat { property: "eyelid"; to: 0.12; ms: 75 }
-        Beat { property: "eyelid"; to: 1; ms: 115 }
-        PauseAnimation { duration: 1600 }
-        Beat { property: "gaze"; to: 2.7; ms: 145 }
-        PauseAnimation { duration: 600 }
-        Beat { property: "gaze"; to: 0; ms: 210 }
-        PauseAnimation { duration: 2100 }
-        Beat { property: "gaze"; to: -2; ms: 135 }
-        Beat { property: "eyelid"; to: 0.12; ms: 80 }
-        Beat { property: "eyelid"; to: 1; ms: 105 }
-        Beat { property: "gaze"; to: 0; ms: 200 }
-        onStopped: { pose.eyelid = 1; pose.gaze = 0; }
+        Beat { property: "eyelid"; to: 0.12; ms: 90 }
+        Beat { property: "eyelid"; to: 1; ms: 145 }
+        PauseAnimation { duration: 1300 }
+        Beat { property: "gaze"; to: 2.6; ms: 420 }
+        PauseAnimation { duration: robot.duration(880) }
+        Beat { property: "gaze"; to: -2.4; ms: 760 }
+        PauseAnimation { duration: robot.duration(800) }
+        Beat { property: "eyelid"; to: 0.12; ms: 100 }
+        Beat { property: "eyelid"; to: 1; ms: 145 }
+        Beat { property: "gaze"; to: 0; ms: 440 }
+        // A greeting picks up the current gaze and blink during its anticipation.
+        onStopped: if (!hello.running) { pose.eyelid = 1; pose.gaze = 0; }
     }
 
-    // The resting pose is the shipped icon, including when animation is disabled.
+    // Keep the same drawing between glances. The motion-off option uses the shipped icon.
     Image {
         anchors.fill: parent
-        visible: !robot.performing
+        visible: !robot.canMove
         fillMode: Image.PreserveAspectFit
         source: Look.robotIcon
         sourceSize.width: Math.ceil(robot.unit * 48)
@@ -133,7 +144,7 @@ Item {
         width: 48
         height: 48
         scale: robot.unit
-        visible: robot.performing || robot.expressionSource !== ""
+        visible: robot.canMove || robot.expressionSource !== ""
 
         component Layer: Image {
             anchors.fill: parent
@@ -173,7 +184,7 @@ Item {
 
             Item {
                 anchors.fill: parent
-                visible: robot.performing
+                visible: robot.canMove
                 Layer {
                     source: "../images/character/aerial.svg"
                     transform: Rotation { origin.x: 25; origin.y: 15; angle: pose.aerial }
