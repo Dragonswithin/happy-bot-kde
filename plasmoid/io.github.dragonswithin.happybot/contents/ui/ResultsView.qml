@@ -98,7 +98,7 @@ Rectangle {
     readonly property real contentHeight: fixVisible
         ? fixCard.naturalHeight + inset * 2
         : articleVisible
-        ? articleView.naturalHeight + inset * 2
+        ? (articleView.webMode ? maximumHeight : articleView.naturalHeight + inset * 2)
         : filesVisible
         ? fileResults.naturalHeight
         : view.session.entries.count === 0
@@ -236,8 +236,17 @@ Rectangle {
                 icon.name: "go-previous"
                 text: i18n("Back")
                 visible: view.session.finding || view.fixVisible
-                onClicked: view.fixVisible ? view.session.stopFixing()
-                    : view.articleVisible ? view.session.closeArticle() : view.session.stopFinding()
+                onClicked: {
+                    if (view.fixVisible) {
+                        view.session.stopFixing();
+                    } else if (view.articleVisible) {
+                        if (!articleView.back()) {  // back through the pages followed, then to the matches
+                            view.session.closeArticle();
+                        }
+                    } else {
+                        view.session.stopFinding();
+                    }
+                }
             }
 
             PlasmaComponents3.ToolButton {
@@ -585,7 +594,9 @@ Rectangle {
                 Flickable {
                     id: articleFlick
                     contentWidth: width
-                    contentHeight: articleView.naturalHeight + view.inset * 2
+                    // The page view scrolls itself and fills the body; the text view scrolls here.
+                    contentHeight: articleView.webMode ? height : articleView.naturalHeight + view.inset * 2
+                    interactive: !articleView.webMode
                     flickableDirection: Flickable.VerticalFlick
                     boundsBehavior: Flickable.StopAtBounds
                     clip: true
@@ -605,6 +616,7 @@ Rectangle {
                         x: view.inset
                         y: view.inset
                         width: parent.width - view.inset * 2
+                        height: webMode ? articleFlick.height - view.inset * 2 : implicitHeight
                         session: view.session
                         onLinkActivated: link => view.hitActivated(link)
                         onAskRequested: title => {

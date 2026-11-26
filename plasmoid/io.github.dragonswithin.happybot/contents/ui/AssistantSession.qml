@@ -105,9 +105,11 @@ import QtQuick
  * web finder also searches it (`/wikipedia/search`, `wikiHits`; hits marked
  * `source: "wikipedia"`, their `location` the article's path), and its
  * articles are listed under their own heading before the web's pages.
- * `openArticle(path)` reads one (`/wikipedia/article`) into `article`
- * (`{title, path, text, cut}` with `loading` and `error`), which the view
- * shows instead of the matches until `closeArticle`; leaving the finder
+ * `openArticle(path)` gets the address of its own page (`/wikipedia/page`)
+ * into `article` (`{title, path, url}` with `loading` and `error`; `text`
+ * and `cut` once `loadArticleText` fetched the text view, where web pages
+ * cannot be shown; `articleShown` follows links taken in the page), which
+ * the view shows instead of the matches until `closeArticle`; leaving the finder
  * closes it too. `searching` is true until
  * both replies are in and `searchedText` is the text they are for, so Enter
  * typed before the results can wait for them. A quick hit has `kind`
@@ -439,15 +441,42 @@ Item {
         clearSearch();
     }
 
-    /** Shows the offline Wikipedia article at `path` (a hit's location, or a link in another article). */
+    /** Shows the offline Wikipedia article at `path` (a hit's location, or a link in another article): the
+     *  address of its own page (`/wikipedia/page`), which ArticleWebView.qml loads. */
     function openArticle(path, title) {
         const wanted = decodeURIComponent(String(path || "")).replace(/ /g, "_");
-        session.article = { loading: true, title: title || wanted.replace(/_/g, " "), path: wanted, text: "", cut: false,
-                            error: "" };
+        session.article = { loading: true, title: title || wanted.replace(/_/g, " "), path: wanted, url: "", text: "",
+                            cut: false, error: "" };
+        request("GET", "/wikipedia/page?path=" + encodeURIComponent(wanted), null, function(data) {
+            if (session.article && session.article.path === wanted) {
+                session.article = Object.assign({}, session.article, { loading: false, url: data.url });
+            }
+        }, function(data) {
+            if (session.article && session.article.path === wanted) {
+                session.article = Object.assign({}, session.article, { loading: false,
+                                                 error: data.error || i18n("The article could not be read.") });
+            }
+        });
+    }
+
+    /** The article's page followed a link: the header shows the article now in view. */
+    function articleShown(title, path) {
+        if (session.article && (session.article.title !== title || session.article.path !== path)) {
+            session.article = Object.assign({}, session.article, { title: title, path: path });
+        }
+    }
+
+    /** Where web pages cannot be shown: the article as light Markdown (`/wikipedia/article`). */
+    function loadArticleText() {
+        if (!session.article) {
+            return;
+        }
+        const wanted = session.article.path;
+        session.article = Object.assign({}, session.article, { loading: true });
         request("GET", "/wikipedia/article?path=" + encodeURIComponent(wanted), null, function(data) {
             if (session.article && session.article.path === wanted) {
-                session.article = { loading: false, title: data.title, path: data.path, text: data.text, cut: data.cut,
-                                    error: "" };
+                session.article = Object.assign({}, session.article, { loading: false, title: data.title,
+                                                 text: data.text, cut: data.cut, error: "" });
             }
         }, function(data) {
             if (session.article && session.article.path === wanted) {

@@ -124,7 +124,9 @@ used.
   one from Kiwix (introductions only, every article without pictures, or
   everything), and can keep it up to date monthly. Then "Search the web"
   also searches it: its articles are listed under "Wikipedia", before the
-  pages from the web, and open inside Happy Bot with links to other articles; the AI can look things up in it
+  pages from the web, and open inside Happy Bot as Wikipedia shows them,
+  with pictures and working links (with Qt WebEngine installed; else as
+  plain text), without contacting the internet; the AI can look things up in it
   too, without the internet.
 - **Fix selected text**: give the "Fix selected text" shortcut a key
   (System Settings > Shortcuts > Happy Bot Shortcuts), select text in any

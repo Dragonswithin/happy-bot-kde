@@ -23,7 +23,8 @@ clients can find the base URL), the current settings, the conversations, the
 ``voice.Listener`` that records a spoken request, the
 ``selection_fix.SelectionNote`` holding the text noted by the "Fix selected
 text" shortcut, the ``wikipedia_setup.DownloadJob`` of an offline Wikipedia
-download, and the
+download, the ``wikipedia_pages.PageServer`` that serves its pages to the
+article view, and the
 ``McpManager`` that owns the tool-server child processes. ``replace_settings`` is the single
 path that changes settings: it validates, saves, then reconfigures the
 manager and brings the routines' systemd units, and the offline Wikipedia
@@ -61,7 +62,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import desktop_context, routines, selection_fix, user_timers, voice, wikipedia_library, wikipedia_setup
+from . import (desktop_context, routines, selection_fix, user_timers, voice, wikipedia_library, wikipedia_pages,
+               wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
 from . import settings as settings_store
 from .icon_activity import IconActivity
@@ -197,6 +199,9 @@ class AssistantServer(ThreadingHTTPServer):
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
         self.wikipedia_download = wikipedia_setup.DownloadJob()  # offline Wikipedia's background download
+        # Offline Wikipedia's own pages for the article view, from a separate loopback server (wikipedia_pages).
+        self.wikipedia_pages = wikipedia_pages.PageServer(
+            lambda entry: wikipedia_reader.entry(self.mcp, self.settings, entry))
         self._settings_lock = threading.Lock()
         self.settings_error = ""
         try:
@@ -238,6 +243,7 @@ class AssistantServer(ThreadingHTTPServer):
 
     def shutdown_tools(self) -> None:
         self.mcp.close_all()
+        self.wikipedia_pages.close()
 
     def remove_runtime_files(self) -> None:
         for path in (state_path(self.runtime_dir), token_path(self.runtime_dir)):

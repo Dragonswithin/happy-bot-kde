@@ -14,7 +14,8 @@ sends the user's pick to ``use``:
   without pictures when it fits, else the introductions.
 
 Either way, ``_apply`` adds the reader tool server and saves the ``wikipedia`` settings: the reader
-is openzim-mcp in its "advanced" mode with the archives' folder as its argument, run from the
+is openzim-mcp in its "advanced" mode with the archives' folder as its argument and its rate limit
+raised for whole pages (``READER_ENV``), run from the
 ``openzim-mcp`` program when one is installed and otherwise through ``uvx`` at ``READER_VERSION``
 (checked 2026-11-25 on PyPI and started against a real archive). Its entry is marked read-only and
 lends the AI only ``AI_TOOLS``, so the AI can look things up in it without approval. It is
@@ -44,6 +45,10 @@ if TYPE_CHECKING:
     from .daemon_http import AssistantServer
 
 READER_VERSION = "3.5.2"
+# openzim-mcp limits how fast it is asked (about 10 reads a second by default) to protect it from runaway
+# AI clients; a Wikipedia page asks for its style sheets and pictures all at once (60 or more), so the
+# reader Happy Bot starts allows bursts. Its own settings, read from these environment variables.
+READER_ENV = {"OPENZIM_MCP_RATE_LIMIT__REQUESTS_PER_SECOND": "200", "OPENZIM_MCP_RATE_LIMIT__BURST_SIZE": "600"}
 SERVER_NAME = "wikipedia"
 AI_TOOLS = ["zim_query", "zim_search", "zim_get"]
 FIRST_START_SECONDS = 240.0
@@ -73,7 +78,8 @@ def reader_entry(folder: str) -> dict[str, Any]:
     else:
         raise SetupError("Reading Wikipedia needs uv (the 'uvx' program) or openzim-mcp. Install uv with your "
                          "package manager, then try again.")
-    return {"command": command, "args": args, "env": {}, "enabled": True, "read_only": True, "tools": list(AI_TOOLS)}
+    return {"command": command, "args": args, "env": dict(READER_ENV), "enabled": True, "read_only": True,
+            "tools": list(AI_TOOLS)}
 
 
 def choices(settings: dict[str, Any]) -> dict[str, Any]:

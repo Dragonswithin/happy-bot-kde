@@ -3,7 +3,8 @@
 Nothing here touches the network, the user's archives or their systemd: archives are small files
 with Kiwix's names in temporary folders, Kiwix's listing and files are served by a fake
 ``urlopen``, the reader tool server is a fake ``McpManager``, and unit files go to a temporary
-folder without ``systemctl``.
+folder without ``systemctl``. The page server is started for real on a loopback port and asked
+over HTTP, with a fake archive behind it.
 """
 
 from __future__ import annotations
@@ -248,6 +249,22 @@ class ReaderTests(unittest.TestCase):
                          [("Python", "A snake"), ("Python (programming language)", "Python is a language")])
         self.assertEqual({call[2]["zim_file_path"] for call in manager.calls}, {str(self.archive)})
 
+    def test_entries_wait_and_retry_when_the_reader_is_rate_limited(self) -> None:
+        busy = {"error": "rate_limited", "message": "Rate limit exceeded for operation 'get_binary_entry'. "
+                                                     "Please wait 0.11 seconds before retrying."}
+        replies = [busy, {"mime_type": "image/png", "data": base64.b64encode(b"img").decode()}]
+
+        class Manager:
+            def call_tool(self, server, tool, arguments, timeout):
+                return ToolResult(json.dumps(replies.pop(0)))
+
+        with mock.patch.object(wikipedia_reader.time, "sleep") as slept:
+            self.assertEqual(wikipedia_reader.entry(Manager(), self.settings, "_assets_/x.png"), (b"img", "image/png"))
+        slept.assert_called_once()
+        replies[:] = [busy] * 5
+        with mock.patch.object(wikipedia_reader.time, "sleep"), self.assertRaisesRegex(wikipedia_reader.ReaderError, "Rate"):
+            wikipedia_reader.entry(Manager(), self.settings, "_assets_/x.png")
+
     def test_an_article_is_fetched_raw_and_cleaned_and_problems_are_plain(self) -> None:
         manager = FakeManager({"zim_get": {"path": "Eiffel_Tower", "title": "Eiffel Tower", "mime_type": "text/html",
                                            "data": base64.b64encode(ARTICLE_HTML.encode()).decode()}})
@@ -262,6 +279,52 @@ class ReaderTests(unittest.TestCase):
         broken = FakeManager({"zim_get": {"error": "entry_not_found", "message": "No such article"}})
         with self.assertRaisesRegex(wikipedia_reader.ReaderError, "No such article"):
             wikipedia_reader.article(broken, self.settings, "Nope")
+
+
+class PageServerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from happy_bot import wikipedia_pages
+        self.asked = []
+
+        def fetch(entry):
+            self.asked.append(entry)
+            if entry == "Eiffel_Tower":
+                return b"<html><head><title>Eiffel Tower</title></head><body>x</body></html>", "text/html"
+            if entry.startswith("_assets_/"):
+                return b"\x89PNG", "image/png"
+            raise wikipedia_reader.ReaderError("not there")
+
+        self.pages = wikipedia_pages.PageServer(fetch)
+        self.addCleanup(self.pages.close)
+
+    def get(self, url, host=None):
+        import urllib.error
+        import urllib.request
+        request = urllib.request.Request(url, headers={"Host": host} if host else {})
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, dict(response.headers), response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, {}, b""
+
+    def test_pages_are_served_under_the_secret_with_the_fit_style_and_a_strict_policy(self) -> None:
+        url = self.pages.url("Eiffel_Tower")
+        self.assertTrue(url.startswith("http://127.0.0.1:") and f"/{self.pages.token}/" in url)
+        status, headers, body = self.get(url)
+        self.assertEqual(status, 200)
+        self.assertIn(b'<style id="happy-bot-fit">', body)
+        self.assertLess(body.index(b"happy-bot-fit"), body.index(b"</head>"))
+        self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
+        self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+        status, headers, body = self.get(url.rsplit("/", 1)[0] + "/_assets_/a/Center%252C_Detroit.png")
+        self.assertEqual((status, body), (200, b"\x89PNG"))
+        self.assertEqual(self.asked[-1], "_assets_/a/Center%2C_Detroit.png")  # decoded once, as the archive names it
+
+    def test_wrong_secret_wrong_host_and_missing_entries_are_refused(self) -> None:
+        url = self.pages.url("Eiffel_Tower")
+        self.assertEqual(self.get(url.replace(self.pages.token, "guess"))[0], 404)
+        self.assertEqual(self.get(url, host="evil.example")[0], 404)
+        self.assertEqual(self.get(url.rsplit("/", 1)[0] + "/Nowhere")[0], 404)
 
 
 class FakeServer:
@@ -313,6 +376,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual((entry["command"], entry["args"][-3:], entry["read_only"], entry["tools"]),
                          ("uvx", ["--mode", "advanced", str(self.folder)], True, wikipedia_setup.AI_TOOLS))
         self.assertIn(f"openzim-mcp=={wikipedia_setup.READER_VERSION}", entry["args"])
+        self.assertEqual(entry["env"], wikipedia_setup.READER_ENV)  # whole pages need bursts of reads
         self.assertEqual(self.server.settings["wikipedia"], {"server": "wikipedia", "folder": str(self.folder),
                                                              "book": "wikipedia_en_all_maxi", "auto_update": False})
         self.assertFalse(wikipedia_setup.set_auto_update(self.server, True)["ok"])
@@ -390,6 +454,8 @@ class RouteTests(unittest.TestCase):
         with mock.patch.object(wikipedia_reader, "article", side_effect=wikipedia_reader.ReaderError("did not answer")):
             self.assertEqual(wikipedia_routes.article(server, {"path": ["X"]}, {})[1]["code"], "tool_failed")
         self.assertEqual(wikipedia_routes.status(server, {}, {})[1]["set_up"], False)
+        self.assertEqual(wikipedia_routes.page(server, {"path": ["Eiffel_Tower"]}, {})[1]["code"], "not_configured")
+        self.assertEqual(wikipedia_routes.page(server, {}, {})[0], 400)
 
 
 if __name__ == "__main__":

@@ -1326,6 +1326,22 @@ Findings:
   before the web's pages, as file search groups its results
   (`AssistantSession.wikiHits`, `Look.hitGroups`). A Wikipedia problem
   hides only its own heading.
+- Articles: the maintainer found the text view a hard-to-read block without
+  pictures and chose the real page inside Happy Bot. ArticleWebView.qml
+  shows the archive's own page in a QtWebEngine view, loaded from a separate
+  loopback server (`wikipedia_pages`: a secret path, a Host check, a
+  policy allowing nothing from outside it, so reading never contacts the
+  internet); the daemon's own API still refuses browsers. A throwaway
+  widget showed QtWebEngine works inside plasmawindowed; inside plasmashell
+  it is loaded through a Loader that falls back to the text view. The first
+  render missed pictures and style sheets: openzim-mcp rate-limits reads
+  (about 10 a second) and a page asks for 60 or more at once, so Happy Bot's
+  reader raises its limit (`wikipedia_setup.READER_ENV`) and a refused read
+  waits and retries. Wide tables made the page scroll sideways; a small
+  added style sheet keeps it to the view's width. Rendered in plasmawindowed:
+  the Detroit page with its infobox and every picture.
+- Opening a chat in the sidebar during a search showed it behind the search;
+  it now leaves the search first.
 
 ## Decisions
 

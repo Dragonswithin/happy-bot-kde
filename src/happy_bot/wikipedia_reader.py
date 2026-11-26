@@ -23,6 +23,9 @@ keep their web address. Paths arrive percent-encoded from links ("Windsor%2C_Ont
 decoded, since the archive names entries as written. Very long articles are cut at
 ``MAX_ARTICLE_CHARS`` with a note.
 
+``article`` is the text view, used where Happy Bot cannot show web pages; normally the article's own
+page is shown as it is (``wikipedia_pages``), with ``entry`` fetching each of its files.
+
 Calls block for about a second (``TIMEOUT`` at most) and raise ``ReaderError`` with a plain message.
 """
 
@@ -31,6 +34,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import unquote
@@ -229,6 +233,34 @@ def search(manager: McpManager, settings: dict[str, Any], text: str, limit: int 
         hits[path] = {"title": title, "location": path, "snippet": _plain(row.get("snippet", "")),
                       "kind": "article", "source": "wikipedia"}
     return list(hits.values())[:limit]
+
+
+MAX_ENTRY_BYTES = 25_000_000  # openzim-mcp refuses a larger binary fetch
+RATE_LIMIT_RETRIES = 3  # a reader set up before its limit was raised asks a page's files to wait
+
+
+def entry(manager: McpManager, settings: dict[str, Any], path: str) -> tuple[bytes, str]:
+    """``(bytes, mime type)`` of any entry in the archive (a page, its style sheet, a picture), for the
+    page server (``wikipedia_pages``); raises ``ReaderError``."""
+    if not path or len(path) > 1000:
+        raise ReaderError("That is not in the archive.")
+    arguments = {"zim_file_path": current_archive(settings), "entry_path": path, "binary": True,
+                 "max_content_length": MAX_ENTRY_BYTES}
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            data = _call(manager, settings, "zim_get", arguments)
+            break
+        except ReaderError as error:
+            wait = re.search(r"Rate limit exceeded.*?wait ([\d.]+) seconds", str(error))
+            if not wait or attempt == RATE_LIMIT_RETRIES:
+                raise
+            time.sleep(min(1.0, float(wait.group(1)) + 0.05))
+    if data.get("truncated"):
+        raise ReaderError("That is too big to show.")
+    try:
+        return base64.b64decode(str(data.get("data") or "")), str(data.get("mime_type") or "application/octet-stream")
+    except ValueError as error:
+        raise ReaderError("That could not be read.") from error
 
 
 def article(manager: McpManager, settings: dict[str, Any], path: str) -> dict[str, Any]:

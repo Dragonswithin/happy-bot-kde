@@ -9,8 +9,11 @@
   keeping what was downloaded), ``POST /wikipedia/off`` (remove the reader; the archives stay).
 - ``POST /wikipedia/reload``: the reader reopens its archives; ``happy-bot wikipedia update`` calls it
   after replacing an archive.
-- ``GET /wikipedia/search?q=`` and ``GET /wikipedia/article?path=``: the popup's Wikipedia finder and
-  article view (``wikipedia_reader``).
+- ``GET /wikipedia/search?q=``: the web finder's Wikipedia articles (``wikipedia_reader``).
+- ``GET /wikipedia/page?path=``: ``{"url"}``, where the article view loads the article's own page
+  (``wikipedia_pages``, a separate loopback server with a secret address).
+- ``GET /wikipedia/article?path=``: the article as light Markdown, for the text view used where Happy
+  Bot cannot show web pages.
 
 Errors are ``{"ok": false, "error", "code"}``: ``not_configured`` when offline Wikipedia is not set
 up, ``tool_failed`` when the reader did not answer, ``invalid`` for a bad request.
@@ -84,6 +87,19 @@ def search(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
         return _reader_error(error)
 
 
+def page(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    path = _first(query, "path").strip()
+    if not path:
+        return 400, {"ok": False, "error": "path is required", "code": "invalid"}
+    try:
+        wikipedia_reader.current_archive(server.settings)
+    except wikipedia_reader.ReaderError as error:
+        return _reader_error(error)
+    if not server.settings["wikipedia"]["server"]:
+        return _reader_error(wikipedia_reader.ReaderError("Offline Wikipedia is not set up."))
+    return 200, {"ok": True, "url": server.wikipedia_pages.url(path)}
+
+
 def article(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     try:
         return 200, {"ok": True, **wikipedia_reader.article(server.mcp, server.settings, _first(query, "path"))}
@@ -100,5 +116,6 @@ ROUTES: dict[tuple[str, str], Callable[["AssistantServer", dict[str, list[str]],
     ("POST", "/wikipedia/off"): turn_off,
     ("POST", "/wikipedia/reload"): reload,
     ("GET", "/wikipedia/search"): search,
+    ("GET", "/wikipedia/page"): page,
     ("GET", "/wikipedia/article"): article,
 }
