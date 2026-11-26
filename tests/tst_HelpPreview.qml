@@ -4,6 +4,7 @@ import QtTest
 import "../plasmoid/io.github.dragonswithin.happybot/contents/ui" as HappyBot
 
 Item {
+    id: host
     width: 800
     height: 700
     function i18n(message, arg) { return arg === undefined ? message : message.replace("%1", arg); }
@@ -66,9 +67,10 @@ Item {
             tryVerify(() => !!findVisible(view, item => item.Accessible.name === "Screenshot preview" && item.status === Image.Ready));
         }
 
-        function fixtureUrl(width, height, fill) {
+        function fixtureUrl(width, height, fill, marked) {
             const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width
-                + '" height="' + height + '"><rect width="100%" height="100%" fill="' + fill + '"/></svg>';
+                + '" height="' + height + '"><rect width="' + width + '" height="' + height + '" fill="' + fill + '"/>'
+                + (marked ? '<circle cx="' + width / 2 + '" cy="' + height / 2 + '" r="50" fill="red"/>' : '') + '</svg>';
             return "data:image/svg+xml," + encodeURIComponent(svg);
         }
 
@@ -92,6 +94,25 @@ Item {
         function originalPoint(image, x, y) {
             const point = image.mapFromItem(image.parent, x, y);
             return Qt.point(point.x / image.width, point.y / image.height);
+        }
+
+        function test_firstPointKeepsMarkedScreenshotVisible() {
+            clickTile("Help with Kate");
+            const image = captureImage("window", 1920, 1023);
+            const frame = image.parent;
+            clickTile("Point");
+            mouseClick(frame, frame.width / 2, frame.height / 2);
+            compare(session.edit.body.action, "point");
+            session.edit.success({ id: "marked", url: fixtureUrl(1920, 1023, "teal", true) });
+            tryCompare(image, "status", Image.Ready);
+            verifyFit(image);
+            tryVerify(() => {
+                const pixels = grabImage(host);
+                const center = frame.mapToItem(host, frame.width / 2, frame.height / 2);
+                const x = Math.round(center.x), y = Math.round(center.y);
+                return pixels.red(x, y) === 255 && pixels.green(x, y) === 0
+                    && pixels.green(x + Math.floor(image.width / 4), y) === 128;
+            }, 2000, "The marked image and its surrounding screenshot should both be visible");
         }
 
         function test_wheelPanAndMarkOriginalPixels() {
@@ -120,9 +141,12 @@ Item {
             fuzzyCompare(session.edit.body.coordinates[0], target.x, 0.002);
             fuzzyCompare(session.edit.body.coordinates[1], target.y, 0.002);
             const magnification = frame.zoom;
+            const center = frame.center;
             session.edit.success({ id: "marked", url: fixtureUrl(1920, 1080, "red") });
             tryCompare(image, "status", Image.Ready);
             compare(frame.zoom, magnification);
+            compare(frame.center, center);
+            verify(image.width > 0 && image.height > 0);
             clickTile("Crop");
             wait(35);
             const topLeft = originalPoint(image, x - 24, y - 18);

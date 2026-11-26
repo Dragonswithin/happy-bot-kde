@@ -16,10 +16,11 @@ Rectangle {
     readonly property alias imageStatus: picture.status
     property real zoom: 1
     readonly property real maximumZoom: Math.max(16, 1 / Math.max(0.001, fitScale))
-    readonly property real fitScale: picture.sourceSize.width > 0 && picture.sourceSize.height > 0
-        ? Math.min(width / picture.sourceSize.width, height / picture.sourceSize.height) : 0
+    // Keep the last decoded size while an edit replaces the image asynchronously.
+    property size imageSize: Qt.size(0, 0)
+    readonly property real fitScale: imageSize.width > 0 && imageSize.height > 0
+        ? Math.min(width / imageSize.width, height / imageSize.height) : 0
     property point center: Qt.point(0.5, 0.5)
-    property size previousSize
     clip: true
     color: Qt.alpha(Kirigami.Theme.textColor, 0.045)
 
@@ -57,19 +58,25 @@ Rectangle {
         asynchronous: true
         cache: false
         mipmap: true
-        width: sourceSize.width * viewport.fitScale * viewport.zoom
-        height: sourceSize.height * viewport.fitScale * viewport.zoom
+        width: viewport.imageSize.width * viewport.fitScale * viewport.zoom
+        height: viewport.imageSize.height * viewport.fitScale * viewport.zoom
         x: viewport.offset(viewport.width, width, viewport.center.x)
         y: viewport.offset(viewport.height, height, viewport.center.y)
         fillMode: Image.PreserveAspectFit
         Accessible.role: Accessible.Graphic
         Accessible.name: i18n("Screenshot preview")
+        Component.onCompleted: {
+            // Qt 6.8 added the option to keep the previous image painted during a reload.
+            if ("retainWhileLoading" in picture) picture.retainWhileLoading = true;
+        }
         onStatusChanged: {
-            if (status === Image.Null) viewport.fit();
-            if (status === Image.Ready) {
-                if (sourceSize.width !== viewport.previousSize.width || sourceSize.height !== viewport.previousSize.height)
-                    viewport.fit();
-                viewport.previousSize = sourceSize;
+            if (status === Image.Null) {
+                viewport.imageSize = Qt.size(0, 0);
+                viewport.fit();
+            } else if (status === Image.Ready && (sourceSize.width !== viewport.imageSize.width
+                       || sourceSize.height !== viewport.imageSize.height)) {
+                viewport.imageSize = Qt.size(sourceSize.width, sourceSize.height);
+                viewport.fit();
             }
         }
     }
