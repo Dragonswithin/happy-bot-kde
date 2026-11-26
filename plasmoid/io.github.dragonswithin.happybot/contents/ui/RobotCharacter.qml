@@ -59,40 +59,43 @@ Item {
         id: hello
         // Anticipation, spring up, two waves, then tuck the hand back in.
         ParallelAnimation {
-            Beat { property: "hop"; from: 0; to: 2.5; ms: 125 }
-            Beat { property: "aerial"; from: 0; to: 10; ms: 125 }
+            Beat { property: "hop"; from: 0; to: 2.5; ms: 180 }
+            Beat { property: "aerial"; from: 0; to: 10; ms: 180 }
         }
         ParallelAnimation {
-            Beat { property: "lift"; from: 0; to: 1; ms: 280; easing.type: Easing.OutCubic }
+            Beat { property: "lift"; from: 0; to: 1; ms: 420; easing.type: Easing.OutCubic }
             SequentialAnimation {
-                Beat { property: "hop"; to: -4; ms: 125; easing.type: Easing.OutQuad }
-                Beat { property: "hop"; to: 0; ms: 155; easing.type: Easing.InQuad }
+                Beat { property: "hop"; to: -4; ms: 180; easing.type: Easing.OutQuad }
+                Beat { property: "hop"; to: 0; ms: 240; easing.type: Easing.InQuad }
             }
             SequentialAnimation {
-                Beat { property: "aerial"; to: -22; ms: 125 }
-                Beat { property: "aerial"; to: 15; ms: 155 }
-            }
-        }
-        ParallelAnimation {
-            SequentialAnimation {
-                Beat { property: "wrist"; to: -27; ms: 145 }
-                Beat { property: "wrist"; to: 22; ms: 175 }
-                Beat { property: "wrist"; to: -25; ms: 170 }
-                Beat { property: "wrist"; to: 18; ms: 165 }
-                Beat { property: "wrist"; to: -4; ms: 135 }
-            }
-            SequentialAnimation {
-                Beat { property: "aerial"; to: -8; ms: 160 }
-                Beat { property: "aerial"; to: 3; ms: 150 }
-                Beat { property: "aerial"; to: 0; ms: 140 }
+                Beat { property: "aerial"; to: -22; ms: 180 }
+                Beat { property: "aerial"; to: 15; ms: 240 }
             }
         }
         ParallelAnimation {
-            Beat { property: "lift"; to: 0; ms: 270 }
-            Beat { property: "wrist"; to: 0; ms: 220 }
             SequentialAnimation {
-                Beat { property: "hop"; to: 2; ms: 125 }
-                Beat { property: "hop"; to: 0; ms: 145 }
+                // Let the raised palm read before the first sweep.
+                PauseAnimation { duration: robot.duration(220) }
+                Beat { property: "wrist"; to: -27; ms: 350 }
+                Beat { property: "wrist"; to: 22; ms: 460 }
+                Beat { property: "wrist"; to: -25; ms: 440 }
+                Beat { property: "wrist"; to: 18; ms: 450 }
+                Beat { property: "wrist"; to: -4; ms: 330 }
+                PauseAnimation { duration: robot.duration(250) }
+            }
+            SequentialAnimation {
+                Beat { property: "aerial"; to: -8; ms: 260 }
+                Beat { property: "aerial"; to: 3; ms: 230 }
+                Beat { property: "aerial"; to: 0; ms: 180 }
+            }
+        }
+        ParallelAnimation {
+            Beat { property: "lift"; to: 0; ms: 460 }
+            Beat { property: "wrist"; to: 0; ms: 390 }
+            SequentialAnimation {
+                Beat { property: "hop"; to: 2; ms: 200 }
+                Beat { property: "hop"; to: 0; ms: 260 }
             }
         }
         onStopped: { pose.lift = 0; pose.hop = 0; pose.wrist = 0; pose.aerial = 0; }
