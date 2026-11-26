@@ -165,17 +165,17 @@ Item {
 
         function test_systemInfoOpensCardsThenDetails() {
             session.showSystemInfo();
-            const processor = findChild(view, "systemCard-resources");
+            const processor = findChild(view, "systemCard-cpu");
+            const memory = findChild(view, "systemCard-memory");
             const hardware = findChild(view, "systemCard-hardware");
             tryVerify(() => processor.visible && hardware.visible);
             compare(processor.expanded, false);
-            for (const section of ["resources", "network", "gpu-0", "disk-activity"]) {
+            for (const section of ["cpu", "memory", "network", "gpu-0", "disk-activity"]) {
                 const chart = findChild(view, "systemGraph-" + section);
                 verify(chart && chart.visible);
             }
-            verify(findChild(view, "systemSecondaryGraph-resources").visible);
-            verify(findChild(view, "systemCard-memory") === null);
-            tryVerify(() => processor.height >= processor.width - 1);
+            verify(memory.visible);
+            tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
             const activity = findChild(view, "systemCard-disk-activity");
             verify(activity && activity.visible && activity !== hardware);
             verify(!findChild(view, "systemGraph-hardware").visible);
@@ -215,6 +215,12 @@ Item {
             tryCompare(session, "lastProgramPath", "/system/programs?sort=memory&order=asc");
             mouseClick(findChild(view, "systemSort-user"));
             tryCompare(session, "lastProgramPath", "/system/programs?sort=user&order=asc");
+            mouseClick(button(view, "Back"));
+            tryCompare(memory, "visible", true);
+            waitForRendering(view);
+            mouseClick(memory);
+            tryCompare(memory, "expanded", true);
+            tryCompare(session, "lastProgramPath", "/system/programs?sort=memory&order=desc");
             mouseClick(button(view, "Back"));
             tryCompare(hardware, "visible", true);
             mouseClick(button(view, "Back"));

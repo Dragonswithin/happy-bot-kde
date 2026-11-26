@@ -16,11 +16,11 @@ import org.kde.plasma.components as PlasmaComponents3
  * shows it while `session.showingSystem` is true (the start screen's optional "System info" button).
  *
  * The overview shows summary cards. Opening a card reveals its readings and charts.
- * CPU & Memory details show a sortable list of programs and let users stop
+ * Processor and Memory details show a sortable list of programs and let users stop
  * their own programs after confirming.
  *
  * Data comes from the daemon (src/happy_bot/system_routes.py): `GET /system/overview` every
- * `overviewMs` while visible and `GET /system/programs` every `programsMs` in CPU & Memory details; the
+ * `overviewMs` while visible and `GET /system/programs` every `programsMs` in Processor or Memory details; the
  * graphs' history is kept by the daemon, so it is there as soon as the view opens. Sizes are shown
  * in powers of 1024 with GB/MB, speeds per second. The view keeps only the latest replies.
  */
@@ -34,7 +34,7 @@ ColumnLayout {
     signal revealCardRequested(Item card)
     property string detailSection: ""
     readonly property bool overviewDetail: ["hardware", "os", "uptime"].includes(detailSection)
-    readonly property bool programsVisible: detailSection === "resources"
+    readonly property bool programsVisible: detailSection === "cpu" || detailSection === "memory"
     property string sort: "cpu"
     property bool sortDescending: true
     property int programRequest: 0
@@ -49,6 +49,10 @@ ColumnLayout {
     spacing: Kirigami.Units.largeSpacing
 
     function openDetails(section) {
+        if (section === "cpu" || section === "memory") {
+            view.sort = section;
+            view.sortDescending = true;
+        }
         view.forceActiveFocus();
         view.detailSection = section;
     }
@@ -199,9 +203,6 @@ ColumnLayout {
         property string value: ""
         property string detail: ""
         property var graph: null
-        property string secondaryValue: ""
-        property string secondaryDetail: ""
-        property var secondaryGraph: null
         property real graphMaximum: 100
         property real uptimeFraction: -1
         property real bar: -1  // 0..1 to draw a bar
@@ -306,27 +307,6 @@ ColumnLayout {
                 values: card.graph || []
                 maximum: card.graphMaximum
             }
-            PlasmaComponents3.Label {
-                Layout.fillWidth: true
-                visible: card.secondaryGraph !== null
-                text: card.secondaryValue
-                elide: Text.ElideRight
-                font: Kirigami.Theme.smallFont
-            }
-            Sparkline {
-                objectName: "systemSecondaryGraph-" + card.section
-                visible: card.secondaryGraph !== null
-                values: card.secondaryGraph || []
-                stroke: Kirigami.Theme.textColor
-            }
-            PlasmaComponents3.Label {
-                Layout.fillWidth: true
-                visible: card.expanded && card.secondaryDetail.length > 0
-                text: card.secondaryDetail
-                font: Kirigami.Theme.smallFont
-                opacity: 0.75
-                wrapMode: Text.Wrap
-            }
             ColumnLayout {
                 visible: card.uptimeFraction >= 0
                 Layout.fillWidth: true
@@ -380,21 +360,23 @@ ColumnLayout {
         visible: view.info !== null && !view.overviewDetail
 
         Card {
-            section: "resources"
-            title: i18n("CPU & Memory")
-            value: view.info ? i18n("CPU %1", view.percent(view.info.cpu.percent)) : ""
+            section: "cpu"
+            title: i18n("Processor")
+            value: view.info ? view.percent(view.info.cpu.percent) : ""
             detail: view.info ? [view.info.cpu.model || "", view.degrees(view.info.cpu.temp_c),
-                                 i18np("%1 logical CPU", "%1 logical CPUs", view.info.cpu.cores),
+                                 i18np("%1 core", "%1 cores", view.info.cpu.cores),
                                  view.info.cpu.load.length ? i18n("load %1", view.info.cpu.load.map(v => v.toFixed(1)).join(" ")) : ""]
                                 .filter(part => part.length > 0).join(" · ") : ""
-            graph: view.info?.history?.cpu ?? null
-            secondaryValue: view.info ? (expanded
-                ? i18n("Memory %1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total))
-                : i18n("Memory %1", view.percent(view.info.memory.total > 0
-                    ? 100 * view.info.memory.used / view.info.memory.total : null))) : ""
-            secondaryDetail: view.info?.memory?.swap_total > 0
+            graph: view.info ? view.info.history.cpu : null
+        }
+
+        Card {
+            section: "memory"
+            title: i18n("Memory")
+            value: view.info ? i18n("%1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total)) : ""
+            detail: view.info && view.info.memory.swap_total > 0
                 ? i18n("Swap: %1 of %2", view.size(view.info.memory.swap_used), view.size(view.info.memory.swap_total)) : ""
-            secondaryGraph: view.info?.history?.memory ?? null
+            graph: view.info ? view.info.history.memory : null
         }
 
         Repeater {
