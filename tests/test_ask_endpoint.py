@@ -387,6 +387,7 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertEqual([(item["id"], item["title"], item["requests"]) for item in listed],
                          [(conversation_id, "what is the weather like today", 1)])
         opened = self.call(restarted, "GET", f"/conversation?id={conversation_id}")
+        self.assertEqual(opened["created"], first[0]["created"])
         self.assertEqual(opened["model"], "m")  # the AI picked for this chat comes back with it
         self.assertEqual([event["type"] for event in opened["events"]], ["user", "text_delta", "done"])
         self.assertEqual(opened["events"][1]["text"], "It is sunny.")

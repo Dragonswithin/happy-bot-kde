@@ -39,9 +39,10 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from . import app_snapshot
+from . import app_snapshot, desktop_context
 from .conversation import Message
 from .redaction import is_local_address, redact
+from .runtime_paths import clear_cache_files
 from .settings import APP_CONTEXT_DEFAULT as DEFAULT_POLICY, APP_CONTEXT_POLICIES as POLICIES  # noqa: F401
 
 MAX_TITLE_CHARS = 200
@@ -79,11 +80,23 @@ def remember_screenshot(settings: dict[str, Any], window_id: str, runtime_dir: P
     """Capture the window the user asked help with, when a screenshot could be used; whether one was taken."""
     if not window_id or not screenshots_wanted(settings):
         return False
-    path = app_snapshot.capture_window(window_id, runtime_dir / "screenshots")
-    if path:
-        with _screenshots_lock:
+    with _screenshots_lock:
+        path = app_snapshot.capture_window(window_id, runtime_dir / "screenshots")
+        if path:
             _screenshots[window_id] = path
     return bool(path)
+
+
+def capture_desktop(runtime_dir: Path) -> dict[str, Any]:
+    with _screenshots_lock:
+        return desktop_context.take_screenshot(runtime_dir)
+
+
+def clear_screenshots(runtime_dir: Path) -> None:
+    """Forget pending attachments and remove Happy Bot's temporary context pictures."""
+    with _screenshots_lock:
+        clear_cache_files(runtime_dir / "screenshots", r"(?:[0-9a-f]{32}|desktop-context-[0-9]+)\.png")
+        _screenshots.clear()
 
 
 def take_screenshot(about: Any) -> str:

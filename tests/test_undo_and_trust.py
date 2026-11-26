@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
-from happy_bot import undo_journal  # noqa: E402
+from happy_bot import permissions, undo_journal  # noqa: E402
 from happy_bot.agent_loop import run_turn  # noqa: E402
 from happy_bot.conversation import Message, TextDelta, ToolCall, ToolCallReady, TurnEnd  # noqa: E402
 from happy_bot.redaction import HIDDEN, is_local_address, redact  # noqa: E402
@@ -94,6 +94,58 @@ class FileUndoTests(RuntimeDirTest):
         with self.assertRaisesRegex(ToolFailure, "something is now at"):
             undo.undo_change({})
         self.assertEqual(len(undo_journal.pending()), 1)  # still undoable later
+
+
+class ClearHistoryTests(RuntimeDirTest):
+    def test_clear_activity_drops_rotated_entries_and_keeps_undo(self) -> None:
+        undo_journal.record("clipboard", "Set clipboard", {"text": "previous"})
+        runtime = self.root / "run" / "happy-bot"
+        with mock.patch.object(permissions, "AUDIT_MAX_BYTES", 1):
+            for turn in range(4):
+                permissions.append_audit(runtime, {"turn": turn})
+        permissions.clear_activity(runtime)
+        permissions.clear_activity(runtime)
+        self.assertFalse((runtime / "actions.jsonl").exists())
+        self.assertEqual(len(undo_journal.pending()), 1)
+        permissions.append_audit(runtime, {"turn": "new"})
+        self.assertEqual(json.loads((runtime / "actions.jsonl").read_text()), {"turn": "new"})
+
+    def test_clear_undo_removes_its_own_backups_only(self) -> None:
+        target = self.work / "notes.txt"
+        target.write_text("before")
+        files.write_text_file({"path": str(target), "content": "current", "overwrite": True})
+        runtime = self.root / "run" / "happy-bot"
+        backup = Path(undo_journal.pending()[0]["data"]["backup"])
+        orphan = Path(undo_journal.back_up(target))
+        permissions.append_audit(runtime, {"tool": "example"})
+        other = backup.parent / "other.txt"
+        other.write_text("unrelated")
+        link = backup.parent / "0123456789abcdef-link"
+        link.symlink_to(target)
+        undo_journal.clear_history(runtime)
+        undo_journal.clear_history(runtime)
+        self.assertEqual(undo_journal.pending(), [])
+        self.assertFalse(backup.exists())
+        self.assertFalse(orphan.exists())
+        self.assertEqual(target.read_text(), "current")
+        self.assertEqual(other.read_text(), "unrelated")
+        self.assertTrue(link.is_symlink())
+        self.assertTrue((runtime / "actions.jsonl").is_file())
+        undo_journal.record("file_replaced", "in progress before clearing", {"backup": str(backup)})
+        self.assertEqual(undo_journal.pending(), [])
+        new_copy = undo_journal.back_up(target)
+        undo_journal.record("file_replaced", "after clearing", {"backup": new_copy})
+        self.assertEqual(undo_journal.pending()[0]["data"]["backup"], new_copy)
+
+    def test_clear_undo_skips_a_linked_backup_folder_and_external_journal_paths(self) -> None:
+        external = self.work / "0123456789abcdef-private"
+        external.write_text("keep")
+        undo_journal.record("file_replaced", "Older entry", {"backup": str(external)})
+        runtime = self.root / "run" / "happy-bot"
+        (runtime / "undo-files").symlink_to(self.work, target_is_directory=True)
+        undo_journal.clear_history(runtime)
+        self.assertEqual(undo_journal.pending(), [])
+        self.assertEqual(external.read_text(), "keep")
 
 
 class DesktopUndoTests(RuntimeDirTest):

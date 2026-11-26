@@ -67,6 +67,10 @@ class History:
         with self._lock:
             return list(self._samples)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._samples.clear()
+
 
 def _text(path: Path) -> str:
     try:

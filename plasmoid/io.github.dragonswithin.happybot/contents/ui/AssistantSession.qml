@@ -170,6 +170,7 @@ Item {
     property string statusText: i18n("Starting")
     property bool busy: false
     property string conversationId: ""
+    property double conversationCreatedAt: 0
     property var models: []
     property string chatModel: ""
     property var helpWith: null
@@ -225,6 +226,9 @@ Item {
     property string searchError: ""
     property string searchErrorCode: ""
     property int searchSequence: 0
+    property double searchClearRevision: 0
+    property double conversationClearRevision: 0
+    signal searchReset()
 
     // The in-flight /ask request and how much of its response was parsed.
     property var activeStream: null
@@ -234,6 +238,9 @@ Item {
     visible: false
 
     Component.onCompleted: {
+        // A newly opened applet has no local results from before its own lifetime.
+        session.searchClearRevision = Date.now() / 1000;
+        session.conversationClearRevision = session.searchClearRevision;
         refreshStatus();
         refreshHistory();
     }
@@ -318,6 +325,7 @@ Item {
     }
 
     function clearSearch() {
+        session.searchReset();
         session.searchSequence += 1;
         session.wikiHits = [];
         session.showingRecent = false;
@@ -328,6 +336,36 @@ Item {
         session.searchedText = "";
         session.searchError = "";
         session.searchErrorCode = "";
+    }
+
+    /** A clear from Settings reaches every open app and panel through the activity stream. */
+    function applyHistoryClears(data) {
+        const search = Number(data.search_clear_revision || 0);
+        const chats = Number(data.conversation_clear_revision || 0);
+        const searchCleared = search > session.searchClearRevision;
+        const chatsCleared = chats > session.conversationClearRevision;
+        if (!searchCleared && !chatsCleared) return false;
+        if (searchCleared) session.searchClearRevision = search;
+        if (chatsCleared) session.conversationClearRevision = chats;
+        session.clearSearch();  // the quick results and recent chips can both include chats
+        if (chatsCleared && session.conversationCreatedAt <= chats) {
+            // The daemon has already cancelled the forgotten turn. Detach its reply
+            // before aborting so a final text delta cannot restore the transcript.
+            const xhr = session.activeStream;
+            session.activeStream = null;
+            if (xhr) xhr.abort();
+            session.busy = false;
+            session.pendingApprovals = 0;
+            session.streamBuffer = "";
+            session.streamOffset = 0;
+            session.resetTranscript();
+            session.refreshStatus();
+        }
+        if (chatsCleared) {
+            session.history = [];
+            session.refreshHistory();
+        }
+        return true;
     }
 
     /** The empty bar's suggestions (`/quick/recent`); a search started meanwhile wins. */
@@ -639,8 +677,10 @@ Item {
     }
 
     function refreshHistory() {
+        const revision = session.conversationClearRevision;
         request("GET", "/conversations", null, function(data) {
-            session.history = data.conversations || [];
+            if (session.conversationClearRevision === revision)
+                session.history = data.conversations || [];
         }, function(data) {});
     }
 
@@ -668,12 +708,16 @@ Item {
         if (session.busy || conversationId === session.conversationId) {
             return;
         }
+        const revision = session.conversationClearRevision;
         request("GET", "/conversation?id=" + encodeURIComponent(conversationId), null, function(data) {
+            if (session.conversationClearRevision !== revision && !(data.created > session.conversationClearRevision)) return;
             session.conversationId = data.id;
+            session.conversationCreatedAt = Number(data.created || 0);
             session.helpChat = false;
             session.chatModel = session.models.some(item => item.name === data.model) ? data.model : "";
             session.replay(data.events || []);
         }, function(data) {
+            if (session.conversationClearRevision !== revision) return;
             session.appendEntry("error", data.error || i18n("That conversation could not be opened"));
             session.refreshHistory();
         });
@@ -731,11 +775,16 @@ Item {
         if (session.busy) {
             cancel();
         }
+        resetTranscript();
+        refreshStatus();
+    }
+
+    function resetTranscript() {
         session.conversationId = "";
+        session.conversationCreatedAt = 0;
         session.chatModel = "";
         session.helpChat = false;
         session.entries.clear();
-        refreshStatus();
     }
 
     /** Sends one request to the assistant. Returns false if it was not sent. */
@@ -746,14 +795,18 @@ Item {
         }
         session.showingSystem = false;  // the answer must show, not System info
         session.busy = true;
+        if (!session.conversationId) session.conversationCreatedAt = Date.now() / 1000;
         setStatus("thinking", i18n("Thinking"));
         appendEntry("user", text);
-        client.withToken(() => startStream(text, true));
+        const xhr = new XMLHttpRequest();
+        session.activeStream = xhr;
+        client.withToken(() => {
+            if (session.activeStream === xhr) startStream(text, true, xhr);
+        });
         return true;
     }
 
-    function startStream(text, mayReload) {
-        const xhr = new XMLHttpRequest();
+    function startStream(text, mayReload, xhr) {
         session.activeStream = xhr;
         session.streamOffset = 0;
         session.streamBuffer = "";
@@ -768,7 +821,9 @@ Item {
                 session.consumeStream(xhr);
             } else if (xhr.readyState === XMLHttpRequest.DONE) {
                 if (xhr.status === 401 && mayReload) {
-                    client.loadToken(() => session.startStream(text, false));
+                    client.loadToken(() => {
+                        if (session.activeStream === xhr) session.startStream(text, false, new XMLHttpRequest());
+                    });
                     return;
                 }
                 if (xhr.status === 200) {
@@ -837,6 +892,7 @@ Item {
             break;
         case "start":
             session.conversationId = event.conversation_id;
+            session.conversationCreatedAt = Number(event.created || session.conversationCreatedAt);
             (event.warnings || []).forEach(warning => session.appendEntry("notice", warning));
             break;
         case "thinking":

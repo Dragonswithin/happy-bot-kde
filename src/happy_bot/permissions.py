@@ -50,6 +50,7 @@ DEFAULT_POLICY = "danger"
 APPROVAL_TIMEOUT_SECONDS = 300.0
 AUDIT_MAX_BYTES = 1_000_000
 AUDIT_ARGUMENT_CHARS = 2000
+_audit_lock = threading.Lock()
 
 
 def needs_approval(policy: str, risk: str) -> bool:
@@ -124,14 +125,21 @@ def append_audit(runtime_dir: Path, record: dict[str, Any]) -> None:
     """Append one line to the transient action log; failures are ignored."""
     path = runtime_dir / "actions.jsonl"
     try:
-        if path.exists() and path.stat().st_size > AUDIT_MAX_BYTES:
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-            path.write_text("\n".join(lines[len(lines) // 2:]) + "\n", encoding="utf-8")
-        with open(path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        path.chmod(0o600)
+        with _audit_lock:
+            if path.exists() and path.stat().st_size > AUDIT_MAX_BYTES:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+                path.write_text("\n".join(lines[len(lines) // 2:]) + "\n", encoding="utf-8")
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            path.chmod(0o600)
     except OSError:
         pass
+
+
+def clear_activity(runtime_dir: Path) -> None:
+    """Forget the action log, including entries retained by its in-place rotation."""
+    with _audit_lock:
+        (runtime_dir / "actions.jsonl").unlink(missing_ok=True)
 
 
 class PermissionGate:

@@ -79,10 +79,12 @@ from .system_routes import ROUTES as SYSTEM_ROUTES
 from .mcp_client import McpManager
 from .krunner_bridge import KRunnerBridge
 from .permissions import ApprovalBroker
+from .quick_results import SearchHistory
 from .runtime_paths import (
     DEFAULT_HOST,
     default_port,
     ensure_runtime_root,
+    read_clear_time,
     state_path,
     token_path,
     write_private_file,
@@ -198,7 +200,11 @@ class AssistantServer(ThreadingHTTPServer):
         self.unit_dir = unit_dir or (user_timers.default_unit_dir() if self.manage_units
                                      else self.config_file.parent / "systemd-user")
         self.mcp = McpManager()
-        self.activity = IconActivity()
+        self.search_history = SearchHistory(self.config_file.with_name("search-cleared-at"))
+        self.krunner = KRunnerBridge(self)
+        self.conversation_clear_marker = self.runtime_dir / "conversations-cleared-at"
+        self.history_clear_lock = threading.Lock()
+        self.activity = IconActivity(self.search_history.index.history_since, read_clear_time(self.conversation_clear_marker))
         self.approvals = ApprovalBroker()
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
@@ -217,7 +223,7 @@ class AssistantServer(ThreadingHTTPServer):
             self.settings_error = str(exc)
         self.mcp.configure(settings_store.server_specs(self.settings))
         self.conversations = ConversationStore(ConversationArchive(history_dir, self.settings["history_days"]))
-        self.conversations.archive.prune()
+        self.conversations.set_retention(self.settings["history_days"])
         self.sync_routines()
         upgraded = wikipedia_setup.upgraded_settings(self.settings)  # an older offline Wikipedia reader
         if upgraded is not None and not self.settings_error:
@@ -235,8 +241,7 @@ class AssistantServer(ThreadingHTTPServer):
             self.settings = stored
             self.settings_error = ""
             self.mcp.configure(settings_store.server_specs(stored))
-            self.conversations.archive.days = stored["history_days"]
-            self.conversations.archive.prune()
+            self.conversations.set_retention(stored["history_days"])
             self.sync_routines()
             return stored
 
@@ -374,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve(host: str, port: int, runtime_dir: Path | None = None) -> int:
     server = AssistantServer(host, port, ensure_runtime_root(runtime_dir))
     print(f"Happy Bot daemon listening on {host}:{server.state.port}", flush=True)
-    if not KRunnerBridge(server).start():
+    if not server.krunner.start():
         print("KRunner integration unavailable (no PyGObject or session bus)", flush=True)
     # The mascot's live cues (heat, CPU load, memory pressure, transfers): one reading a second, kept
     # for a few minutes too, for System info's graphs.

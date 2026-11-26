@@ -91,6 +91,16 @@ class BrowserTests(unittest.TestCase):
         self.index.build(history=False)
         self.assertEqual(self.index.search("planet", bookmarks=True, history=True), ([], []))
 
+    def test_rebuilding_after_a_clear_keeps_bookmarks_and_only_later_visits(self) -> None:
+        database = self.home / ".mozilla/firefox/abc.default-release/places.sqlite"
+        original = database.read_bytes()
+        index = browsers.BrowserIndex(self.home, self.home / ".config", history_since=NOW - 1.5 * DAY)
+        index.build(history=True)
+        bookmarks, visited = index.search("kde", bookmarks=True, history=True)
+        self.assertEqual([page.title for page in bookmarks], ["KDE"])
+        self.assertEqual([page.title for page in visited], ["KDE - ArchWiki", "Planet KDE"])
+        self.assertEqual(database.read_bytes(), original)
+
     def test_results_open_in_the_browser_and_odd_targets_are_refused(self) -> None:
         self.index.build(history=True)
         with mock.patch.object(quick_results, "_browsers", self.index), \

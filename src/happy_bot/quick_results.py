@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from . import browsers, characters, quick_answers, quick_commands, usage_history
+from .runtime_paths import read_clear_time, write_private_file
 from .tools import apps
 
 MAX_RESULTS = 20
@@ -76,14 +77,36 @@ class ActivationError(RuntimeError):
     """The chosen result could not be carried out; the message says why."""
 
 
+class SearchHistory:
+    """Remember when earlier suggestions were cleared, without editing source databases.
+
+    Each clear replaces the browser index so an already-running refresh finishes
+    into the retired index. The private timestamp alone survives restart.
+    """
+
+    def __init__(self, marker: Path) -> None:
+        self.marker = marker
+        self.index = browsers.BrowserIndex(history_since=read_clear_time(marker))
+
+    def clear(self) -> None:
+        global _cache
+        since = time.time()
+        self.marker.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_private_file(self.marker, str(since))
+        self.index = browsers.BrowserIndex(history_since=since)
+        with _cache_lock:
+            _cache = {}
+
+
 def _cached(key: str, load) -> list[dict[str, str]]:
     with _cache_lock:
-        stamp, value = _cache.get(key, (0.0, []))
+        cache = _cache
+        stamp, value = cache.get(key, (0.0, []))
         if time.monotonic() - stamp < CACHE_SECONDS and value:
             return value
     value = load()
     with _cache_lock:
-        _cache[key] = (time.monotonic(), value)
+        cache[key] = (time.monotonic(), value)
     return value
 
 
@@ -137,11 +160,11 @@ def _conversations(text: str, conversations: list[dict[str, Any]]) -> list[dict[
             for item in conversations if _words_match(text, item.get("title", ""))]
 
 
-def _pages(text: str, bookmarks: bool, history: bool) -> list[dict[str, Any]]:
+def _pages(text: str, bookmarks: bool, history: bool, index: browsers.BrowserIndex) -> list[dict[str, Any]]:
     if not (bookmarks or history):
         return []
-    _browsers.refresh_in_background(history)
-    marked, visited = _browsers.search(text, bookmarks, history)
+    index.refresh_in_background(history)
+    marked, visited = index.search(text, bookmarks, history)
     return [{"kind": "quick", "title": page.title or browsers.host(page.url),
              "subtitle": f"{'Bookmark' if page.bookmark else 'Visited'} · {browsers.host(page.url)} · {page.browser}",
              "icon": page.icon, "action": {"type": "bookmark" if page.bookmark else "visited", "target": page.url}}
@@ -149,7 +172,7 @@ def _pages(text: str, bookmarks: bool, history: bool) -> list[dict[str, Any]]:
 
 
 def gather(text: str, conversations: list[dict[str, Any]] | None = None,
-           bookmarks: bool = False, history: bool = False) -> list[dict[str, Any]]:
+           bookmarks: bool = False, history: bool = False, index: browsers.BrowserIndex | None = None) -> list[dict[str, Any]]:
     """Quick results for the typed text, best first (see module docstring)."""
     text = text.strip()
     results: list[dict[str, Any]] = quick_commands.match(text) if text else []
@@ -169,7 +192,7 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None,
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
             continue
     try:
-        results.extend(_pages(text, bookmarks, history))
+        results.extend(_pages(text, bookmarks, history, index or _browsers))
     except Exception:  # noqa: BLE001 - a browser database that cannot be read must not hide the rest
         pass
     results.extend(_conversations(text, conversations or [])[:3])
@@ -181,7 +204,7 @@ RECENT_LIMITS = {"applications": 6, "files": 6, "settings": 3, "websites": 4, "c
 
 
 def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = False,
-           database: Path | None = None) -> list[dict[str, Any]]:
+           database: Path | None = None, *, since: float = 0) -> list[dict[str, Any]]:
     """What the empty bar suggests: recently used applications, files, settings, websites and chats."""
     found: dict[str, list[dict[str, Any]]] = {kind: [] for kind in RECENT_LIMITS}
     try:
@@ -193,6 +216,8 @@ def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = F
     transient = TRANSIENT_FOLDERS + ((os.environ["XDG_RUNTIME_DIR"].rstrip("/") + "/",)
                                      if os.environ.get("XDG_RUNTIME_DIR") else ())
     for item in usage_history.recent_resources(database):
+        if since and item.last_used <= since:
+            continue
         target = item.target
         if target.startswith("applications:"):
             app = applications.get(target.removeprefix("applications:"))
@@ -218,7 +243,8 @@ def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = F
                                        "kind": "folder" if os.path.isdir(path) else "file"})
     found["chats"] = [{"kind": "quick", "title": item["title"], "subtitle": "Earlier conversation", "icon": "view-history",
                        "action": {"type": "conversation", "target": item["id"]}}
-                      for item in sorted(conversations or [], key=lambda c: c.get("updated", 0), reverse=True)]
+                      for item in sorted(conversations or [], key=lambda c: c.get("updated", 0), reverse=True)
+                      if not since or item.get("updated", 0) > since]
     unique: dict[str, dict[str, Any]] = {}
     for kind, items in found.items():
         for item in items[:RECENT_LIMITS[kind]]:

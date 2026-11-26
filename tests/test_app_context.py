@@ -78,6 +78,23 @@ class ScreenshotTests(unittest.TestCase):
         self.assertTrue(app_context.screenshots_wanted(self.settings("any", False, True)))
         self.assertFalse(app_context.screenshots_wanted(self.settings("off", True, True)))
 
+    def test_clear_removes_only_generated_captures_and_forgets_pending_attachments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp)
+            folder = runtime / "screenshots"
+            folder.mkdir()
+            window = folder / ("a" * 32 + ".png")
+            desktop = folder / "desktop-context-1234.png"
+            kept = folder / "chosen-picture.png"
+            for file in (window, desktop, kept):
+                file.touch()
+            with mock.patch.object(app_snapshot, "capture_window", return_value=str(window)):
+                app_context.remember_screenshot(self.settings("local", True, False), "window", runtime)
+            app_context.clear_screenshots(runtime)
+            app_context.clear_screenshots(runtime)
+            self.assertEqual(list(folder.iterdir()), [kept])
+            self.assertEqual(app_context.take_screenshot({"window": "window"}), "")
+
     def test_it_is_taken_on_request_and_used_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(app_snapshot, "capture_window", return_value=f"{tmp}/a.png") as capture:

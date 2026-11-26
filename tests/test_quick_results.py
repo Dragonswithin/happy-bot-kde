@@ -153,6 +153,12 @@ class KRunnerTests(unittest.TestCase):
                 mock.patch.object(krunner_bridge.subprocess, "Popen") as popen:
             bridge.run("ask")
         self.assertEqual(popen.call_args[0][0], ["/usr/bin/happy-bot", "ask", "--notify", "--", "konsole"])
+        with mock.patch.object(krunner_bridge.quick_results, "gather", return_value=[]), \
+                mock.patch.object(krunner_bridge.instant_search, "search_files", side_effect=lambda *_: bridge.clear() or files):
+            self.assertEqual(bridge.matches("earlier request"), [])
+        with mock.patch.object(krunner_bridge.subprocess, "Popen") as popen:
+            bridge.run("ask")
+            popen.assert_not_called()
 
 
 if __name__ == "__main__":

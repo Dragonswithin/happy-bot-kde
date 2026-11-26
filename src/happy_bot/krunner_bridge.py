@@ -57,12 +57,20 @@ class KRunnerBridge:
         self.server = server
         self._matches: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
+        self._generation = 0
+
+    def clear(self) -> None:
+        with self._lock:
+            self._matches.clear()
+            self._generation += 1
 
     def matches(self, query: str) -> list[tuple[str, str, str, int, float, dict[str, Any]]]:
         """``(id, text, icon, type, relevance, properties)`` for KRunner, best first."""
         query = query.strip()
         if len(query) < MIN_QUERY:
             return []
+        with self._lock:
+            generation = self._generation
         found: list[tuple[str, str, str, int, float, dict[str, Any]]] = []
         remembered: dict[str, dict[str, Any]] = {}
         for index, result in enumerate(quick_results.gather(query, self.server.conversations.list())):
@@ -85,6 +93,8 @@ class KRunnerBridge:
         found.append(("ask", f"Ask the assistant: {query}", "tools-wizard", HELPER, 0.3,
                       {"subtext": "The answer arrives as a notification"}))
         with self._lock:
+            if generation != self._generation:
+                return []
             self._matches = remembered
         return found
 

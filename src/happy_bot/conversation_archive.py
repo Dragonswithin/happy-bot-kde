@@ -166,15 +166,38 @@ class ConversationArchive:
         except OSError:
             return False
 
-    def delete_all(self) -> int:
-        removed = 0
-        for path in self._files():
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                pass
+    def remove_records(self, *, strict: bool = False) -> set[str]:
+        """Remove owned records and return their ids; explicit user clears report I/O errors."""
+        removed: set[str] = set()
+        try:
+            folder = os.open(self.directory, os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return removed
+        except OSError:
+            if strict:
+                raise
+            return removed
+        try:
+            for name in os.listdir(folder):
+                if not name.endswith(".json") or not valid_id(name[:-5]):
+                    continue
+                try:
+                    os.unlink(name, dir_fd=folder)
+                    removed.add(name[:-5])
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    if strict:
+                        raise
+        except OSError:
+            if strict:
+                raise
+        finally:
+            os.close(folder)
         return removed
+
+    def delete_all(self) -> int:
+        return len(self.remove_records())
 
     def prune(self, now: float | None = None) -> int:
         """Delete conversations unused for longer than ``days`` (all of them when 0)."""

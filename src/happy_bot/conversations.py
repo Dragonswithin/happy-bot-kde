@@ -83,13 +83,14 @@ def conversation_from_record(record: dict[str, Any]) -> Conversation:
 
 class ConversationStore:
     def __init__(self, archive: ConversationArchive | None = None) -> None:
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._conversations: dict[str, Conversation] = {}
+        self.cleared_at = 0.0
         self.archive = archive or ConversationArchive(days=0)
 
-    def _evict(self) -> None:
+    def _evict(self, keep: Conversation) -> None:
         idle = sorted(
-            (item for item in self._conversations.values() if not item.turn_lock.locked()),
+            (item for item in self._conversations.values() if item is not keep and not item.turn_lock.locked()),
             key=lambda item: item.last_used,
         )
         while len(self._conversations) > MAX_CONVERSATIONS and idle:
@@ -107,7 +108,7 @@ class ConversationStore:
                     return None
                 conversation = conversation_from_record(record)
                 self._conversations[conversation.id] = conversation
-                self._evict()
+                self._evict(conversation)
             conversation.last_used = time.monotonic()
             return conversation
 
@@ -119,8 +120,22 @@ class ConversationStore:
         with self._lock:
             conversation = Conversation(id=secrets.token_urlsafe(12))
             self._conversations[conversation.id] = conversation
-            self._evict()
+            self._evict(conversation)
             return conversation
+
+    def acquire_turn(self, conversation_id: str) -> Conversation | None:
+        """Claim a turn and reset cancellation before a concurrent clear can cancel it."""
+        with self._lock:
+            conversation = self.get_or_create(conversation_id)
+            if not conversation.turn_lock.acquire(blocking=False):
+                return None
+            conversation.cancel.clear()
+            return conversation
+
+    def set_retention(self, days: int) -> None:
+        with self._lock:
+            self.archive.days = days
+            self.archive.prune()
 
     def begin_turn(self, conversation: Conversation, request: str) -> None:
         """Note a new request: sets the title on the first one and records it for replay."""
@@ -129,11 +144,14 @@ class ConversationStore:
         conversation.record({"type": "user", "text": request})
 
     def save(self, conversation: Conversation) -> None:
-        conversation.updated = time.time()
-        try:
-            self.archive.save(conversation.to_record())
-        except OSError:
-            pass  # history is a convenience; a full disk must not fail the turn
+        with self._lock:
+            if self._conversations.get(conversation.id) is not conversation:
+                return  # The user cleared this turn while it was finishing.
+            conversation.updated = time.time()
+            try:
+                self.archive.save(conversation.to_record())
+            except OSError:
+                pass  # history is a convenience; a full disk must not fail the turn
 
     def forget(self, conversation_id: str) -> None:
         """Drop a conversation from memory without saving it (requests marked ephemeral)."""
@@ -142,8 +160,8 @@ class ConversationStore:
 
     def list(self) -> list[dict[str, Any]]:
         """Saved conversations, newest first, plus unsaved ones still in memory."""
-        listed = {item["id"]: item for item in self.archive.list()}
         with self._lock:
+            listed = {item["id"]: item for item in self.archive.list()}
             for conversation in self._conversations.values():
                 if conversation.id not in listed and conversation.events:
                     listed[conversation.id] = {
@@ -155,27 +173,33 @@ class ConversationStore:
 
     def set_pinned(self, conversation_id: str, pinned: bool) -> bool:
         """Pin or unpin a conversation and save it; False if it is unknown."""
-        conversation = self.get(conversation_id)
-        if conversation is None:
-            return False
-        conversation.pinned = pinned
-        try:
-            self.archive.save(conversation.to_record())
-        except OSError:
-            return False
-        return True
+        with self._lock:
+            conversation = self.get(conversation_id)
+            if conversation is None:
+                return False
+            conversation.pinned = pinned
+            try:
+                self.archive.save(conversation.to_record())
+            except OSError:
+                return False
+            return True
 
     def delete(self, conversation_id: str) -> bool:
         with self._lock:
-            in_memory = self._conversations.pop(conversation_id, None) is not None
-        return self.archive.delete(conversation_id) or in_memory
+            conversation = self._conversations.pop(conversation_id, None)
+            if conversation:
+                conversation.cancel.set()
+            return self.archive.delete(conversation_id) or conversation is not None
 
     def delete_all(self) -> int:
         with self._lock:
-            idle = [key for key, item in self._conversations.items() if not item.turn_lock.locked()]
-            for key in idle:
-                del self._conversations[key]
-        return self.archive.delete_all()
+            removed = set(self._conversations)
+            for item in self._conversations.values():
+                item.cancel.set()
+            self._conversations.clear()
+            removed.update(self.archive.remove_records(strict=True))
+            self.cleared_at = time.time()
+            return len(removed)
 
     def cancel(self, conversation_id: str) -> bool:
         """Ask a running turn to stop. Returns False if the conversation is unknown."""

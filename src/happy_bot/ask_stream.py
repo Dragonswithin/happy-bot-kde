@@ -146,18 +146,17 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             send({"type": "error", "code": "not_configured", "message": "No AI in your list can answer: "
                   + "; ".join(skipped) + ". Change this on the AI Model page."})
             return
-        conversation = server.conversations.get_or_create(str(body.get("conversation_id") or ""))
-        conversation.model = chosen
-        if not conversation.turn_lock.acquire(blocking=False):
+        conversation = server.conversations.acquire_turn(str(body.get("conversation_id") or ""))
+        if conversation is None:
             send({"type": "error", "message": "The assistant is still working on the previous request.", "code": "busy"})
             return
+        conversation.model = chosen
     except ClientGone:
         return
 
     started = time.monotonic()
     agent = settings.get("agent") or settings_store.default_agent()
     try:
-        conversation.cancel.clear()
         def update_settings(mutate):
             changed = copy.deepcopy(server.settings)
             mutate(changed)
@@ -199,6 +198,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         emit({
             "type": "start",
             "conversation_id": conversation.id,
+            "created": conversation.created,
             "model": chain[0][0],
             "tools": registry.names(),
             "warnings": warnings,

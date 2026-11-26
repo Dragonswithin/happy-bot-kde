@@ -10,10 +10,13 @@ action), and the conversion of settings from before the order existed.
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -47,6 +50,45 @@ class SpendTests(unittest.TestCase):
         self.assertFalse(spend.over_cap("big", hosted))
         self.assertFalse(spend.over_cap("other", {**hosted, "monthly_cap": 4}))  # its own spending, not the total
         self.assertFalse(spend.over_cap("small", {**LOCAL, "monthly_cap": 0.001}))
+
+    def test_clear_past_usage_preserves_current_caps_and_ignores_future_months(self) -> None:
+        hosted = {**HOSTED, "monthly_cap": 4}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.json"
+            with mock.patch.object(spend, "_month", return_value="2025-12"):
+                spend.record("big", hosted, 2000, 100, path)
+            with mock.patch.object(spend, "_month", return_value="2026-02"):
+                spend.record("big", hosted, 600, 20, path)
+            with mock.patch.object(spend, "_month", return_value="2026-01"):
+                spend.record("big", hosted, 1_500_000, 100, path)
+                before = json.loads(path.read_text())
+                self.assertTrue(spend.over_cap("big", hosted, path))
+                spend.clear_past_usage(path)
+                spend.clear_past_usage(path)
+                del before["2025-12"]
+                self.assertEqual(json.loads(path.read_text()), before)
+                self.assertTrue(spend.over_cap("big", hosted, path))
+                spend.record("big", hosted, 200, 20, path)
+                self.assertEqual(spend.month_summary(path)["models"]["big"]["input_tokens"], 1_500_200)
+
+    def test_clear_usage_reports_errors_without_overwriting_and_can_be_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.json"
+            spend.clear_past_usage(path)
+            self.assertFalse(path.exists())
+            path.write_text("{damaged")
+            with self.assertRaises(OSError):
+                spend.clear_past_usage(path)
+            self.assertEqual(path.read_text(), "{damaged")
+            with mock.patch.object(spend, "_month", return_value="2026-01"):
+                previous = '{"2025-12": {}, "2026-01": {}}'
+                path.write_text(previous)
+                with mock.patch.object(spend, "write_private_file", side_effect=OSError("full")):
+                    with self.assertRaises(OSError):
+                        spend.clear_past_usage(path)
+                self.assertEqual(path.read_text(), previous)
+                spend.clear_past_usage(path)
+                self.assertEqual(json.loads(path.read_text()), {"2026-01": {}})
 
     def test_prices_and_limits_are_validated(self) -> None:
         with self.assertRaisesRegex(SettingsError, "'input_price'"):
@@ -141,8 +183,6 @@ class ModelOrderTests(unittest.TestCase):
 
 class BusyModelTests(unittest.TestCase):
     def test_all_slots_busy_is_reported_and_anything_odd_is_not(self) -> None:
-        from unittest import mock
-
         cases = [([{"is_processing": True}], True), ([{"is_processing": True}, {"is_processing": False}], False),
                  ({"error": "no slots"}, False), ([], False)]
         for slots, busy in cases:

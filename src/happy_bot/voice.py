@@ -26,8 +26,7 @@ is the daemon's side of that:
   recording is loudness-normalized (``normalize``): the chunks heard as speech are brought to
   ``TARGET_SPEECH_RMS`` on average, with the loudest sample kept under ``PEAK_LIMIT``, since
   Whisper needs loudness-normalized 16 kHz mono (with ``language`` set) to hear a quiet or distant
-  voice correctly. The recording is written to the runtime folder (0600), sent, and deleted at
-  once; it never stays on disk.
+  voice correctly. The recording is encoded and sent from memory.
 - ``transcribe`` sends one recording (multipart ``file``, ``model``, ``language``) and returns the
   service's ``text``; ``check_service`` sends half a second of silence to see that a service
   answers like one, for the settings page's Test button, and ``find_service`` tries the model
@@ -43,12 +42,11 @@ an online one is refused while the user's "local only" setting is on.
 from __future__ import annotations
 
 import array
+import io
 import json
-import os
 import re
 import shutil
 import subprocess
-import tempfile
 import threading
 import time
 import uuid
@@ -60,6 +58,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .redaction import is_local_address
+from .runtime_paths import clear_cache_files
 
 VOICE_DEFAULTS: dict[str, Any] = {"enabled": False, "base_url": "", "model": "", "language": "en"}
 
@@ -138,12 +137,14 @@ def normalize(frames: bytes, speech_power: float) -> bytes:
     return array.array("h", (int(sample * gain) for sample in samples)).tobytes()
 
 
-def _wav(path: Path, frames: bytes) -> None:
-    with wave.open(str(path), "wb") as out:
+def _wav(frames: bytes) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
         out.setframerate(RATE)
         out.writeframes(frames)
+    return buffer.getvalue()
 
 
 def _multipart(fields: dict[str, str], audio: bytes) -> tuple[bytes, str]:
@@ -186,10 +187,7 @@ def _usable(voice: dict[str, Any], local_only: bool) -> None:
 def check_service(voice: dict[str, Any], local_only: bool = False) -> dict[str, Any]:
     """Send half a second of silence; ``{"ok": True}`` when the service answers with text."""
     _usable(voice, local_only)
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder, "silence.wav")
-        _wav(path, b"\0\0" * (RATE // 2))
-        transcribe(voice, path.read_bytes(), timeout=30.0)
+    transcribe(voice, _wav(b"\0\0" * (RATE // 2)), timeout=30.0)
     return {"ok": True}
 
 
@@ -217,6 +215,10 @@ class Listener:
         self._discard = False
         self.active = False
 
+    def clear_cache(self) -> None:
+        """Remove temporary voice clips left by an interrupted older version."""
+        clear_cache_files(self._folder, r"[0-9a-f]{32}\.wav")
+
     def stop(self, discard: bool = False) -> bool:
         """Ends the recording now; with ``discard`` nothing is sent. False when none was running."""
         self._discard = discard
@@ -234,17 +236,7 @@ class Listener:
             frames, speech_power = self._record()
             if self._discard:
                 return {"text": "", "discarded": True}
-            self._folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-            path = self._folder / f"{uuid.uuid4().hex}.wav"
-            try:
-                old_umask = os.umask(0o077)
-                try:
-                    _wav(path, normalize(frames, speech_power))
-                finally:
-                    os.umask(old_umask)
-                return {"text": transcribe(voice, path.read_bytes())}
-            finally:
-                path.unlink(missing_ok=True)
+            return {"text": transcribe(voice, _wav(normalize(frames, speech_power)))}
         finally:
             self.active = False
             self._lock.release()

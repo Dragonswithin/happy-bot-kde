@@ -81,6 +81,8 @@ Endpoints:
 - ``GET /conversation?id=...``: one conversation's display events, for the
   popup to redraw it.
 - ``POST /conversations/delete``: ``{"id": ...}`` or ``{"all": true}``.
+- ``POST /history/clear``: clear one explicit ``kind``: search suggestions,
+  conversations, activity, undo, previous months' usage, or temporary cache files and graph samples.
 - ``POST /conversations/pin``: ``{"id": ..., "pinned": bool}``; pinned ones
   are listed first and kept past ``history_days``.
 - ``GET /export`` / ``POST /import``: everything the assistant keeps for the
@@ -153,6 +155,7 @@ from .agent_loop import user_folders
 from .mcp_client import McpError
 from .providers import ProviderError
 from .redaction import is_local_address
+from .runtime_paths import write_private_file
 from .providers.openai_compatible import list_models
 from .tool_roles import RoleNotConfigured, find_limit_argument, find_query_argument, propose_role, tool_arguments
 from .tools import reminders
@@ -466,7 +469,7 @@ def open_location(server: "AssistantServer", query: dict[str, list[str]], body: 
 
 
 def screenshot(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
-    return 200, desktop_context.take_screenshot(server.runtime_dir)
+    return 200, app_context.capture_desktop(server.runtime_dir)
 
 
 def discover_models(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -589,16 +592,51 @@ def get_conversation(server: "AssistantServer", query: dict[str, list[str]], bod
     conversation = server.conversations.get(_first(query, "id"))
     if conversation is None:
         return _error(404, "That conversation is no longer saved.", "invalid")
-    return 200, {"ok": True, "id": conversation.id, "title": conversation.title, "model": conversation.model,
+    return 200, {"ok": True, "id": conversation.id, "created": conversation.created,
+                 "title": conversation.title, "model": conversation.model,
                  "events": conversation.events}
 
 
 def delete_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     if body.get("all") is True:
-        return 200, {"ok": True, "deleted": server.conversations.delete_all()}
+        return clear_history(server, query, {"kind": "conversations"})
     if not server.conversations.delete(str(body.get("id") or "")):
         return _error(404, "That conversation is no longer saved.", "invalid")
     return 200, {"ok": True, "deleted": 1}
+
+
+def clear_history(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    from . import permissions, undo_journal
+
+    kind = body.get("kind")
+    if set(body) != {"kind"} or kind not in ("search", "conversations", "activity", "undo", "cache", "usage"):
+        return _error(400, "Choose one type of saved data to clear.", "invalid")
+    try:
+        if kind == "conversations":
+            with server.history_clear_lock:
+                deleted = server.conversations.delete_all()
+                when = server.conversations.cleared_at
+                server.activity.history_cleared("conversation", when)
+                write_private_file(server.conversation_clear_marker, str(when))
+            return 200, {"ok": True, "deleted": deleted}
+        if kind == "search":
+            with server.history_clear_lock:
+                server.search_history.clear()
+                server.krunner.clear()
+                server.activity.history_cleared("search", server.search_history.index.history_since)
+        elif kind == "activity":
+            permissions.clear_activity(server.runtime_dir)
+        elif kind == "undo":
+            undo_journal.clear_history(server.runtime_dir)
+        elif kind == "usage":
+            spend.clear_past_usage()
+        else:
+            server.voice.clear_cache()
+            app_context.clear_screenshots(server.runtime_dir)
+            server.system_history.clear()
+    except OSError as exc:
+        return _error(500, f"Could not finish clearing {kind}: {exc}", "clear_failed")
+    return 200, {"ok": True}
 
 
 def pin_conversation(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -680,13 +718,14 @@ def quick(server: "AssistantServer", query: dict[str, list[str]], body: dict[str
     text = _first(query, "q").strip()[:MAX_QUERY_CHARS]
     ui = server.settings.get("ui") or {}
     return 200, {"ok": True, "query": text, "results": quick_results.gather(
-        text, server.conversations.list(), ui.get("search_bookmarks") is True, ui.get("search_history") is True)}
+        text, server.conversations.list(), ui.get("search_bookmarks") is True, ui.get("search_history") is True,
+        server.search_history.index)}
 
 
 def quick_recent(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     ui = server.settings.get("ui") or {}
-    return 200, {"ok": True, "results": quick_results.recent(server.conversations.list(),
-                                                             ui.get("search_history") is True)}
+    return 200, {"ok": True, "results": quick_results.recent(
+        server.conversations.list(), ui.get("search_history") is True, since=server.search_history.index.history_since)}
 
 
 def quick_activate(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -802,6 +841,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/conversations"): list_conversations,
     ("GET", "/conversation"): get_conversation,
     ("POST", "/conversations/delete"): delete_conversations,
+    ("POST", "/history/clear"): clear_history,
     ("POST", "/conversations/pin"): pin_conversation,
     ("GET", "/check"): check,
     ("GET", "/spend"): spending,

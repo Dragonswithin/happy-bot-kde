@@ -76,6 +76,90 @@ class RouteTests(unittest.TestCase):
         self.assertEqual((status, reply["code"]), (409, "not_configured"))
         self.assertFalse(self.call("GET", "/health")[1]["setup"]["file_search"])
 
+    def test_clear_search_keeps_archived_chats_and_survives_restart(self) -> None:
+        store = self.server.conversations
+        chat = store.get_or_create()
+        store.begin_turn(chat, "Yesterday's chat")
+        store.save(chat)
+        before = self.call("GET", "/icon/activity")[1]
+        self.assertEqual(before["search_clear_revision"], "")
+        for invalid in ({}, {"kind": "all"}, {"kind": ["search"]}, {"kind": "search", "all": True}):
+            self.assertEqual(self.call("POST", "/history/clear", invalid)[0], 400)
+        self.assertEqual(self.call("POST", "/history/clear", {"kind": "search"}), (200, {"ok": True}))
+        after = self.call("GET", "/icon/activity")[1]
+        self.assertNotEqual(after["search_clear_revision"], before["search_clear_revision"])
+        self.assertEqual(after["conversation_clear_revision"], "")
+        self.assertTrue(self.call("GET", f"/conversation?id={chat.id}")[1]["ok"])
+        self.assertFalse(any(r.get("action", {}).get("target") == chat.id
+                             for r in self.call("GET", "/quick/recent")[1]["results"]))
+        self.assertTrue(any(r.get("action", {}).get("target") == chat.id
+                            for r in self.call("GET", "/quick?q=Yesterday")[1]["results"]))
+        self.assertEqual(self.server.search_history.marker.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(float(after["search_clear_revision"]), self.server.search_history.index.history_since)
+        self.call("POST", "/history/clear", {"kind": "conversations"})
+        cleared = self.call("GET", "/icon/activity")[1]
+        restarted = AssistantServer("127.0.0.1", 0, self.server.runtime_dir, self.config_file, store.archive.directory)
+        try:
+            saved = restarted.activity.wait("")
+            for key in ("search_clear_revision", "conversation_clear_revision"):
+                self.assertEqual(saved[key], cleared[key])
+        finally:
+            restarted.server_close()
+            restarted.shutdown_tools()
+
+    def test_clear_chats_including_pinned_and_active_never_resaves_them(self) -> None:
+        store = self.server.conversations
+        pinned = store.get_or_create()
+        store.begin_turn(pinned, "Pinned")
+        self.assertTrue(store.set_pinned(pinned.id, True))
+        active = store.acquire_turn("")
+        store.begin_turn(active, "Still working")
+        try:
+            self.assertEqual(self.call("POST", "/history/clear", {"kind": "conversations"}),
+                             (200, {"ok": True, "deleted": 2}))
+            self.assertTrue(active.cancel.is_set())
+            store.save(active)  # stream_ask's finally runs even for a cancelled turn.
+        finally:
+            active.turn_lock.release()
+        self.assertEqual(self.call("GET", "/conversations")[1]["conversations"], [])
+        self.assertIsNone(store.archive.load(active.id))
+        revision = self.call("GET", "/icon/activity")[1]["conversation_clear_revision"]
+        self.assertTrue(revision)
+        self.assertEqual(self.call("POST", "/conversations/delete", {"all": True})[1]["deleted"], 0)
+        self.assertNotEqual(self.call("GET", "/icon/activity")[1]["conversation_clear_revision"], revision)
+
+    def test_failed_search_clear_preserves_suggestions_and_reports_failure(self) -> None:
+        revision = self.call("GET", "/icon/activity")[1]["search_clear_revision"]
+        with mock.patch("happy_bot.quick_results.write_private_file", side_effect=PermissionError("read-only")):
+            status, error = self.call("POST", "/history/clear", {"kind": "search"})
+        self.assertEqual((status, error["code"]), (500, "clear_failed"))
+        self.assertEqual(self.server.search_history.index.history_since, 0)
+        self.assertEqual(self.call("GET", "/icon/activity")[1]["search_clear_revision"], revision)
+
+    def test_clearing_a_runtime_category_only_removes_its_own_data(self) -> None:
+        runtime = self.server.runtime_dir
+        log, journal = runtime / "actions.jsonl", runtime / "undo.jsonl"
+        shot = runtime / "screenshots" / "desktop-context-123.png"
+        shot.parent.mkdir()
+        for path in (log, journal, shot):
+            path.write_bytes(b"fixture")
+        for kind, path in (("activity", log), ("undo", journal), ("cache", shot)):
+            self.assertTrue(path.exists())
+            self.assertEqual(self.call("POST", "/history/clear", {"kind": kind}), (200, {"ok": True}))
+            self.assertFalse(path.exists())
+            self.assertEqual((runtime / "token").read_text().strip(), self.server.auth_token)
+
+    def test_clearing_conversations_refuses_a_redirected_archive(self) -> None:
+        archive = self.server.conversations.archive.directory
+        outside = Path(self._tmp.name) / "outside"
+        outside.mkdir()
+        fixture = outside / "record.json"
+        fixture.write_text("unrelated")
+        archive.symlink_to(outside, target_is_directory=True)
+        status, error = self.call("POST", "/history/clear", {"kind": "conversations"})
+        self.assertEqual((status, error["code"]), (500, "clear_failed"))
+        self.assertEqual(fixture.read_text(), "unrelated")
+
     def test_search_returns_hits_and_respects_limit(self) -> None:
         self.configure()
         status, reply = self.call("GET", f"/search?q={quote('tax return')}&limit=2")

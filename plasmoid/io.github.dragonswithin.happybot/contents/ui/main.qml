@@ -211,6 +211,7 @@ PlasmoidItem {
         running: true
         onTriggered: session.request("GET", "/icon/activity?seen=" + revision, null, data => {
             iconActivity.apply(data);
+            if (session.applyHistoryClears(data)) root.refreshAfterHistoryClear();
             revision = data.revision;
             interval = 0;
             restart();
@@ -226,6 +227,15 @@ PlasmoidItem {
         id: session
         nudges: iconActivity.nudgesEnabled ? iconActivity.nudges : []
         configuredUrl: Plasmoid.configuration.daemonUrl || ""
+        onSearchClearRevisionChanged: {
+            root.sentRequests = root.sentRequests.filter(item => item.sent > session.searchClearRevision);
+            root.recallIndex = root.sentRequests.length;
+        }
+        // A reset cancels Enter before the old search can finish in onSearchingChanged.
+        onSearchReset: {
+            root.acceptAfterSearch = "";
+            root.acceptFromBar = false;
+        }
         // The top result starts selected, so Enter opens it; with none, the Ask row is selected (-1).
         // The empty bar's suggestions start with nothing selected, so Enter there still opens the popup.
         onHitsChanged: {
@@ -694,6 +704,16 @@ PlasmoidItem {
         return session.finding;
     }
 
+    /** Refresh visible suggestions after a clear from Settings. */
+    function refreshAfterHistoryClear() {
+        searchDelay.stop();
+        root.pendingQuery = "";
+        // Keep drafts in the field. Editing or submitting one starts the next lookup.
+        if (root.assistantOpen ? session.finding && !session.article && !root.surface.inputText.trim()
+                               : root.barFocused && !root.barText)
+            session.showRecent();
+    }
+
     /** The panel bar's text changed: search it after a pause, or clear the results. */
     function barEdited(text) {
         root.pendingQuery = String(text || "").trim();
@@ -883,7 +903,7 @@ PlasmoidItem {
             return;
         }
         root.recallIndex = Math.max(0, Math.min(root.sentRequests.length, root.recallIndex + delta));
-        root.setInput(root.recallIndex < root.sentRequests.length ? root.sentRequests[root.recallIndex] : "");
+        root.setInput(root.recallIndex < root.sentRequests.length ? root.sentRequests[root.recallIndex].text : "");
     }
 
     /** Tab puts the top result's name in the field (an application, a setting, a file). */
@@ -935,7 +955,7 @@ PlasmoidItem {
             return;
         }
         if (text.length > 0 && session.ask(BarInput.request(BarInput.parse(text)))) {
-            root.sentRequests = root.sentRequests.concat([text]).slice(-50);
+            root.sentRequests = root.sentRequests.concat([{ text: text, sent: Date.now() / 1000 }]).slice(-50);
             root.recallIndex = root.sentRequests.length;
             searchDelay.stop();
             session.stopFinding();

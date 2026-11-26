@@ -180,8 +180,9 @@ def _key(url: str) -> str:
 class BrowserIndex:
     """Bookmarks and recent history of every profile, in memory, refreshed in the background."""
 
-    def __init__(self, home: Path | None = None, config: Path | None = None) -> None:
+    def __init__(self, home: Path | None = None, config: Path | None = None, *, history_since: float = 0) -> None:
         self._home, self._config = home, config
+        self.history_since = history_since
         self._lock = threading.Lock()
         self._pages: list[Page] = []
         self._built = 0.0
@@ -190,7 +191,7 @@ class BrowserIndex:
 
     def build(self, history: bool) -> None:
         """Read everything now (blocking: copies the browsers' databases)."""
-        since = time.time() - HISTORY_DAYS * 86400
+        since = max(self.history_since, time.time() - HISTORY_DAYS * 86400)
         pages: list[Page] = []
         for profile in profiles(self._home, self._config):
             pages += _bookmarks(profile)

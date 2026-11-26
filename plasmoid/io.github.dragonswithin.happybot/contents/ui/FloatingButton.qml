@@ -54,6 +54,7 @@ Window {
     property int widthInGridUnits: 30
     property int heightInGridUnits: 26
     property bool expanded: false
+    readonly property alias inputText: view.inputText
 
     readonly property real shortcutScale: (session.ui.floating_size ?? 100) / 100
     readonly property int size: Math.round((Kirigami.Units.iconSizes.large + Kirigami.Units.largeSpacing) * shortcutScale)

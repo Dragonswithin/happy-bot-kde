@@ -21,6 +21,7 @@ can run at once.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import shutil
 import threading
@@ -28,10 +29,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .runtime_paths import ensure_runtime_root
+from .runtime_paths import clear_cache_files, ensure_runtime_root
 
 MAX_ENTRIES = 200
 MAX_BACKUP_BYTES = 5_000_000
+_BACKUP_NAME = re.compile(r"[0-9a-f]{16}-.+", re.DOTALL)
 _lock = threading.Lock()
 
 
@@ -67,6 +69,9 @@ def record(kind: str, summary: str, data: dict[str, Any], runtime_dir: Path | No
              "summary": summary, "data": data, "undone": False}
     try:
         with _lock:
+            # A clear can land between backing up a file and completing its replacement.
+            if kind == "file_replaced" and data.get("backup") and not Path(data["backup"]).is_file():
+                return
             path = _journal_path(runtime_dir)
             _write(path, _read(path) + [entry])
     except OSError:
@@ -91,7 +96,16 @@ def mark_undone(entry_id: str, runtime_dir: Path | None = None) -> None:
         for entry in items:
             if entry["id"] == entry_id:
                 entry["undone"] = True
-        _write(path, items)
+                _write(path, items)
+                return
+
+
+def clear_history(runtime_dir: Path) -> None:
+    """Forget journal entries and Happy Bot's file backups, including copies rotated out of the journal."""
+    with _lock:
+        # A journal entry may refer to any user path. Only enumerate the private backup folder.
+        clear_cache_files(runtime_dir / "undo-files", _BACKUP_NAME)
+        _journal_path(runtime_dir).unlink(missing_ok=True)
 
 
 def back_up(path: Path, runtime_dir: Path | None = None) -> str:
@@ -99,11 +113,14 @@ def back_up(path: Path, runtime_dir: Path | None = None) -> str:
     try:
         if not path.is_file() or path.stat().st_size > MAX_BACKUP_BYTES:
             return ""
-        folder = (runtime_dir or ensure_runtime_root()) / "undo-files"
-        folder.mkdir(mode=0o700, exist_ok=True)
-        copy = folder / f"{secrets.token_hex(8)}-{path.name}"
-        shutil.copy2(path, copy)
-        copy.chmod(0o600)
-        return str(copy)
+        with _lock:
+            folder = (runtime_dir or ensure_runtime_root()) / "undo-files"
+            folder.mkdir(mode=0o700, exist_ok=True)
+            if folder.is_symlink():
+                return ""
+            copy = folder / f"{secrets.token_hex(8)}-{path.name}"
+            shutil.copy2(path, copy)
+            copy.chmod(0o600)
+            return str(copy)
     except OSError:
         return ""

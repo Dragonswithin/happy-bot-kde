@@ -16,8 +16,11 @@ symlink, because the ``/tmp`` fallback could be pre-created by another user.
 
 from __future__ import annotations
 
+import math
 import os
+import re
 import stat
+import time
 from pathlib import Path
 
 APP_DIR_NAME = "happy-bot"
@@ -45,8 +48,38 @@ def state_path(root: Path | None = None) -> Path:
     return (root or runtime_root()) / "daemon.json"
 
 
+def read_clear_time(marker: Path) -> float:
+    """Read a private history cutoff; an unreadable marker should not expose older activity."""
+    try:
+        since = float(marker.read_text(encoding="utf-8"))
+        return since if math.isfinite(since) and since >= 0 else time.time()
+    except FileNotFoundError:
+        return 0
+    except (ValueError, OSError):
+        return time.time()
+
+
 def token_path(root: Path | None = None) -> Path:
     return (root or runtime_root()) / "token"
+
+
+def clear_cache_files(directory: Path, filename_pattern: str | re.Pattern[str]) -> None:
+    """Remove generated file names in one real cache directory, without following links."""
+    try:
+        folder = os.open(directory, os.O_DIRECTORY | os.O_NOFOLLOW)
+    except (FileNotFoundError, NotADirectoryError):
+        return
+    try:
+        pattern = re.compile(filename_pattern)
+        with os.scandir(folder) as files:
+            for file in files:
+                if pattern.fullmatch(file.name) and file.is_file(follow_symlinks=False):
+                    try:
+                        os.unlink(file.name, dir_fd=folder)
+                    except FileNotFoundError:
+                        pass
+    finally:
+        os.close(folder)
 
 
 def ensure_runtime_root(root: Path | None = None) -> Path:

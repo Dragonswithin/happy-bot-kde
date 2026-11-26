@@ -247,6 +247,11 @@ class RecentTests(unittest.TestCase):
         with_websites = quick_results.recent([], True, self.database)
         self.assertEqual(with_websites[-1]["action"], {"type": "visited", "target": "https://kde.org/"})
         self.assertEqual(with_websites[-1]["title"], "KDE")
+        original_database = self.database.read_bytes()
+        chats = [{"id": "old", "title": "Earlier", "updated": 40}, {"id": "new", "title": "Later", "updated": 51}]
+        cleared = quick_results.recent(chats, True, self.database, since=50)
+        self.assertEqual([item["title"] for item in cleared], ["note.txt", self.folder.name, "Later"])
+        self.assertEqual(self.database.read_bytes(), original_database)
 
 
 class AppActionTests(unittest.TestCase):

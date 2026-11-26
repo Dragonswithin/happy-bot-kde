@@ -5,7 +5,8 @@ observe_sensors with CPU temperature and load, available memory and pressure,
 and the active connection's receive/transmit rates. A slower local sampler reports
 battery, disk, restart and update conditions. Dismissal applies to both views
 until that condition clears. Unknown readings hide the cue without rearming it.
-Both views long-poll the latest snapshot. Nothing is stored on disk.
+Both views long-poll the latest snapshot, including the last search and
+conversation clears so a reconnected view can discard outdated entries.
 """
 
 from __future__ import annotations
@@ -42,11 +43,12 @@ class _Sustained:
 
 
 class IconActivity:
-    def __init__(self) -> None:
+    def __init__(self, search_cleared: float = 0, conversations_cleared: float = 0) -> None:
         self._changed = threading.Condition()
         self._revision = time.monotonic_ns()
         self._state = dict(recording=False, hot=False, busy=False, low_memory=False, downloading=False, uploading=False,
-                           nudges=[])
+                           nudges=[], search_clear_revision=str(search_cleared) if search_cleared else "",
+                           conversation_clear_revision=str(conversations_cleared) if conversations_cleared else "")
         self._dismissed_nudges: set[str] = set()
         self._hot = _Sustained(10, 20)
         self._busy = _Sustained(10, 8)
@@ -54,11 +56,16 @@ class IconActivity:
         self._down = _Sustained(3, 5)
         self._up = _Sustained(3, 5)
 
-    def _update(self, **fields: bool | list[str]) -> None:
+    def _update(self, **fields: bool | list[str] | str) -> None:
         if any(self._state[key] != value for key, value in fields.items()):
             self._state.update(fields)
             self._revision += 1
             self._changed.notify_all()
+
+    def history_cleared(self, kind: str, when: float) -> None:
+        """Tell both desktop surfaces to discard results from before this clear."""
+        with self._changed:
+            self._update(**{kind + "_clear_revision": str(when)})
 
     def set_recording(self, active: bool) -> None:
         with self._changed:

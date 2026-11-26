@@ -258,9 +258,15 @@ panel widget always look and behave the same.
   and typing, system settings, files, commands); your own standing
   instructions; steps per request, how long commands may run, when to
   notify; which terminal installs open in.
-- **History & Folders:** how long conversations are kept, deleting them
-  all, and where Desktop, Documents, Downloads, Pictures, Music and Videos
-  are.
+- **History & Folders** lets you clear what Happy Bot remembers. **Search history**
+  resets arrow-key recall and starts recent suggestions and visited-site matches
+  from the time you clear them. Plasma and your browser manage their own records.
+  Other buttons clear conversations (including pinned chats), the action log,
+  undo records and their backups, previous months’ model usage, and the temporary
+  cache of screenshots, leftover voice clips and System info graph readings.
+  This month’s usage continues to count toward your model spending limits. The
+  same page sets conversation retention and the locations of your standard
+  folders, notes and to-dos.
 - **Appearance:** the robot mascot or the wand, mascot animations, an optional
   greeting sound, start-screen buttons and their order, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it

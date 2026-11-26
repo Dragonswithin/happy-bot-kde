@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -38,10 +39,16 @@ def _month() -> str:
     return time.strftime("%Y-%m")
 
 
+def _read(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("expected a map of months")
+    return data
+
+
 def _load(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        return _read(path)
     except (OSError, ValueError):
         return {}
 
@@ -64,6 +71,24 @@ def record(name: str, model: dict[str, Any], input_tokens: int, output_tokens: i
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         write_private_file(target, json.dumps({month: data[month] for month in months}, indent=1))
     return spent
+
+
+def clear_past_usage(path: Path | None = None) -> None:
+    """Erase completed calendar months while preserving the ledger used for active spending caps."""
+    target = path or ledger_path()
+    with _lock:
+        try:
+            data = _read(target)
+        except FileNotFoundError:
+            return
+        except ValueError as exc:
+            raise OSError("Cannot read the model usage ledger.") from exc
+        current = _month()
+        past = [key for key in data if key < current and re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", key)]
+        if past:
+            for month in past:
+                del data[month]
+            write_private_file(target, json.dumps(data, indent=1))
 
 
 def month_total(path: Path | None = None) -> float:

@@ -86,7 +86,7 @@ class ListeningTests(unittest.TestCase):
         return mock.patch.object(voice, "_recorder", return_value=[sys.executable, "-c", FAKE_MICROPHONE, str(quiet),
                                                                    str(loud), str(level)])
 
-    def test_speech_then_a_pause_is_sent_and_the_recording_deleted(self) -> None:
+    def test_speech_then_a_pause_is_sent_from_memory(self) -> None:
         with self.microphone(quiet=5, loud=8):
             heard = self.listener.listen(self.voice, local_only=True)
         self.assertEqual(heard, {"text": "turn on night light"})
@@ -96,8 +96,17 @@ class ListeningTests(unittest.TestCase):
         self.assertIn(b'name="language"\r\n\r\nen', body)
         self.assertIn(b"RIFF", body)                       # a WAV file
         self.assertNotIn(b'name="model"', body)            # none set, none sent
-        self.assertEqual(list((self.runtime / "voice").iterdir()), [])
+        self.assertFalse((self.runtime / "voice").exists())
         self.assertFalse(self.listener.active)
+
+    def test_clear_cache_removes_only_abandoned_recordings(self) -> None:
+        folder = self.runtime / "voice"
+        folder.mkdir()
+        (folder / ("b" * 32 + ".wav")).touch()
+        keep = folder / "song.wav"
+        keep.touch()
+        self.listener.clear_cache()
+        self.assertEqual(list(folder.iterdir()), [keep])
 
     def test_capture_indicator_clears_before_transcription(self) -> None:
         changes = []
