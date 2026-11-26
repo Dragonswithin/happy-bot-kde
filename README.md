@@ -266,6 +266,9 @@ panel widget always look and behave the same.
   Happy Bot at login, how faded the floating Happy Bot is and putting it
   back in its corner, the popup's size, and in the panel Happy Bot's icon
   or a search bar, and the bar's width. New setups start with the animated robot.
+  Hover over the floating shortcut or the panel logo to see the robot wave. It
+  also greets you on the start screen. Choose **Replay wave** in Appearance
+  to watch it again. **Animate the robot** controls its motion.
   Enable **Play a greeting sound** to hear a short chirp when the assistant opens.
   The preview button plays it in settings.
   Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the

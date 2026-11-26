@@ -27,6 +27,8 @@ Item {
 
     property string status: "idle"
     property string iconName: "tools-wizard"
+    property alias activity: icon.activity
+    property alias animateMascot: icon.animateMascot
     property bool busy: false
     property bool needsAttention: false
     property bool open: false
@@ -53,10 +55,11 @@ Item {
         }
     }
 
-    Kirigami.Icon {
+    PanelIcon {
+        id: icon
         anchors.fill: parent
-        source: compact.iconName
-        active: mouse.containsMouse
+        iconName: compact.iconName
+        hovered: mouse.containsMouse
         opacity: compact.status === "offline" ? 0.6 : 1.0
     }
 

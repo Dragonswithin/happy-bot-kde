@@ -141,6 +141,8 @@ PlasmoidItem {
     property var sentRequests: []
     property int recallIndex: 0
 
+    readonly property bool animatePanelMascot: !standalone && session.ui.robot_mascot && session.ui.mascot_animations !== false
+
     // plasmawindowed publishes this string as the tray's theme icon name.
     Plasmoid.icon: {
         if (session.ui.robot_mascot && iconActivity.trayPose) {
@@ -293,6 +295,8 @@ PlasmoidItem {
     compactRepresentation: CompactRepresentation {
         status: session.status
         iconName: Plasmoid.icon
+        activity: iconActivity
+        animateMascot: root.animatePanelMascot
         busy: session.busy
         needsAttention: session.pendingApprovals > 0
         Accessible.description: iconActivity.description()
@@ -355,6 +359,8 @@ PlasmoidItem {
             : session.statusText
         offline: session.status === "offline" || session.pendingApprovals > 0 || session.needsSetup
         iconName: Plasmoid.icon
+        activity: iconActivity
+        animateMascot: root.animatePanelMascot
         widthInGridUnits: Plasmoid.configuration.barWidth
 
         onFocusRequested: {

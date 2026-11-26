@@ -238,20 +238,13 @@ Window {
         }
 
         MascotIcon {
-            id: robot
             anchors.centerIn: parent
             width: Math.round(Kirigami.Units.iconSizes.medium * floating.shortcutScale)
             height: width
             activity: floating.activity
             mascot: floating.useRobotMascot
             animate: floating.session.ui.mascot_animations !== false
-            // A small look up at the pointer before the button opens.
-            transformOrigin: Item.Bottom
-            rotation: robot.moving && robot.mascot && mouse.containsMouse && !mouse.dragging && !floating.expanded ? -8 : 0
-            Behavior on rotation {
-                enabled: robot.moving
-                NumberAnimation { duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
-            }
+            attentive: mouse.containsMouse && !mouse.dragging && !floating.expanded
         }
 
         // Turns while Happy Bot is working on a request.

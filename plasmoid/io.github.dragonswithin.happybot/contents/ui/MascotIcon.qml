@@ -11,7 +11,9 @@ Item {
     required property IconActivity activity
     property bool mascot: true
     property bool animate: true
-    readonly property bool moving: visible && animate && Kirigami.Units.longDuration > 1
+    property bool attentive: false
+    readonly property bool moving: animate && visible && Window.window && Window.window.visible
+                                   && Window.visibility !== Window.Minimized && Kirigami.Units.longDuration > 1
     readonly property string expression: mascot ? activity.expression : ""
     readonly property bool hot: expression === "hot"
     // The nudge's note uses the same corner as the network arrows.
@@ -42,11 +44,22 @@ Item {
         return name ? Qt.resolvedUrl("../images/reactions/" + name + ".svg").toString() : "";
     }
 
+    // Heat and recording have a dedicated visor and antenna to keep their
+    // indicators readable. Other expressions ride on the character's moving head.
+    RobotCharacter {
+        anchors.fill: parent
+        visible: face.mascot && !face.hot && !face.activity.recording
+        animate: face.animate
+        attentive: face.attentive
+        expressionSource: visible ? face.artwork(face.expression) : ""
+    }
+
     Image {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.mascot ? Look.robotIcon : face.activity.recording ? Look.activeMicrophoneIcon : ""
+        source: face.mascot && (face.hot || face.activity.recording) ? Look.robotIcon
+              : face.activity.recording ? Look.activeMicrophoneIcon : ""
     }
     Kirigami.Icon {
         anchors.fill: parent
@@ -58,7 +71,7 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.artwork(face.hot ? "hot-face" : face.expression)
+        source: face.hot ? face.artwork("hot-face") : face.mascot && face.activity.recording ? face.artwork("recording") : ""
     }
     Image {
         id: drop

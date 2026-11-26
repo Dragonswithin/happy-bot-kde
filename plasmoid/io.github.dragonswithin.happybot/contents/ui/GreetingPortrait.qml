@@ -13,6 +13,10 @@ Item {
     implicitHeight: implicitWidth
     Accessible.ignored: true
 
+    function greet() {
+        character.greet();
+    }
+
     Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width, parent.height)
@@ -37,22 +41,21 @@ Item {
             radius: width / 2
             color: portrait.accent
         }
+        RobotCharacter {
+            id: character
+            anchors.centerIn: parent
+            width: parent.width * 0.8
+            height: width
+            visible: portrait.iconSource === Look.robotIcon.toString()
+            animate: portrait.animate
+            greetOnShow: true
+        }
         Kirigami.Icon {
-            id: face
             anchors.centerIn: parent
             width: parent.width * 0.58
             height: width
-            source: portrait.iconSource
-            transformOrigin: Item.Bottom
-
-            SequentialAnimation on rotation {
-                running: portrait.animate && portrait.visible && portrait.Window.window !== null
-                         && portrait.Window.window.visible && Kirigami.Units.longDuration > 1
-                NumberAnimation { from: 0; to: -12; duration: Kirigami.Units.longDuration; easing.type: Easing.OutSine }
-                NumberAnimation { to: 5; duration: Kirigami.Units.shortDuration; easing.type: Easing.InOutSine }
-                NumberAnimation { to: 0; duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic }
-                onStopped: face.rotation = 0
-            }
+            visible: !character.visible
+            source: visible ? portrait.iconSource : ""
         }
     }
 }

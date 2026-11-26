@@ -61,6 +61,8 @@ Item {
     property bool offline: false
     property string iconDescription: ""
     property string iconName: "search"
+    property alias activity: icon.activity
+    property alias animateMascot: icon.animateMascot
     property int widthInGridUnits: 18
     property bool voiceEnabled: false  // show the microphone at the bar's right end
     property bool listening: false
@@ -132,14 +134,15 @@ Item {
             }
         }
 
-        Kirigami.Icon {
+        PanelIcon {
             id: icon
             anchors.left: parent.left
             anchors.leftMargin: Kirigami.Units.smallSpacing
             anchors.verticalCenter: parent.verticalCenter
             width: Kirigami.Units.iconSizes.small
             height: width
-            source: bar.iconName
+            iconName: bar.iconName
+            hovered: logoButton.containsMouse
             opacity: bar.offline ? 0.45 : 0.8
         }
 
@@ -203,6 +206,7 @@ Item {
     // The logo is a button of its own, above the click-to-type areas; right
     // clicks fall through to the menu area below.
     MouseArea {
+        id: logoButton
         x: field.x
         width: icon.width + Kirigami.Units.smallSpacing * 2
         height: parent.height
