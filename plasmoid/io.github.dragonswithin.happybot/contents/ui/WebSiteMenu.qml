@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick.Controls as QQC2
 
 // Both web result rows and start-page tiles edit the same homepage preference.
-QQC2.Menu {
+AssistantMenu {
     id: menu
     property var site: null
     signal siteActionRequested(var site, string action)

@@ -41,6 +41,8 @@ Item {
             session.stopFixing();
             session.resetTranscript();
             session.history = [];
+            session.models = [];
+            session.chatModel = "";
         }
 
         function button(item, text) {
@@ -98,6 +100,19 @@ Item {
             compare(moves.count, 0);
             mouseClick(button(view, "Close (Esc)"));
             compare(closes.count, 1);
+        }
+
+        function test_modelSelector() {
+            session.models = [{name: "Local AI"}, {name: "Hosted AI", online: true}];
+            const picker = findChild(view, "chatModelPicker");
+            tryVerify(() => picker.visible);
+            tryVerify(() => picker.width > 0);
+            mouseClick(picker);
+            tryVerify(() => picker.popup.visible);
+            keyClick(Qt.Key_Down);
+            keyClick(Qt.Key_Return);
+            tryCompare(session, "chatModel", "Local AI");
+            compare(picker.displayText, "Local AI");
         }
 
         function test_articleAndSelection() {

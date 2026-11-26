@@ -70,6 +70,7 @@ Item {
     }
 
     WebSiteMenu {
+        accent: page.accent
         id: siteMenu
         objectName: "webSiteMenu"
         onSiteActionRequested: (site, action) => page.siteActionRequested(site, action)

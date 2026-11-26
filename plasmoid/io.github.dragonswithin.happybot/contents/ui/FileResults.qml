@@ -74,6 +74,7 @@ Item {
     }
 
     WebSiteMenu {
+        accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
         id: webMenu
         objectName: "webResultMenu"
         property var hit: null
@@ -253,7 +254,8 @@ Item {
                                     onTapped: point => row.openMenu(point.position.x, point.position.y)
                                 }
 
-                                QQC2.Menu {
+                                AssistantMenu {
+                                    accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
                                     id: appMenu
 
                                     property var info: null  // from session.appInfo; null until it answers
@@ -296,7 +298,8 @@ Item {
                                     }
                                 }
 
-                                QQC2.Menu {
+                                AssistantMenu {
+                                    accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
                                     id: fileMenu
 
                                     QQC2.MenuItem {

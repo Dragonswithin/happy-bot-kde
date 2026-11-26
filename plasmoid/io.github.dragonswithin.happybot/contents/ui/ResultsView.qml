@@ -510,6 +510,7 @@ Rectangle {
 
             // Which AI this chat uses; only when more than one is set up.
             ModelPicker {
+                accent: view.accent
                 Layout.row: 0
                 Layout.column: 2
                 session: view.session
