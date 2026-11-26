@@ -204,6 +204,7 @@ ColumnLayout {
         property string detail: ""
         property var graph: null
         property real graphMaximum: 100
+        property Component detailContent
         property real uptimeFraction: -1
         property real bar: -1  // 0..1 to draw a bar
         Layout.fillWidth: true
@@ -307,6 +308,12 @@ ColumnLayout {
                 values: card.graph || []
                 maximum: card.graphMaximum
             }
+            Loader {
+                Layout.fillWidth: true
+                active: card.expanded && card.detailContent !== null
+                visible: active
+                sourceComponent: card.detailContent
+            }
             ColumnLayout {
                 visible: card.uptimeFraction >= 0
                 Layout.fillWidth: true
@@ -405,10 +412,26 @@ ColumnLayout {
         Card {
             section: "network"
             title: view.info && view.info.network.interface ? i18n("Network (%1)", view.info.network.interface) : i18n("Network")
-            value: view.info ? "↓ " + view.rate(view.info.network.receive_bps) : ""
-            detail: view.info ? "↑ " + view.rate(view.info.network.send_bps) : ""
+            value: view.info ? (expanded
+                ? i18n("Download: %1", view.rate(view.info.network.receive_bps))
+                : "↓ " + view.rate(view.info.network.receive_bps)) : ""
             graph: view.info ? view.info.history.receive : null
             graphMaximum: 0
+            detailContent: ColumnLayout {
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Upload: %1", view.rate(view.info?.network?.send_bps))
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.3
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.Wrap
+                }
+
+                Sparkline {
+                    objectName: "systemGraph-network-upload"
+                    values: view.info?.history?.send ?? []
+                    maximum: 0
+                }
+            }
         }
 
         Card {
@@ -492,8 +515,19 @@ ColumnLayout {
             title: i18n("Uptime")
             uptimeFraction: view.info?.uptime_seconds ? Math.min(1, view.info.uptime_seconds / 86400) : -1
             value: view.info ? view.uptime(view.info.uptime_seconds) : ""
-            detail: view.info?.uptime_seconds
-                ? i18n("Started %1", new Date(Date.now() - view.info.uptime_seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)) : ""
+            detail: {
+                if (!view.info?.uptime_seconds)
+                    return "";
+                const started = new Date(Date.now() - view.info.uptime_seconds * 1000);
+                const reasons = {
+                    reboot: i18n("Orderly reboot"),
+                    poweroff: i18n("Powered on after an orderly shutdown"),
+                    kernel_panic: i18n("Kernel panic recorded before this boot")
+                };
+                const reason = reasons[view.info.last_restart] ?? i18n("Unknown from the available system journal");
+                return i18n("Started %1", started.toLocaleString(Qt.locale(), Locale.ShortFormat))
+                    + "\n" + i18n("Last restart: %1", reason);
+            }
         }
     }
 

@@ -35,6 +35,7 @@ import signal
 import subprocess
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -280,6 +281,35 @@ def _operating_system() -> dict[str, str]:
     }
 
 
+@lru_cache(maxsize=1)
+def _last_restart() -> str:
+    """Describe the previous boot's ending only when trusted journal entries identify it."""
+    try:
+        journal = subprocess.run(
+            ["journalctl", "--boot=-1", "--lines=160", "--output=cat", "--no-pager", "--quiet",
+             "_PID=1", "+", "_SYSTEMD_UNIT=systemd-logind.service", "+", "_TRANSPORT=kernel"],
+            capture_output=True, text=True, errors="replace", timeout=1, check=True,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+    for message in reversed(journal.stdout.casefold().splitlines()):
+        if "kernel panic - not syncing:" in message:
+            return "kernel_panic"
+        if message.startswith(("reboot: restarting system", "reboot: system restart", "restarting system.")) or message in {
+            "reached target reboot.", "reached target system reboot.", "the system will reboot now!",
+            "the system is rebooting.", "rebooting.",
+        }:
+            return "reboot"
+        if message.startswith(("reboot: power down", "powering off.")) or message in {
+            "reached target power-off.", "reached target system power off.", "the system will power off now!",
+            "the system is powering down.",
+        }:
+            return "poweroff"
+    return "unknown"
+
+
 def overview(history: History) -> dict[str, Any]:
     """Everything the System info view shows at the top (see the module docstring)."""
     samples = history.samples()
@@ -304,6 +334,7 @@ def overview(history: History) -> dict[str, Any]:
                     "send_bps": latest.get("send_bytes_per_second")},
         "battery": next((battery for battery in batteries() if battery["percent"] is not None), None),
         "uptime_seconds": float(uptime[0]) if uptime else None,
+        "last_restart": _last_restart(),
         "history": {
             **hardware,
             "cpu": [sample["cpu_percent"] for sample in samples],

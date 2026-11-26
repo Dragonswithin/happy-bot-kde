@@ -81,6 +81,23 @@ class ProgramTests(unittest.TestCase):
 
 
 class OverviewTests(unittest.TestCase):
+    def test_last_restart_uses_previous_system_boot_evidence(self) -> None:
+        self.addCleanup(system_monitor._last_restart.cache_clear)
+        for message, expected in (
+            ("Reached target System Reboot.", "reboot"),
+            ("Reached target System Power Off.", "poweroff"),
+            ("Kernel panic - not syncing: fatal exception", "kernel_panic"),
+            ("Reached target Exit the Session.", "unknown"),
+            ("", "unknown"),
+        ):
+            with self.subTest(message=message), mock.patch.object(system_monitor.subprocess, "run") as run:
+                system_monitor._last_restart.cache_clear()
+                run.return_value.stdout = message
+                self.assertEqual(system_monitor._last_restart(), expected)
+                self.assertEqual(system_monitor._last_restart(), expected)
+                run.assert_called_once()
+                self.assertIn("--boot=-1", run.call_args.args[0])
+
     def test_hardware_inventory_lists_unmounted_drives_and_skips_virtual_devices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -112,7 +129,7 @@ class OverviewTests(unittest.TestCase):
             history.add({"cpu_percent": load, "available_memory_percent": 75, "receive_bytes_per_second": 5})
         self.assertEqual([sample["cpu_percent"] for sample in history.samples()], [20, 30, 40])
         overview = system_monitor.overview(history)
-        self.assertEqual(set(overview), {"cpu", "memory", "os", "hardware", "gpus", "disks", "network", "battery", "uptime_seconds", "history"})
+        self.assertEqual(set(overview), {"cpu", "memory", "os", "hardware", "gpus", "disks", "network", "battery", "uptime_seconds", "last_restart", "history"})
         self.assertEqual((overview["cpu"]["percent"], overview["history"]["memory"]), (40, [25, 25, 25]))
         history.clear()
         self.assertEqual(history.samples(), [])

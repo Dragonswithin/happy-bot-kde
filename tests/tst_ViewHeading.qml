@@ -21,11 +21,11 @@ Item {
             function request(method, path, body, success, failure) {
                 if (path === "/system/overview") {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
-                        memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
+                        memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], send: [20, 40], gpu: {test: [3, 7]}, disk: [42, 61]},
                         gpus: [{id: "test", name: "Test GPU", busy_percent: 7, memory_used: 25, memory_total: 50, shared_used: 0, shared_total: 75}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
                         hardware: {model: "Test workstation", board: "Test board", drives: [{device: "/dev/sda", model: "Test drive", total: 200, rotational: 0}]},
                         os: {name: "Test Linux", logo: "test-linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
-                        uptime_seconds: 4500});
+                        uptime_seconds: 4500, last_restart: "reboot"});
                 } else if (path.startsWith("/system/programs?")) {
                     programRequests++;
                     lastProgramPath = path;
@@ -192,6 +192,21 @@ Item {
             verify(findChild(view, "systemCard-storage") === null);
             compare(processor.visible, false);
             compare(session.programRequests, 0);
+            mouseClick(button(view, "Back"));
+            tryCompare(processor, "visible", true);
+            const network = findChild(view, "systemCard-network");
+            network.forceActiveFocus(Qt.TabFocusReason);
+            keyClick(Qt.Key_Return);
+            tryCompare(network, "expanded", true);
+            compare(findChild(view, "systemGraph-network").values[1], 80);
+            compare(findChild(view, "systemGraph-network-upload").values[1], 40);
+            mouseClick(button(view, "Back"));
+            tryCompare(processor, "visible", true);
+            const uptime = findChild(view, "systemCard-uptime");
+            uptime.forceActiveFocus(Qt.TabFocusReason);
+            keyClick(Qt.Key_Return);
+            tryCompare(uptime, "expanded", true);
+            verify(uptime.detail.includes("Orderly reboot"));
             mouseClick(button(view, "Back"));
             tryCompare(processor, "visible", true);
             const os = findChild(view, "systemCard-os");
