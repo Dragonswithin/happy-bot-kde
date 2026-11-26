@@ -63,7 +63,7 @@ ColumnLayout {
 
         readonly property real artworkWidth: Math.min(width * 0.32, Kirigami.Units.gridUnit * 8)
         Layout.fillWidth: true
-        implicitHeight: Math.max(Kirigami.Units.gridUnit * 5.5, intro.implicitHeight)
+        implicitHeight: Math.max(Kirigami.Units.gridUnit * 4.75, intro.implicitHeight)
 
         ColumnLayout {
             id: intro

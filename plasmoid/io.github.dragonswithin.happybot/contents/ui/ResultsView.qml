@@ -75,11 +75,8 @@ Rectangle {
 
     radius: Kirigami.Units.cornerRadius * 3
     color: Kirigami.Theme.backgroundColor
-    border.color: welcomeVisible ? Qt.alpha(accent, 0.23) : Qt.alpha(Kirigami.Theme.textColor, 0.2)
-    gradient: welcomeVisible ? welcomeGradient : null
-
-    Gradient {
-        id: welcomeGradient
+    border.color: Qt.alpha(accent, 0.23)
+    gradient: Gradient {
         orientation: Gradient.Horizontal
         GradientStop { position: 0; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.06)) }
         GradientStop { position: 1; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.18)) }
@@ -264,13 +261,14 @@ Rectangle {
         anchors.top: parent.top
         height: implicitHeight
 
-        implicitHeight: titleActions.implicitHeight + Kirigami.Units.smallSpacing
+        implicitHeight: titleActions.implicitHeight + Math.ceil(Kirigami.Units.smallSpacing / 2)
 
         RowLayout {
             id: titleActions
             anchors.fill: parent
             anchors.leftMargin: view.inset
-            anchors.rightMargin: view.welcomeVisible ? view.inset : Kirigami.Units.smallSpacing
+            anchors.rightMargin: view.inset
+            anchors.topMargin: Math.ceil(Kirigami.Units.smallSpacing / 2)
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
@@ -391,19 +389,12 @@ Rectangle {
         height: implicitHeight
         implicitHeight: composer.implicitHeight + composer.anchors.topMargin + composer.anchors.bottomMargin
 
-        Rectangle {
-            visible: !view.welcomeVisible
-            y: view.fieldAtBottom ? 0 : parent.height - height
-            width: parent.width
-            height: 1
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
-        }
         GridLayout {
             id: composer
             rows: 1
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
-            anchors.leftMargin: view.welcomeVisible ? view.inset : anchors.margins
+            anchors.leftMargin: view.inset
             anchors.rightMargin: anchors.leftMargin
             columnSpacing: Kirigami.Units.largeSpacing
 
@@ -975,14 +966,14 @@ Rectangle {
                     acceptedButtons: Qt.NoButton
                     id: welcomeArea
                     contentWidth: width
-                    contentHeight: welcome.implicitHeight + view.inset * 2
+                    contentHeight: welcome.implicitHeight + Kirigami.Units.smallSpacing + view.inset
                     clip: true
 
                     AssistantWelcome {
                         id: welcome
                         locatingApplication: view.session.locatingApplication
                         x: view.inset
-                        y: Math.max(view.inset, (welcomeArea.height - height) / 2)
+                        y: Kirigami.Units.smallSpacing
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
                         assistantIcon: view.assistantIcon
                         robotStyle: view.robotStyle

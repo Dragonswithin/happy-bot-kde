@@ -66,12 +66,13 @@ Item {
             session.history = data.saved ? [{ id: "a", title: "Saved chat", updated: 0 }] : [];
             const width = view.width;
             compare(heading.text, "Start screen");
-            verify(view.gradient !== null);
+            const surface = view.gradient;
+            verify(surface !== null);
             tryVerify(() => !!button(view, data.text));
             waitForRendering(view);
             mouseClick(button(view, data.text));
             tryCompare(heading, "text", data.text);
-            compare(view.gradient, null);
+            compare(view.gradient, surface);
             compare(view.width, width);
             compare(view.height, view.heightInGridUnits * Kirigami.Units.gridUnit);
             waitForRendering(view);
