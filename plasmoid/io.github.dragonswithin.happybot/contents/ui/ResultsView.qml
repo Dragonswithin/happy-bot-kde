@@ -70,18 +70,8 @@ import org.kde.plasma.extras as PlasmaExtras
  * The view sets its own width and height: Plasma's popup window follows its
  * content's actual size, not its implicit size.
  */
-Rectangle {
+AssistantSurface {
     id: view
-
-    radius: Kirigami.Units.cornerRadius * 3
-    color: Kirigami.Theme.backgroundColor
-    border.color: Qt.alpha(accent, 0.23)
-    gradient: Gradient {
-        orientation: Gradient.Horizontal
-        GradientStop { position: 0; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.06)) }
-        GradientStop { position: 1; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.18)) }
-    }
-    clip: true
 
     required property var session
     // A full desktop capture includes overlays. Let the desktop draw through the
@@ -89,8 +79,7 @@ Rectangle {
     opacity: (session.capturing && !session.helpWindow) || movePreview.item?.visible ? 0 : 1
     property bool useRobotMascot: false
     readonly property string robotStyle: session.ui?.robot_style ?? "pip"
-    readonly property color accent: useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
-    readonly property int inset: Kirigami.Units.largeSpacing * 1.5
+    accent: Look.assistantAccent(useRobotMascot, robotStyle, Kirigami.Theme.highlightColor)
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot, robotStyle)
     property bool fieldAtBottom: false
     property bool backAtTop: false
@@ -428,7 +417,7 @@ Rectangle {
                     })
                     color: Kirigami.Theme.backgroundColor
                     radius: Kirigami.Units.cornerRadius * 2
-                    border.color: field.activeFocus ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.25)
+                    border.color: field.activeFocus ? view.accent : Qt.alpha(Kirigami.Theme.textColor, 0.25)
                 }
                 rightActions: []
                 // Draw the microphone as full-colour artwork in the field. Plasma's

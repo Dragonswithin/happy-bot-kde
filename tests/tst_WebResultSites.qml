@@ -35,6 +35,8 @@ Item {
                 {kind: "article", source: "wikipedia", title: "Plasma", location: "Plasma", snippet: "An article in Wikipedia."}
             ]
             property var lastChange: null
+            property var removed: null
+            function removeRecent(hit) { removed = hit; }
             function changeWebSite(url, action) { lastChange = {url, action}; }
         }
     }
@@ -57,10 +59,40 @@ Item {
         function init() {
             view.session.finder = "web";
             view.session.lastChange = null;
+            view.session.removed = null;
             view.selectedIndex = -1;
             links.clear();
             opens.clear();
             waitForRendering(view);
+        }
+
+        function test_removeRecentFileChip() {
+            const hits = view.session.hits;
+            const file = {kind: "file", title: "Report", location: "/home/user/Report.txt"};
+            view.session.hits = [file, hits[1]];
+            view.session.showingRecent = true;
+            const chip = findChild(view, "recentChip-0");
+            tryVerify(() => chip && chip.width > 0);
+            mouseClick(chip, 12, 12, Qt.RightButton);
+            const recentMenu = findChild(view, "recentEntryMenu");
+            tryCompare(recentMenu, "opened", true);
+            mouseClick(recentMenu.itemAt(0));
+            compare(view.session.removed, file);
+            compare(opens.count, 0);
+            view.session.showingRecent = false;
+            view.session.hits = hits;
+        }
+
+        function test_removeVisitedWebsite() {
+            mouseClick(row(1), 14, 14, Qt.RightButton);
+            tryCompare(menu(), "opened", true);
+            const remove = childWithText(menu().contentItem, "Remove from recent");
+            verify(!!remove);
+            waitForRendering(view);
+            mouseClick(remove);
+            tryVerify(() => view.session.removed !== null);
+            compare(view.session.removed.action.target, view.session.hits[1].action.target);
+            compare(opens.count, 0);
         }
 
         function test_rightClickBookmarkPin() {

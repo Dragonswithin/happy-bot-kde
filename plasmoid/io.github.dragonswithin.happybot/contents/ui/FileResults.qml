@@ -50,6 +50,7 @@ import org.kde.plasma.components as PlasmaComponents3
 Item {
     id: results
     property var popup: null
+    property color accent: popup?.accent ?? Kirigami.Theme.highlightColor
 
     required property var session
     property string query: ""
@@ -74,7 +75,7 @@ Item {
     }
 
     WebSiteMenu {
-        accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
+        accent: results.accent
         id: webMenu
         objectName: "webResultMenu"
         property var hit: null
@@ -84,6 +85,13 @@ Item {
             item => item.pinned && item.host === hit.site_host) } : null
         onSiteActionRequested: (site, action) => results.session.changeWebSite(site.location, action)
 
+        QQC2.MenuItem {
+            text: i18n("Remove from recent")
+            icon.name: "edit-clear-history"
+            visible: webMenu.hit?.action?.type === "visited"
+            height: visible ? implicitHeight : 0
+            onTriggered: results.session.removeRecent(webMenu.hit)
+        }
         QQC2.MenuSeparator {}
         QQC2.MenuItem {
             text: i18n("Open")
@@ -161,7 +169,9 @@ Item {
                     visible: results.chips
                     hits: results.chips ? results.session.hits : []
                     selectedIndex: results.selectedIndex
+                    accent: results.accent
                     onActivated: hit => results.resultActivated(hit)
+                    onRemoveRequested: hit => results.session.removeRecent(hit)
                 }
 
                 Repeater {
@@ -255,7 +265,7 @@ Item {
                                 }
 
                                 AssistantMenu {
-                                    accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
+                                    accent: results.accent
                                     id: appMenu
 
                                     property var info: null  // from session.appInfo; null until it answers
@@ -299,7 +309,7 @@ Item {
                                 }
 
                                 AssistantMenu {
-                                    accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
+                                    accent: results.accent
                                     id: fileMenu
 
                                     QQC2.MenuItem {
@@ -425,7 +435,7 @@ Item {
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
                             AssistantToolTip {
-                                accent: results.popup?.accent ?? Kirigami.Theme.highlightColor
+                                accent: results.accent
                                 text: results.session.searchError
                                 visible: errorHover.hovered && results.session.searchErrorCode !== "not_configured"
                             }

@@ -254,6 +254,24 @@ class RecentTests(unittest.TestCase):
         self.assertEqual([item["title"] for item in cleared], ["note.txt", self.folder.name, "Later"])
         self.assertEqual(self.database.read_bytes(), original_database)
 
+    def test_remove_only_selected_recent_entries_and_allow_new_visits(self) -> None:
+        note = self.folder / "note.txt"
+        note.write_text("keep me")
+        site = "https://kde.org/one"
+        other = "https://kde.org/two"
+        _activity_database(self.database, [(str(note), 70), (site, 65), (other, 60)], {})
+        history = quick_results.SearchHistory(self.folder / "cutoff", self.folder / "queries")
+        history.remove_recent("file", str(note))
+        history.remove_recent("website", site)
+        reloaded = quick_results.SearchHistory(history.marker, history.query_file)
+        remaining = quick_results.recent([], True, self.database, removed=reloaded.removed_recent())
+        self.assertEqual([item["action"]["target"] for item in remaining], [other])
+        self.assertEqual(note.read_text(), "keep me")
+        self.database.unlink()
+        _activity_database(self.database, [(site, int(reloaded.removed_recent()[site]) + 2), (other, 60)], {})
+        recent = quick_results.recent([], True, self.database, removed=reloaded.removed_recent())
+        self.assertEqual([item["action"]["target"] for item in recent], [site, other])
+
 
 class AppActionTests(unittest.TestCase):
     def setUp(self) -> None:

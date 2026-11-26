@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
@@ -29,8 +30,22 @@ ColumnLayout {
 
     property var hits: []
     property int selectedIndex: -1
+    property color accent: Kirigami.Theme.highlightColor
 
     signal activated(var hit)
+    signal removeRequested(var hit)
+
+    AssistantMenu {
+        id: recentMenu
+        objectName: "recentEntryMenu"
+        accent: chips.accent
+        property var hit: null
+        QQC2.MenuItem {
+            text: i18n("Remove from recent")
+            icon.name: "edit-clear-history"
+            onTriggered: chips.removeRequested(recentMenu.hit)
+        }
+    }
 
     /** `hits` split into runs of one kind: `[{group, first, items}]`, `first` being the run's index in `hits`. */
     readonly property var groups: {
@@ -85,6 +100,14 @@ ColumnLayout {
 
                         required property var modelData
                         required property int index
+                        readonly property bool removable: modelData.kind === "file" || modelData.kind === "folder"
+                            || modelData.action?.type === "visited"
+                        function openMenu(x, y) {
+                            if (removable) {
+                                recentMenu.hit = modelData;
+                                recentMenu.popup(button, x, y);
+                            }
+                        }
                         readonly property int position: run.modelData.first + index
 
                         implicitWidth: button.implicitWidth
@@ -100,6 +123,7 @@ ColumnLayout {
 
                         PlasmaComponents3.ItemDelegate {
                             id: button
+                            objectName: "recentChip-" + chip.position
 
                             anchors.fill: parent
                             highlighted: chip.position === chips.selectedIndex
@@ -110,6 +134,18 @@ ColumnLayout {
                                 visible: parent.hovered && chip.modelData.kind !== "quick"
                             }
                             onClicked: chips.activated(chip.modelData)
+                            TapHandler {
+                                enabled: chip.removable
+                                acceptedButtons: Qt.RightButton
+                                onTapped: point => chip.openMenu(point.position.x, point.position.y)
+                            }
+                            Keys.onMenuPressed: chip.openMenu(0, height)
+                            Keys.onPressed: event => {
+                                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier) && chip.removable) {
+                                    chip.openMenu(0, height);
+                                    event.accepted = true;
+                                }
+                            }
 
                             contentItem: RowLayout {
                                 spacing: Kirigami.Units.smallSpacing

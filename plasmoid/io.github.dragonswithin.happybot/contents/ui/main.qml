@@ -437,6 +437,8 @@ PlasmoidItem {
         visible: root.barMode && root.barFocused && !popup.visible
             && (root.barText.length > 0 ? session.searching || session.searchedText.length > 0
                                         : session.showingRecent && session.hits.length > 0)
+        minimumWidthInGridUnits: session.ui.popup_width
+        maximumHeightInGridUnits: session.ui.popup_height
         query: root.barText
         selectedIndex: root.barSelectedIndex
         assistantIcon: Look.assistantIcon(session.ui.robot_mascot, root.robotStyle)

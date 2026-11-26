@@ -818,13 +818,24 @@ def quick(server: "AssistantServer", query: dict[str, list[str]], body: dict[str
     ui = server.settings.get("ui") or {}
     return 200, {"ok": True, "query": text, "results": quick_results.gather(
         text, server.conversations.list(), ui.get("search_bookmarks") is True, ui.get("search_history") is True,
-        server.search_history.index)}
+        server.search_history.index, removed=server.search_history.removed_recent())}
 
 
 def quick_recent(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     ui = server.settings.get("ui") or {}
     return 200, {"ok": True, "results": quick_results.recent(
-        server.conversations.list(), ui.get("search_history") is True, since=server.search_history.index.history_since)}
+        server.conversations.list(), ui.get("search_history") is True, since=server.search_history.index.history_since,
+        removed=server.search_history.removed_recent())}
+
+
+def quick_remove_recent(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    try:
+        server.search_history.remove_recent(body.get("kind"), body.get("target"))
+    except ValueError as exc:
+        return _error(400, str(exc), "invalid")
+    except OSError:
+        return _error(500, "Could not remove the recent entry.", "save_failed")
+    return 200, {"ok": True}
 
 
 def quick_activate(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -956,6 +967,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/import"): import_,
     ("GET", "/quick"): quick,
     ("GET", "/quick/recent"): quick_recent,
+    ("POST", "/quick/recent/remove"): quick_remove_recent,
     ("POST", "/quick/activate"): quick_activate,
     ("GET", "/quick/app"): quick_app,
     ("POST", "/quick/app"): quick_app_action,

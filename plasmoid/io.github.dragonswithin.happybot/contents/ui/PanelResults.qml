@@ -5,9 +5,11 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.components as PlasmaComponents3
 
 /**
  * The panel search bar's results, shown right above the bar (beside it on
@@ -48,18 +50,55 @@ PlasmaCore.Dialog {
     flags: Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     hideOnWindowDeactivate: false
 
-    mainItem: FileResults {
-        session: dialog.session
-        query: dialog.query
-        selectedIndex: dialog.selectedIndex
-        assistantIcon: dialog.assistantIcon
-        useRobotMascot: dialog.useRobotMascot
+    backgroundHints: PlasmaCore.Dialog.NoBackground
+
+    mainItem: AssistantSurface {
+        id: surface
+        accent: Look.assistantAccent(dialog.useRobotMascot, dialog.session.ui.robot_style ?? "pip",
+                                     Kirigami.Theme.highlightColor)
         width: Math.max(dialog.visualParent ? dialog.visualParent.width : 0,
                         Kirigami.Units.gridUnit * dialog.minimumWidthInGridUnits)
-        height: Math.round(Math.min(naturalHeight, Kirigami.Units.gridUnit * dialog.maximumHeightInGridUnits))
+        height: Math.round(Math.min(heading.height + results.naturalHeight + Kirigami.Units.smallSpacing,
+                                   Kirigami.Units.gridUnit * dialog.maximumHeightInGridUnits))
 
-        onResultActivated: hit => dialog.resultActivated(hit)
-        onFileActionRequested: (hit, action) => dialog.fileActionRequested(hit, action)
-        onAskRequested: text => dialog.askRequested(text)
+        RowLayout {
+            id: heading
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: surface.inset
+            anchors.rightMargin: surface.inset
+            height: Kirigami.Units.gridUnit * 1.5 + Math.ceil(Kirigami.Units.smallSpacing / 2)
+            Kirigami.Icon {
+                source: "folder-open-symbolic"
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                text: i18n("Find a file")
+                font.weight: Font.DemiBold
+                Accessible.role: Accessible.Heading
+            }
+        }
+
+        FileResults {
+            id: results
+            anchors.top: heading.bottom
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottomMargin: Kirigami.Units.smallSpacing
+
+            session: dialog.session
+            query: dialog.query
+            selectedIndex: dialog.selectedIndex
+            assistantIcon: dialog.assistantIcon
+            useRobotMascot: dialog.useRobotMascot
+            accent: surface.accent
+
+            onResultActivated: hit => dialog.resultActivated(hit)
+            onFileActionRequested: (hit, action) => dialog.fileActionRequested(hit, action)
+            onAskRequested: text => dialog.askRequested(text)
+        }
     }
 }

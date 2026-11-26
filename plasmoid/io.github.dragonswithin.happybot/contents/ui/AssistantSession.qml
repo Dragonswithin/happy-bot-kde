@@ -410,6 +410,22 @@ Item {
         }, function(data) {});
     }
 
+    function removeRecent(hit) {
+        const website = hit.action?.type === "visited";
+        const target = website ? hit.action.target : hit.location;
+        request("POST", "/quick/recent/remove", { kind: website ? "website" : "file", target }, () => {
+            session.recentHits = session.recentHits.filter(item => website
+                ? item.action?.type !== "visited" || item.action.target !== target : item.location !== target);
+            session.quickHits = session.quickHits.filter(item => item.action?.type !== "visited" || item.action.target !== target);
+            if (session.showingRecent)
+                session.showRecent();
+            else if (session.searchedText)
+                session.search(session.searchedText);
+        }, data => {
+            session.searchError = data.error || i18n("Could not remove the recent entry.");
+        });
+    }
+
     function loadWebStart() {
         const sequence = ++session.webStartSequence;
         session.webStartLoading = true;

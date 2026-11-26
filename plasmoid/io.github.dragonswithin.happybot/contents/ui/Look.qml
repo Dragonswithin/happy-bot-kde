@@ -21,26 +21,30 @@ QtObject {
     readonly property string homePath: String(QtCore.StandardPaths.writableLocation(
         QtCore.StandardPaths.HomeLocation)).replace(/^file:\/\//, "")
 
-    readonly property color mascotAccent: "#72c8bf"
+    readonly property color mascotAccent: robotStyles[0].accent
 
     readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
     // Each pivot is in the same 48-unit drawing as its SVG beacon. Motion
     // values describe one short gesture before the robot settles and blinks.
     readonly property var robotStyles: [
-        { id: "pip", name: "Pip", pivot: Qt.point(25, 15), turn: 16, ms: 450 },
-        { id: "rivet", name: "Rivet", pivot: Qt.point(36, 13), turn: 48, ms: 570 },
-        { id: "orbit", name: "Orbit", pivot: Qt.point(24, 10), turn: 24, rise: 1.3, ms: 670 },
-        { id: "watt", name: "Watt", pivot: Qt.point(24, 9), zoom: 0.20, rise: -1.2, ms: 320 },
-        { id: "pixel", name: "Pixel", pivot: Qt.point(24, 8), rise: 1.5, slide: 2, ms: 360 },
-        { id: "sprig", name: "Sprig", pivot: Qt.point(24, 15), turn: 16, ms: 640 },
-        { id: "nixie", name: "Nixie", pivot: Qt.point(24, 8), dim: 0.72, ms: 330 },
-        { id: "sprocket", name: "Sprocket", pivot: Qt.point(37, 12), turn: 90, ms: 720 },
-        { id: "sonar", name: "Sonar", pivot: Qt.point(24, 12), turn: -84, ms: 740 },
-        { id: "dotty", name: "Dotty", pivot: Qt.point(24, 9), turn: 110, ms: 580 }
+        { id: "pip", name: "Pip", accent: "#72c8bf", pivot: Qt.point(25, 15), turn: 16, ms: 450 },
+        { id: "rivet", name: "Rivet", accent: "#df926e", pivot: Qt.point(36, 13), turn: 48, ms: 570 },
+        { id: "orbit", name: "Orbit", accent: "#829de7", pivot: Qt.point(24, 10), turn: 24, rise: 1.3, ms: 670 },
+        { id: "watt", name: "Watt", accent: "#efbc51", pivot: Qt.point(24, 9), zoom: 0.20, rise: -1.2, ms: 320 },
+        { id: "pixel", name: "Pixel", accent: "#b19ae8", pivot: Qt.point(24, 8), rise: 1.5, slide: 2, ms: 360 },
+        { id: "sprig", name: "Sprig", accent: "#86bf77", pivot: Qt.point(24, 15), turn: 16, ms: 640 },
+        { id: "nixie", name: "Nixie", accent: "#ec8b9a", pivot: Qt.point(24, 8), dim: 0.72, ms: 330 },
+        { id: "sprocket", name: "Sprocket", accent: "#9aafc4", pivot: Qt.point(37, 12), turn: 90, ms: 720 },
+        { id: "sonar", name: "Sonar", accent: "#64bacc", pivot: Qt.point(24, 12), turn: -84, ms: 740 },
+        { id: "dotty", name: "Dotty", accent: "#ca8cc0", pivot: Qt.point(24, 9), turn: 110, ms: 580 }
     ]
 
     function robotDesign(style: string): var {
         return robotStyles.find(design => design.id === style) || robotStyles[0];
+    }
+
+    function assistantAccent(useRobotMascot: bool, style: string, desktopAccent: color): color {
+        return useRobotMascot ? robotDesign(style).accent : desktopAccent;
     }
 
     function robotImage(style: string): url {

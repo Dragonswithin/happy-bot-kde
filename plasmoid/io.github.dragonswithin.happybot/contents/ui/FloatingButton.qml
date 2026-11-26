@@ -326,7 +326,7 @@ PositionedWindow {
             opacity: (1 - floating.dockSlide) * (mouse.containsMouse || floating.activity.recording ? 1 : floating.idleOpacity)
             // Carry the note and recording light colours over from the mascot artwork.
             color: floating.activity.recording ? "#ff696b" : floating.activity.expression === "nudge" ? "#ffc463"
-                : floating.useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
+                : Look.assistantAccent(floating.useRobotMascot, floating.session.ui.robot_style ?? "pip", Kirigami.Theme.highlightColor)
             border.width: 1
             border.color: Kirigami.Theme.textColor
         }

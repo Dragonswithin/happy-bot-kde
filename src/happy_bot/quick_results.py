@@ -105,6 +105,30 @@ class SearchHistory:
         except (OSError, ValueError):
             pass
 
+        self.removed_file = marker.with_name("recent-dismissed.json")
+        self._removed: dict[str, float] = {}
+        try:
+            removed = json.loads(self.removed_file.read_text(encoding="utf-8"))
+            if isinstance(removed, dict):
+                self._removed = {key: value for key, value in removed.items()
+                                 if type(value) in (int, float) and math.isfinite(value)}
+        except (OSError, ValueError):
+            pass
+
+    def removed_recent(self) -> dict[str, float]:
+        with self._lock:
+            return self._removed.copy()
+
+    def remove_recent(self, kind: Any, target: Any) -> None:
+        if (not isinstance(target, str) or len(target) > 8192 or "\0" in target or
+                not ((kind == "file" and target.startswith("/")) or
+                     (kind == "website" and site_field(target)))):
+            raise ValueError("Choose a recent file or website.")
+        with self._lock:
+            removed = {**self._removed, target: time.time()}
+            write_private_file(self.removed_file, json.dumps(removed))
+            self._removed = removed
+
     def web_queries(self) -> list[str]:
         with self._lock:
             return list(self._queries)
@@ -134,6 +158,8 @@ class SearchHistory:
             self.index = browsers.BrowserIndex(history_since=since)
             self._queries.clear()
             self.query_file.unlink(missing_ok=True)
+            self.removed_file.unlink(missing_ok=True)
+            self._removed.clear()
         with _cache_lock:
             _cache = {}
 
@@ -200,11 +226,11 @@ def _conversations(text: str, conversations: list[dict[str, Any]]) -> list[dict[
             for item in conversations if _words_match(text, item.get("title", ""))]
 
 
-def _pages(text: str, bookmarks: bool, history: bool, index: browsers.BrowserIndex) -> list[dict[str, Any]]:
+def _pages(text: str, bookmarks: bool, history: bool, index: browsers.BrowserIndex, removed: dict[str, float] | None) -> list[dict[str, Any]]:
     if not (bookmarks or history):
         return []
     index.refresh_in_background(history)
-    marked, visited = index.search(text, bookmarks, history)
+    marked, visited = index.search(text, bookmarks, history, removed=removed)
     return [{"kind": "quick", "title": page.title or browsers.host(page.url),
              "subtitle": f"{'Bookmark' if page.bookmark else 'Visited'} · {browsers.host(page.url)} · {page.browser}",
              "icon": page.icon, **site_field(page.url), "action": {"type": "bookmark" if page.bookmark else "visited", "target": page.url}}
@@ -212,7 +238,8 @@ def _pages(text: str, bookmarks: bool, history: bool, index: browsers.BrowserInd
 
 
 def gather(text: str, conversations: list[dict[str, Any]] | None = None,
-           bookmarks: bool = False, history: bool = False, index: browsers.BrowserIndex | None = None) -> list[dict[str, Any]]:
+           bookmarks: bool = False, history: bool = False, index: browsers.BrowserIndex | None = None, *,
+           removed: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """Quick results for the typed text, best first (see module docstring)."""
     text = text.strip()
     results: list[dict[str, Any]] = quick_commands.match(text) if text else []
@@ -232,7 +259,7 @@ def gather(text: str, conversations: list[dict[str, Any]] | None = None,
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
             continue
     try:
-        results.extend(_pages(text, bookmarks, history, index or _browsers))
+        results.extend(_pages(text, bookmarks, history, index or _browsers, removed))
     except Exception:  # noqa: BLE001 - a browser database that cannot be read must not hide the rest
         pass
     results.extend(_conversations(text, conversations or [])[:3])
@@ -244,7 +271,8 @@ RECENT_LIMITS = {"applications": 6, "files": 6, "settings": 3, "websites": 4, "c
 
 
 def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = False,
-           database: Path | None = None, *, since: float = 0) -> list[dict[str, Any]]:
+           database: Path | None = None, *, since: float = 0,
+           removed: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """What the empty bar suggests: recently used applications, files, settings, websites and chats."""
     found: dict[str, list[dict[str, Any]]] = {kind: [] for kind in RECENT_LIMITS}
     try:
@@ -259,6 +287,8 @@ def recent(conversations: list[dict[str, Any]] | None = None, websites: bool = F
         if since and item.last_used <= since:
             continue
         target = item.target
+        if removed and item.last_used <= removed.get(target.removeprefix("file://"), 0):
+            continue
         if target.startswith("applications:"):
             app = applications.get(target.removeprefix("applications:"))
             if app and app["id"] != DESKTOP_FILE:

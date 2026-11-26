@@ -20,6 +20,12 @@ Item {
         }
     }
 
+    HappyBot.PanelResults {
+        id: panelResults
+        session: view.session
+        useRobotMascot: view.useRobotMascot
+    }
+
     SignalSpy { id: moves; target: view; signalName: "windowMoved" }
     SignalSpy { id: closes; target: view; signalName: "closeRequested" }
 
@@ -100,6 +106,22 @@ Item {
             compare(moves.count, 0);
             mouseClick(button(view, "Close (Esc)"));
             compare(closes.count, 1);
+        }
+
+        function test_panelAndToolsShareEachMascotPalette() {
+            view.useRobotMascot = true;
+            const colors = new Set();
+            for (const design of HappyBot.Look.robotStyles) {
+                session.ui = Object.assign({}, session.ui, {robot_style: design.id});
+                compare(view.accent, Qt.color(design.accent));
+                compare(panelResults.mainItem.accent, view.accent);
+                compare(panelResults.mainItem.gradient.stops[1].color, view.gradient.stops[1].color);
+                colors.add(String(view.accent));
+            }
+            compare(colors.size, 10);
+            view.useRobotMascot = false;
+            compare(panelResults.mainItem.accent, view.accent);
+            session.ui = Object.assign({}, session.ui, {robot_style: "pip"});
         }
 
         function test_modelSelector() {

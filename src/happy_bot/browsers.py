@@ -396,7 +396,8 @@ class BrowserIndex:
                 break
         return icons
 
-    def search(self, text: str, bookmarks: bool, history: bool, most: int = 4) -> tuple[list[Page], list[Page]]:
+    def search(self, text: str, bookmarks: bool, history: bool, most: int = 4, *,
+               removed: dict[str, float] | None = None) -> tuple[list[Page], list[Page]]:
         """``(bookmarks, history)`` matching every word of ``text``, at most ``most`` of each."""
         words = text.lower().split()
         if not words or not (bookmarks or history):
@@ -412,7 +413,7 @@ class BrowserIndex:
                 marked.append(page)
         visited: list[Page] = []
         for page in sorted((page for page in matches if not page.bookmark), key=lambda p: (-p.visits, -p.visited)):
-            if _key(page.url) not in seen:
+            if _key(page.url) not in seen and (not removed or page.visited > removed.get(page.url, 0)):
                 seen.add(_key(page.url))
                 visited.append(page)
         return (marked[:most] if bookmarks else []), (visited[:most] if history else [])

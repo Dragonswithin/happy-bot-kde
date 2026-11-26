@@ -462,7 +462,10 @@ open at its configured dimensions.
 **Web finder.** Opening Search the web shows pinned and frequently visited
 sites and recent searches before typing. A site can be pinned or hidden
 from this page. The file finder, web finder, Help and System info use the
-same configured popup dimensions as their content changes.
+same configured popup dimensions as their content changes. The panel's instant
+search uses the same result list, surface and mascot palette as Find a file.
+Recent files and visited pages can be removed individually from search
+suggestions. A later open or visit can make the entry recent again.
 
 The next web finder work is a readable result preview that preserves the
 search position, questions answered from the selected page with links to
