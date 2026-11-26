@@ -43,7 +43,7 @@ import org.kde.layershell as LayerShell
  * unchanged, like ResultsPopup.qml's, so main.qml treats either the same;
  * `dismissed` is emitted whenever it closes.
  */
-Window {
+PositionedWindow {
     id: floating
 
     required property AssistantSession session
@@ -62,8 +62,6 @@ Window {
 
     readonly property real shortcutScale: (session.ui.floating_size ?? 100) / 100
     readonly property int size: Math.round((Kirigami.Units.iconSizes.large + Kirigami.Units.largeSpacing) * shortcutScale)
-    readonly property int screenWidth: screen ? screen.width : 1280
-    readonly property int screenHeight: screen ? screen.height : 720
     // -1 means "never placed": near the bottom right, clear of a bottom panel.
     readonly property int placedX: clampX(posX < 0 ? screenWidth - size - Kirigami.Units.gridUnit * 2 : posX)
     readonly property int placedY: clampY(posY < 0 ? screenHeight - size - Kirigami.Units.gridUnit * 5 : posY)
@@ -95,10 +93,6 @@ Window {
     readonly property int openWidth: Math.min(screenWidth, Math.max(1, view.width))
     readonly property int openHeight: Math.min(screenHeight, Math.max(1, view.height))
 
-    property point popupPosition: Qt.point(-1, -1)
-    property point draggedPopupPosition: popupPosition
-    signal popupMoved(int x, int y)
-
     signal clicked()
     signal menuRequested()
     signal moved(int x, int y)
@@ -124,23 +118,13 @@ Window {
         return Math.max(0, Math.min(screenHeight - size, value));
     }
 
-    /** Puts the window's top left at x, y (logical pixels, from the screen's top left) and redraws. */
-    function place(x, y) {
-        floating.LayerShell.Window.margins = ({
-            left: Math.max(0, Math.min(x, screenWidth - width)),
-            top: Math.max(0, Math.min(y, screenHeight - height)),
-            right: 0, bottom: 0
-        });
-        floating.requestUpdate();
-    }
-
     /** Where the window goes for its current size: the button's corner stays put. */
     function layout() {
         if (mouse.dragging) {
             return;
         }
-        if (expanded && draggedPopupPosition.x >= 0) {
-            place(draggedPopupPosition.x, draggedPopupPosition.y);
+        if (expanded && popupPosition.x >= 0) {
+            place(popupPosition.x, popupPosition.y);
             return;
         }
         const top = placedY + Math.round((size - closedHeight) / 2);
@@ -184,17 +168,11 @@ Window {
     width: Math.round(closedWidth + (openWidth - closedWidth) * reveal)
     height: Math.round(closedHeight + (openHeight - closedHeight) * reveal)
     visible: true
-    color: "transparent"
-    flags: Qt.FramelessWindowHint
     title: i18n("Happy Bot")
 
     LayerShell.Window.scope: "happy-bot-button"
-    LayerShell.Window.layer: LayerShell.Window.LayerTop
-    LayerShell.Window.anchors: LayerShell.Window.AnchorTop | LayerShell.Window.AnchorLeft
     LayerShell.Window.keyboardInteractivity: expanded ? LayerShell.Window.KeyboardInteractivityOnDemand
                                                       : LayerShell.Window.KeyboardInteractivityNone
-    // Not pushed aside by panels' reserved space: the position is from the screen's own corner.
-    LayerShell.Window.exclusionZone: -1
 
     Component.onCompleted: layout()
     onSizeChanged: layout()
@@ -237,14 +215,8 @@ Window {
             widthInGridUnits: floating.widthInGridUnits
             heightInGridUnits: floating.heightInGridUnits
 
-            windowPosition: () => Qt.point(floating.LayerShell.Window.margins.left,
-                                           floating.LayerShell.Window.margins.top)
-            onWindowMoved: (position, finished) => {
-                floating.place(position.x, position.y);
-                floating.draggedPopupPosition = windowPosition();
-                if (finished)
-                    floating.popupMoved(floating.draggedPopupPosition.x, floating.draggedPopupPosition.y);
-            }
+            windowPosition: () => floating.screenPosition
+            onWindowMoved: (position, finished) => floating.movePopup(position, finished)
 
             onQueryEdited: text => floating.queryEdited(text)
             onAccepted: text => floating.accepted(text)
@@ -372,8 +344,8 @@ Window {
             // to the event position so resizing a right-hand tab keeps the grab point.
             function screenPoint(event) {
                 const point = mapToItem(floating.contentItem, event.x, event.y);
-                const margins = floating.LayerShell.Window.margins;
-                return Qt.point(margins.left + point.x, margins.top + point.y);
+                const position = floating.screenPosition;
+                return Qt.point(position.x + point.x, position.y + point.y);
             }
 
             onPressed: event => {

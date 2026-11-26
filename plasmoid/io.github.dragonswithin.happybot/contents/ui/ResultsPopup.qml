@@ -23,7 +23,7 @@ import org.kde.layershell as LayerShell
  * that a click on the icon was the click that just closed it. The view's
  * signals are re-emitted unchanged; `dismissed` is emitted whenever it hides.
  */
-Window {
+PositionedWindow {
     id: popup
 
     required property AssistantSession session
@@ -35,25 +35,14 @@ Window {
     property real hiddenAt: 0
     property Item anchorItem
     property int location: PlasmaCore.Types.Floating
-    property point savedPosition: Qt.point(session.ui.panel_popup_x ?? -1, session.ui.panel_popup_y ?? -1)
-    property point currentPosition
-    property bool positionedByUser: savedPosition.x >= 0 && savedPosition.y >= 0
+    popupPosition: Qt.point(session.ui.panel_popup_x ?? -1, session.ui.panel_popup_y ?? -1)
     screen: anchorItem?.Window.window?.screen ?? null
-
-    function place(position) {
-        currentPosition = Qt.point(
-            Math.round(Math.max(0, Math.min(position.x, screen.width - width))),
-            Math.round(Math.max(0, Math.min(position.y, screen.height - height))));
-        LayerShell.Window.margins = ({ left: currentPosition.x, top: currentPosition.y, right: 0, bottom: 0 });
-        x = resultsView.Screen.virtualX + currentPosition.x;
-        y = resultsView.Screen.virtualY + currentPosition.y;
-    }
 
     function restorePosition() {
         if (!screen || !anchorItem?.Window.window)
             return;
-        if (positionedByUser) {
-            place(savedPosition);
+        if (popupPosition.x >= 0 && popupPosition.y >= 0) {
+            place(popupPosition.x, popupPosition.y);
             return;
         }
         const topLeft = anchorItem.mapToGlobal(0, 0);
@@ -70,9 +59,10 @@ Window {
             top = screen.height - panel.height - height;
         else
             top += anchorItem.height;
-        place(Qt.point(left, top));
+        place(left, top);
     }
 
+    onPopupMoved: (x, y) => session.saveUi({ panel_popup_x: x, panel_popup_y: y })
     onWidthChanged: Qt.callLater(restorePosition)
     onHeightChanged: Qt.callLater(restorePosition)
     onScreenChanged: Qt.callLater(restorePosition)
@@ -93,14 +83,9 @@ Window {
 
     width: Math.min(resultsView.implicitWidth, screen?.width ?? resultsView.implicitWidth)
     height: Math.min(resultsView.implicitHeight, screen?.height ?? resultsView.implicitHeight)
-    color: "transparent"
-    flags: Qt.Dialog | Qt.FramelessWindowHint
     title: i18n("Happy Bot")
     LayerShell.Window.scope: "happy-bot-panel-popup"
-    LayerShell.Window.layer: LayerShell.Window.LayerTop
-    LayerShell.Window.anchors: LayerShell.Window.AnchorTop | LayerShell.Window.AnchorLeft
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityOnDemand
-    LayerShell.Window.exclusionZone: -1
 
     // Hold focus-loss dismissal during a "Help with …" screenshot.
     property bool holdOpen: false
@@ -142,14 +127,8 @@ Window {
         widthInGridUnits: popup.widthInGridUnits
         heightInGridUnits: popup.heightInGridUnits
 
-        windowPosition: () => popup.currentPosition
-        onWindowMoved: (position, finished) => {
-            popup.place(position);
-            if (finished) {
-                popup.savedPosition = popup.currentPosition;
-                popup.session.saveUi({ panel_popup_x: popup.savedPosition.x, panel_popup_y: popup.savedPosition.y });
-            }
-        }
+        windowPosition: () => popup.screenPosition
+        onWindowMoved: (position, finished) => popup.movePopup(position, finished)
 
         onQueryEdited: text => popup.queryEdited(text)
         onAccepted: text => popup.accepted(text)
