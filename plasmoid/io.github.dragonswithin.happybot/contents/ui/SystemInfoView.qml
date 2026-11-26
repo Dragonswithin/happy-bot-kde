@@ -186,7 +186,7 @@ ColumnLayout {
         property real bar: -1  // 0..1 to draw a bar
         Layout.fillWidth: true
         Layout.preferredWidth: 1
-        Layout.preferredHeight: expanded ? implicitHeight : width
+        Layout.preferredHeight: expanded ? implicitHeight : Math.max(width, implicitHeight)
         implicitHeight: column.implicitHeight + Kirigami.Units.largeSpacing * 2
         radius: Kirigami.Units.cornerRadius * 2
         visible: available && (!view.detailSection || expanded)
@@ -249,7 +249,8 @@ ColumnLayout {
                 value: Math.max(0, card.bar)
             }
             Sparkline {
-                visible: card.expanded && card.graph !== null
+                objectName: "systemGraph-" + card.section
+                visible: card.graph !== null
                 values: card.graph || []
                 maximum: card.graphMaximum
             }
