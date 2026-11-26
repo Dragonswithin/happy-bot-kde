@@ -78,7 +78,7 @@ Item {
     readonly property bool inputFocused: field.activeFocus && windowActive
     onWindowActiveChanged: {
         if (!windowActive) {
-            field.focus = false;
+            releaseFocus();
         }
     }
     readonly property alias text: field.text
@@ -100,6 +100,10 @@ Item {
     function takeFocus() {
         field.forceActiveFocus(Qt.ShortcutFocusReason);
         field.selectAll();
+    }
+
+    function releaseFocus() {
+        field.focus = false;
     }
 
     function setText(text) {

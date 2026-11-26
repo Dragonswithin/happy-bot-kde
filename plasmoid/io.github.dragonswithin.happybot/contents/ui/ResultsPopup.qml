@@ -101,7 +101,15 @@ PositionedWindow {
 
     // Hold focus-loss dismissal during a "Help with …" screenshot.
     property bool holdOpen: false
-    onActiveChanged: if (!active && visible && !holdOpen) visible = false
+    onActiveChanged: {
+        if (!active && visible && !holdOpen)
+            Qt.callLater(dismissIfInactive);
+    }
+
+    function dismissIfInactive() {
+        if (!active && visible && !holdOpen)
+            visible = false;
+    }
 
     /** Takes the keyboard back after another window was briefly made active. */
     function refocus() {

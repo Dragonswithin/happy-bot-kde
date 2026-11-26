@@ -124,14 +124,20 @@ AssistantSurface {
     readonly property bool windowMoveInProgress: movePreview.active
 
     function previewWindowMove(position) {
+        if (!view.Window.window?.visible)
+            return;
         const firstMove = !movePreview.active;
         movePreview.active = true;
         const preview = movePreview.item;
         preview.place(position.x, position.y);
         if (firstMove) {
-            view.grabToImage(result => {
-                if (preview && movePreview.item === preview)
-                    preview.snapshot = result;
+            Qt.callLater(() => {
+                if (!view.Window.window?.visible || !preview || movePreview.item !== preview)
+                    return;
+                view.grabToImage(result => {
+                    if (preview && movePreview.item === preview)
+                        preview.snapshot = result;
+                });
             });
         }
     }

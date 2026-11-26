@@ -287,9 +287,14 @@ PlasmoidItem {
         enabled: parent !== null
         applet: root.barMode ? root.fullRepresentationItem : root.compactRepresentationItem
         onOutsidePressed: {
-            if (popup.visible && !popup.holdOpen)
-                popup.visible = false;
-            session.request("POST", "/app/panel-press", {}, () => {}, () => {});
+            const hiddenAt = popup.hiddenAt;
+            const dismiss = popup.visible;
+            // Let Plasma finish delivering the press before changing the layer surface.
+            Qt.callLater(() => {
+                if (dismiss && popup.visible && popup.hiddenAt === hiddenAt && !popup.holdOpen)
+                    popup.visible = false;
+                session.request("POST", "/app/panel-press", {}, () => {}, () => {});
+            });
         }
     }
 
@@ -724,10 +729,19 @@ PlasmoidItem {
         if (popup.visible) {
             return;
         }
-        if (!session.helpDraft && root.barMode && root.fullRepresentationItem) {
-            const draft = root.fullRepresentationItem.text;
-            root.fullRepresentationItem.setText("");
-            popup.setInput(draft);
+        const bar = root.barMode ? root.fullRepresentationItem : null;
+        if (bar) {
+            const draft = bar.text;
+            bar.releaseFocus();
+            root.wantsInput = false;
+            root.barFocused = false;
+            barBlur.stop();
+            searchDelay.stop();
+            root.acceptAfterSearch = "";
+            if (!session.helpDraft) {
+                bar.setText("");
+                popup.setInput(draft);
+            }
         }
         session.refreshHistory();
         session.refreshStatus();  // picks up AIs added in the settings since the last check
@@ -749,11 +763,13 @@ PlasmoidItem {
     }
 
     function focusBar() {
+        if (popup.visible)
+            root.closePopup();
         root.wantsInput = true;
         // The panel window gains focus only after the status change above is
         // processed, so the bar is focused on the next event loop turn.
         Qt.callLater(function() {
-            if (root.fullRepresentationItem) {
+            if (root.wantsInput && !popup.visible && root.barMode && root.fullRepresentationItem) {
                 root.fullRepresentationItem.takeFocus();
             }
         });
