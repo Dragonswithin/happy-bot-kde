@@ -22,7 +22,7 @@ Item {
                 if (path === "/system/overview") {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
                         memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
-                        gpus: [{id: "test", name: "Test GPU", busy_percent: 7}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
+                        gpus: [{id: "test", name: "Test GPU", busy_percent: 7, memory_used: 25, memory_total: 50, shared_used: 0, shared_total: 75}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
                         hardware: {model: "Test workstation", board: "Test board", drives: [{device: "/dev/sda", model: "Test drive", total: 200, rotational: 0}]},
                         os: {name: "Test Linux", logo: "test-linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
                         uptime_seconds: 4500});
@@ -220,6 +220,13 @@ Item {
             waitForRendering(view);
             mouseClick(memory);
             tryCompare(memory, "expanded", true);
+            verify(memory.detail.includes("System RAM available"));
+            const vram = findChild(view, "memoryVram");
+            const shared = findChild(view, "memorySharedGpu");
+            verify(vram.visible && shared.visible);
+            compare(vram.used, 25);
+            compare(shared.used, 0);
+            verify(shared.totalLabel.includes("driver limit"));
             tryCompare(session, "lastProgramPath", "/system/programs?sort=memory&order=desc");
             mouseClick(button(view, "Back"));
             tryCompare(hardware, "visible", true);

@@ -373,9 +373,15 @@ ColumnLayout {
         Card {
             section: "memory"
             title: i18n("Memory")
-            value: view.info ? i18n("%1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total)) : ""
-            detail: view.info && view.info.memory.swap_total > 0
-                ? i18n("Swap: %1 of %2", view.size(view.info.memory.swap_used), view.size(view.info.memory.swap_total)) : ""
+            value: view.info ? (expanded
+                ? i18n("%1 of %2 system RAM used", view.size(view.info.memory.used), view.size(view.info.memory.total))
+                : i18n("%1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total))) : ""
+            detail: view.info ? [
+                i18n("System RAM available: %1", view.size(view.info.memory.total - view.info.memory.used)),
+                view.info.memory.swap_total > 0
+                    ? i18n("Swap: %1 of %2", view.size(view.info.memory.swap_used), view.size(view.info.memory.swap_total)) : ""
+            ].filter(Boolean).join("\n") : ""
+            bar: view.info?.memory?.total > 0 ? view.info.memory.used / view.info.memory.total : -1
             graph: view.info ? view.info.history.memory : null
         }
 
@@ -568,6 +574,83 @@ ColumnLayout {
                 visible: view.detailSection === "disk-activity" && disk.activity !== null
                 values: disk.activity || []
                 maximum: 0
+            }
+        }
+    }
+
+    component MemoryUsage: ColumnLayout {
+        id: usage
+        required property string label
+        required property var used
+        required property var total
+        required property string totalLabel
+        Layout.fillWidth: true
+        spacing: Kirigami.Units.smallSpacing
+
+        PlasmaComponents3.Label {
+            Layout.fillWidth: true
+            text: usage.label
+            wrapMode: Text.Wrap
+        }
+
+        PlasmaComponents3.Label {
+            Layout.fillWidth: true
+            text: i18n("%1 used · %2", view.size(usage.used), usage.totalLabel)
+            font: Kirigami.Theme.smallFont
+            wrapMode: Text.Wrap
+        }
+
+        QQC2.ProgressBar {
+            Layout.fillWidth: true
+            from: 0
+            to: Math.max(1, usage.total ?? 0)
+            value: Math.min(usage.used ?? 0, usage.total ?? 0)
+            Accessible.name: usage.label
+        }
+    }
+
+    Repeater {
+        model: view.detailSection === "memory" ? (view.info?.gpus ?? []).filter(gpu =>
+            (gpu.memory_total > 0 && gpu.memory_used != null)
+            || (gpu.shared_total > 0 && gpu.shared_used != null)) : []
+
+        ColumnLayout {
+            id: gpuMemory
+            required property var modelData
+            Layout.fillWidth: true
+
+            Kirigami.Heading {
+                Layout.fillWidth: true
+                level: 5
+                text: i18n("GPU memory · %1", gpuMemory.modelData.name)
+                wrapMode: Text.Wrap
+            }
+
+            MemoryUsage {
+                objectName: "memoryVram"
+                visible: total > 0 && used != null
+                label: i18n("Graphics memory (VRAM)")
+                used: gpuMemory.modelData.memory_used
+                total: gpuMemory.modelData.memory_total
+                totalLabel: i18n("%1 total", view.size(total))
+            }
+
+            MemoryUsage {
+                objectName: "memorySharedGpu"
+                visible: total > 0 && used != null
+                label: i18n("System RAM used by the GPU")
+                used: gpuMemory.modelData.shared_used
+                total: gpuMemory.modelData.shared_total
+                totalLabel: i18n("%1 driver limit", view.size(total))
+            }
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                visible: gpuMemory.modelData.shared_total > 0 && gpuMemory.modelData.shared_used != null
+                text: i18n("This usage is part of system RAM.")
+                font: Kirigami.Theme.smallFont
+                opacity: 0.75
+                wrapMode: Text.Wrap
             }
         }
     }

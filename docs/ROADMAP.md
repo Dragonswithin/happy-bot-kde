@@ -435,7 +435,8 @@ button opens Live activity and System overview cards. Disk activity shows
 throughput. System overview includes Hardware, which shows physical drives
 and mounted storage capacity alongside system components, plus separate
 Operating system and Uptime cards. Processor and Memory each have a live graph and
-open a program list sortable by CPU, memory, or user.
+open a program list sortable by CPU, memory, or user. Memory details also
+show VRAM and GPU usage of shared system RAM when the driver reports them.
 *Exit:* a person switches System info on and reorders the buttons on the
 Appearance page and sees the start screen follow in the panel popup and the
 floating Happy Bot; System info shows live load, memory, graphics, network
