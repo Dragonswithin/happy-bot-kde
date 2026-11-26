@@ -187,6 +187,7 @@ PlasmoidItem {
     property bool hostWindowSeen: false
     // "Show yourself" requests seen from the daemon (`happy-bot app show`); -1 before the first answer.
     property int showRequests: -1
+    property int panelPresses: -1
 
     // The floating Happy Bot in the app, and whether it is open. While it is open it is
     // where the user types, so the keyboard handlers below work on it instead of the panel popup.
@@ -276,6 +277,20 @@ PlasmoidItem {
         // ms of no typing before searching: the web finder's searches take a second, so it waits longer
         interval: session.finder === "web" ? 600 : 200
         onTriggered: session.search(root.pendingQuery)
+    }
+
+    // Plasma panels can receive a click while the assistant keeps keyboard focus.
+    PanelPressObserver {
+        parent: !root.standalone && (Plasmoid.formFactor === PlasmaCore.Types.Horizontal
+                                    || Plasmoid.formFactor === PlasmaCore.Types.Vertical)
+            ? root.Window.window?.contentItem ?? null : null
+        enabled: parent !== null
+        applet: root.barMode ? root.fullRepresentationItem : root.compactRepresentationItem
+        onOutsidePressed: {
+            if (popup.visible && !popup.holdOpen)
+                popup.visible = false;
+            session.request("POST", "/app/panel-press", {}, () => {}, () => {});
+        }
     }
 
     ResultsPopup {
@@ -611,7 +626,12 @@ PlasmoidItem {
 
     /** The app waits for "show yourself" (a second launch, or the hotkey) through the daemon. */
     function waitForShowRequest() {
-        session.request("GET", "/app/wait?seen=" + root.showRequests, null, function(data) {
+        session.request("GET", "/app/wait?seen=" + root.showRequests + "&panel_seen=" + root.panelPresses,
+                        null, function(data) {
+            if (root.panelPresses >= 0 && data.panel_presses > root.panelPresses
+                    && root.floatingOpen && !root.floating.holdOpen)
+                root.floating.close();
+            root.panelPresses = data.panel_presses ?? -1;
             // A second launch or the launch shortcut opens the floating Happy Bot, or closes it when open;
             // the panel widget asks for the settings. A request that started the app counts too.
             const fresh = root.showRequests >= 0 ? data.count > root.showRequests

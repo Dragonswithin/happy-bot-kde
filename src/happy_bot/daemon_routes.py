@@ -359,9 +359,15 @@ def voice_find(server: "AssistantServer", query: dict[str, list[str]], body: dic
 def app_wait(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     try:
         seen = int(_first(query, "seen", "-1"))
+        panel_seen = int(_first(query, "panel_seen", "-1"))
     except ValueError:
         return _error(400, "seen must be a number", "invalid")
-    return 200, {"ok": True, **app_control.waker.wait(seen)}
+    return 200, {"ok": True, **app_control.waker.wait(seen, panel_seen=panel_seen)}
+
+
+def app_panel_press(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    app_control.waker.panel_press()
+    return 200, {"ok": True}
 
 
 def current_application(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -931,6 +937,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/app"): app_status,
     ("POST", "/app"): app_change,
     ("POST", "/app/show"): app_show,
+    ("POST", "/app/panel-press"): app_panel_press,
     ("POST", "/voice/listen"): voice_listen,
     ("POST", "/voice/stop"): voice_stop,
     ("POST", "/voice/check"): voice_check,

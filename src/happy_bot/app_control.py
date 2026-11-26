@@ -20,6 +20,7 @@ launcher. This module is the daemon's side of it:
   which answers as soon as the count of requests grows or after ``WAIT_SECONDS``, so the app asks
   again. The answer carries the last request's action and age, so an app that was just started
   for a request (``start``, then ``notify``) still acts on it. Only the app waits.
+  Panel presses have a separate counter so dismissal cannot overwrite a show request.
 """
 
 from __future__ import annotations
@@ -93,6 +94,7 @@ class Waker:
 
     def __init__(self) -> None:
         self._count = 0
+        self._panel_presses = 0
         self._action = "open"
         self._at = 0.0
         self._changed = threading.Condition()
@@ -105,16 +107,25 @@ class Waker:
             self._changed.notify_all()
             return self._count
 
-    def wait(self, seen: int, timeout: float = WAIT_SECONDS) -> dict[str, object]:
-        """``{"count", "action", "age"}`` once the count is above ``seen`` (at once for -1), else after ``timeout``.
+    def panel_press(self) -> None:
+        with self._changed:
+            self._panel_presses += 1
+            self._changed.notify_all()
+
+    def wait(self, seen: int, timeout: float = WAIT_SECONDS, *, panel_seen: int = -1) -> dict[str, object]:
+        """Return both counters when either has advanced, or after ``timeout``.
+
+        A negative ``seen`` requests the current state immediately.
 
         ``age`` is how many seconds ago the last request came (-1 when there was none).
         """
         with self._changed:
             if seen >= 0:
-                self._changed.wait_for(lambda: self._count > seen, timeout)
+                self._changed.wait_for(
+                    lambda: self._count > seen or 0 <= panel_seen < self._panel_presses, timeout,
+                )
             age = round(time.monotonic() - self._at, 1) if self._count else -1
-            return {"count": self._count, "action": self._action, "age": age}
+            return {"count": self._count, "action": self._action, "age": age, "panel_presses": self._panel_presses}
 
 
 waker = Waker()

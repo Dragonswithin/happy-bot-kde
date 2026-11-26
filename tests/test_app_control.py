@@ -58,6 +58,17 @@ class WakerTests(unittest.TestCase):
         self.assertEqual((woke[0]["count"], woke[0]["action"]), (seen + 1, "settings"))
         self.assertLess(woke[0]["age"], 1)
 
+    def test_panel_press_wakes_app_without_replacing_its_show_request(self) -> None:
+        waker = app_control.Waker()
+        seen = waker.notify("settings")
+        woke: list[dict] = []
+        waiter = threading.Thread(target=lambda: woke.append(waker.wait(seen, timeout=3, panel_seen=0)))
+        waiter.start()
+        waker.panel_press()
+        waiter.join(1)
+        self.assertFalse(waiter.is_alive())
+        self.assertEqual((woke[0]["count"], woke[0]["action"], woke[0]["panel_presses"]), (seen, "settings", 1))
+
     def test_a_request_made_before_the_app_started_is_still_seen(self) -> None:
         waker = app_control.Waker()
         waker.notify("settings")
