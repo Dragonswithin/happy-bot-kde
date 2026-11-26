@@ -137,6 +137,7 @@ PositionedWindow {
         anchors.fill: parent
         session: popup.session
         fieldAtBottom: popup.location === PlasmaCore.Types.BottomEdge
+        backAtTop: resultsView.fullSizeTool && !popup.popupGrowsUp
         selectedIndex: popup.selectedIndex
         widthInGridUnits: popup.widthInGridUnits
         heightInGridUnits: popup.heightInGridUnits

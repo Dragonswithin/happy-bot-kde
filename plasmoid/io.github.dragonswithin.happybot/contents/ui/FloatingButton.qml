@@ -232,6 +232,7 @@ PositionedWindow {
             height: Math.min(implicitHeight, floating.screenHeight)
             useRobotMascot: floating.useRobotMascot
             fieldAtBottom: floating.growUp
+            backAtTop: view.fullSizeTool && !floating.popupGrowsUp
             selectedIndex: floating.selectedIndex
             widthInGridUnits: floating.widthInGridUnits
             heightInGridUnits: floating.heightInGridUnits

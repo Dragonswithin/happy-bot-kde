@@ -77,6 +77,23 @@ Item {
             else
                 compare(shortcut.screenPosition.y, data.top);
 
+            const back = findChild(shortcut.contentItem, "assistantBack");
+            verify(back && back.visible);
+            const close = findChild(shortcut.contentItem, "assistantClose");
+            const backPosition = () => back.mapToItem(shortcut.contentItem, 0, 0);
+            if (data.up) {
+                tryVerify(() => backPosition().x < shortcut.width / 4);
+                tryVerify(() => backPosition().y + back.height > shortcut.height * 0.9);
+            } else {
+                verify(close && close.visible);
+                tryVerify(() => {
+                    const backPoint = backPosition();
+                    const closePoint = close.mapToItem(shortcut.contentItem, 0, 0);
+                    return backPoint.x > shortcut.width / 2 && backPoint.x < closePoint.x
+                        && Math.abs(backPoint.y - closePoint.y) < back.height / 2;
+                });
+            }
+
             shortcut.session.showingSystem = false;
             tryCompare(shortcut, "height", initialHeight);
             tryVerify(() => shortcut.screenPosition.y === data.top);

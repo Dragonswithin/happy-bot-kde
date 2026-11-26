@@ -93,6 +93,7 @@ Rectangle {
     readonly property int inset: Kirigami.Units.largeSpacing * 1.5
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot, robotStyle)
     property bool fieldAtBottom: false
+    property bool backAtTop: false
     readonly property alias inputText: field.text
     property int selectedIndex: -1
     property int widthInGridUnits: 30
@@ -309,8 +310,14 @@ Rectangle {
                 onClicked: view.session.cancel()
             }
 
+            RowLayout {
+                id: topBackSlot
+                visible: view.backAtTop
+            }
+
             PlasmaComponents3.ToolButton {
                 Layout.preferredHeight: Kirigami.Units.gridUnit * 1.5
+                objectName: "assistantClose"
                 icon.name: "window-close"
                 text: i18n("Close (Esc)")
                 display: QQC2.AbstractButton.IconOnly
@@ -326,7 +333,7 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: !view.fieldAtBottom && backButton.visible ? backButton.implicitHeight + Kirigami.Units.smallSpacing : 0
+        height: !view.backAtTop && !view.fieldAtBottom && backButton.visible ? backButton.implicitHeight + Kirigami.Units.smallSpacing : 0
 
         RowLayout {
             id: bottomRow
@@ -338,7 +345,8 @@ Rectangle {
 
     PlasmaComponents3.ToolButton {
         id: backButton
-        parent: view.fieldAtBottom ? composer : bottomRow
+        objectName: "assistantBack"
+        parent: view.backAtTop ? topBackSlot : view.fieldAtBottom ? composer : bottomRow
         Layout.row: 0
         Layout.column: 0
         visible: view.session.finding || view.fixVisible || view.systemVisible
