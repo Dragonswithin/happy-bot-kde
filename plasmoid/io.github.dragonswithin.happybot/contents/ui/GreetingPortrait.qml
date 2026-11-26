@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// The start screen and Appearance share the same portrait and one-shot greeting.
+// The start screen and Appearance share the same mascot portrait.
 pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kirigami as Kirigami
@@ -12,10 +12,6 @@ Item {
     implicitWidth: Kirigami.Units.gridUnit * 4
     implicitHeight: implicitWidth
     Accessible.ignored: true
-
-    function greet() {
-        character.greet();
-    }
 
     Rectangle {
         anchors.centerIn: parent
@@ -48,7 +44,6 @@ Item {
             height: width
             visible: portrait.iconSource === Look.robotIcon.toString()
             animate: portrait.animate
-            greetOnShow: true
         }
         Kirigami.Icon {
             anchors.centerIn: parent

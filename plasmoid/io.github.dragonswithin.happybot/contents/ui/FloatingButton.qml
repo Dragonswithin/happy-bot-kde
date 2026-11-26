@@ -245,7 +245,6 @@ Window {
             activity: floating.activity
             mascot: floating.useRobotMascot
             animate: floating.session.ui.mascot_animations !== false
-            attentive: mouse.containsMouse && !mouse.dragging && !floating.expanded
         }
 
         // Turns while Happy Bot is working on a request.

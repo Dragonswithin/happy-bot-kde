@@ -1,5 +1,0 @@
-<!-- SPDX-License-Identifier: MIT. The antenna from happy-bot.svg, pivoted at its socket. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <path d="m25 15 6-9" fill="none" stroke="#183840" stroke-width="4"/>
-  <circle cx="32" cy="6" r="4" fill="#ffc463" stroke="#183840" stroke-width="2.5"/>
-</svg>

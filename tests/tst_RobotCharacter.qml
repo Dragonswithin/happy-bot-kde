@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
-// Exercise the idle face and greeting on the real character at shortcut size.
+// Exercise idle eyes at shortcut size and the portrait and panel entry points.
 import QtQuick
 import QtTest
 import org.kde.kirigami as Kirigami
 import "../plasmoid/io.github.dragonswithin.happybot/contents/ui" as HappyBot
 
 Item {
-    id: scene
-    width: 120
+    width: 232
     height: 56
 
     Item {
@@ -34,14 +33,37 @@ Item {
         source: HappyBot.Look.robotIcon
     }
 
+    HappyBot.GreetingPortrait {
+        id: portrait
+        x: 120
+        width: 48
+        height: width
+        animate: true
+        visible: false
+        iconSource: HappyBot.Look.robotIcon.toString()
+    }
+
+    HappyBot.IconActivity { id: activityState }
+    HappyBot.PanelIcon {
+        id: panelIcon
+        x: 180
+        width: 32
+        height: width
+        animateMascot: true
+        visible: false
+        activity: activityState
+        iconName: HappyBot.Look.robotIcon.toString()
+    }
+
     TestCase {
         name: "RobotCharacter"
         when: windowShown
 
         function init() {
             robot.animate = false;
-            robot.attentive = false;
-            robot.greetOnShow = false;
+            portrait.visible = false;
+            panelIcon.visible = false;
+            panelIcon.hovered = false;
             surface.visible = true;
             tryCompare(original, "status", Image.Ready);
             tryVerify(() => grabImage(surface).equals(grabImage(original)));
@@ -56,47 +78,11 @@ Item {
             return pose;
         }
 
-        // At shortcut scale the two gold lights are only a few pixels each.
-        // Seeing the palm beside the head while the antenna is still above it
-        // distinguishes the unfolded arm from rotating the resting icon.
-        function hasGold(frame, left, top, right, bottom) {
-            for (let y = Math.floor(top * frame.height); y < bottom * frame.height; y++) {
-                for (let x = Math.floor(left * frame.width); x < right * frame.width; x++) {
-                    const r = frame.red(x, y), g = frame.green(x, y), b = frame.blue(x, y);
-                    if (r > 190 && g > 125 && b < 150 && r > 1.7 * b) return true;
-                }
-            }
-            return false;
-        }
-
-        function test_motionOffShowsTheOriginalIcon() {
-            const still = grabImage(original);
-            robot.attentive = true;
-            robot.greetOnShow = true;
-            robot.greet();
-            wait(120);
-            verify(grabImage(surface).equals(still));
-        }
-
-        function test_hoverMovesThroughSeveralPosesInsideTheShortcut() {
+        function test_motionOffRestoresTheOriginalIconDuringABlink() {
             const pose = enableMotion();
-            const idle = grabImage(surface);
-            const start = Date.now();
-            robot.attentive = true;
-            tryVerify(() => {
-                const frame = grabImage(surface);
-                return hasGold(frame, 0.25, 0, 0.70, 0.29)
-                    && hasGold(frame, 0.71, 0.24, 0.99, 0.55);
-            });
-            const firstPose = grabImage(surface);
-            tryVerify(() => pose.wrist > 10, robot.duration(4000));
-            verify(Date.now() - start >= 1000, "The first full sweep should take time to read");
-            const next = grabImage(surface);
-            verify(!next.equals(firstPose) && !next.equals(idle));
-            compare(robot.mapToItem(surface, 0, 0), Qt.point(0, 0));
-            compare(robot.mapToItem(surface, robot.width, robot.height), Qt.point(32, 32));
-
+            tryVerify(() => pose.eyelid < 0.95, robot.duration(6000));
             robot.animate = false;
+            tryCompare(pose, "eyelid", 1);
             tryVerify(() => grabImage(surface).equals(grabImage(original)));
         }
 
@@ -119,35 +105,32 @@ Item {
             tryVerify(() => pose.gaze === 0 && grabImage(surface).equals(idle), robot.duration(4000));
         }
 
-        function test_hoverDuringGlanceKeepsEyePosition() {
+        function test_hidingAndShowingRestartsTheIdlePose() {
             const pose = enableMotion();
+            const idle = grabImage(surface);
             tryVerify(() => pose.gaze > 2, robot.duration(8000));
-            const gaze = pose.gaze;
-            robot.attentive = true;
-            compare(pose.gaze, gaze);
-            tryVerify(() => pose.gaze === 0 && pose.lift > 0, robot.duration(3000));
-        }
-
-        function test_portraitGreetsWhenShown() {
-            enableMotion();
-            const idle = grabImage(surface);
             surface.visible = false;
-            robot.greetOnShow = true;
+            tryCompare(robot, "canMove", false);
             surface.visible = true;
-            tryVerify(() => !grabImage(surface).equals(idle));
-        }
-
-        function test_hidingCancelsGreetingAndReplayWorks() {
-            enableMotion();
-            const idle = grabImage(surface);
-            robot.greet();
-            tryVerify(() => !grabImage(surface).equals(idle));
-            surface.visible = false;
-            wait(30);
-            surface.visible = true;
+            tryCompare(robot, "canMove", true);
+            compare(pose.gaze, 0);
+            compare(pose.eyelid, 1);
             tryVerify(() => grabImage(surface).equals(idle));
-            robot.greet();
-            tryVerify(() => !grabImage(surface).equals(idle));
+        }
+
+        function test_showingPortraitAndHoveringPanelKeepTheRobotAtRest() {
+            if (Kirigami.Units.longDuration <= 1) skip("Plasma animations are disabled");
+            panelIcon.visible = true;
+            portrait.visible = true;
+            tryCompare(panelIcon, "status", Loader.Ready);
+            waitForPolish(portrait);
+            wait(50);
+            const portraitAtRest = grabImage(portrait);
+            const panelAtRest = grabImage(panelIcon);
+            panelIcon.hovered = true;
+            wait(700);  // Both entry points are still within the pause before the first idle blink.
+            verify(grabImage(portrait).equals(portraitAtRest));
+            verify(grabImage(panelIcon).equals(panelAtRest));
         }
     }
 }

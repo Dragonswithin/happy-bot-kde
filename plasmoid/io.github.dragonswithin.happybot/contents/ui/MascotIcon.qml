@@ -11,7 +11,6 @@ Item {
     required property IconActivity activity
     property bool mascot: true
     property bool animate: true
-    property bool attentive: false
     readonly property bool moving: animate && visible && Window.window && Window.window.visible
                                    && Window.visibility !== Window.Minimized && Kirigami.Units.longDuration > 1
     readonly property string expression: mascot ? activity.expression : ""
@@ -45,12 +44,11 @@ Item {
     }
 
     // Heat and recording have a dedicated visor and antenna to keep their
-    // indicators readable. Other expressions ride on the character's moving head.
+    // indicators readable. Other expressions appear on the character's visor.
     RobotCharacter {
         anchors.fill: parent
         visible: face.mascot && !face.hot && !face.activity.recording
         animate: face.animate
-        attentive: face.attentive
         expressionSource: visible ? face.artwork(face.expression) : ""
     }
 

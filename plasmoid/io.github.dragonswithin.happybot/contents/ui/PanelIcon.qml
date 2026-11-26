@@ -21,7 +21,6 @@ Loader {
         id: character
         MascotIcon {
             activity: icon.activity
-            attentive: icon.hovered
         }
     }
 

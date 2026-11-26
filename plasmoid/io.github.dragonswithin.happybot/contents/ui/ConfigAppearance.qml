@@ -43,7 +43,6 @@ KCM.SimpleKCM {
     id: page
 
     property string cfg_daemonUrl: ""
-    signal previewWaveRequested()
 
     property bool unsavedChanges: false
     property var ui: null
@@ -164,13 +163,8 @@ KCM.SimpleKCM {
             iconName: "preferences-desktop-icons"
             description: i18n("Choose the picture you see in the panel, on the floating button and beside replies.")
             headerArtwork: GreetingPortrait {
-                id: picturePreview
                 iconSource: Look.assistantIcon(page.ui?.robot_mascot ?? true)
                 animate: page.ui?.robot_mascot === true && page.ui?.mascot_animations !== false
-                Connections {
-                    target: page
-                    function onPreviewWaveRequested() { picturePreview.greet(); }
-                }
             }
 
             GridLayout {
@@ -194,21 +188,11 @@ KCM.SimpleKCM {
                 }
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-                QQC2.CheckBox {
-                    id: animateRobot
-                    enabled: page.ui?.robot_mascot === true
-                    text: i18n("Animate the robot")
-                    checked: page.ui !== null && page.ui.mascot_animations !== false
-                    onToggled: page.save({ mascot_animations: checked })
-                }
-                QQC2.ToolButton {
-                    enabled: animateRobot.enabled && animateRobot.checked && Kirigami.Units.longDuration > 1
-                    text: i18n("Replay wave")
-                    icon.name: "media-playback-start"
-                    onClicked: page.previewWaveRequested()
-                }
+            QQC2.CheckBox {
+                enabled: page.ui?.robot_mascot === true
+                text: i18n("Animate the robot")
+                checked: page.ui !== null && page.ui.mascot_animations !== false
+                onToggled: page.save({ mascot_animations: checked })
             }
 
             QQC2.CheckBox {
