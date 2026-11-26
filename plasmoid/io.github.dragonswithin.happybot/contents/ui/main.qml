@@ -5,10 +5,12 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtCore as QtCore
 
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.extras as PlasmaExtras
+import org.kde.plasma.plasma5support as P5Support
 import org.kde.plasma.plasmoid
 
 import "barInput.js" as BarInput
@@ -472,7 +474,9 @@ PlasmoidItem {
             text: i18n("New conversation")
             icon.name: "document-new"
             onTriggered: {
+                session.stopFinding();
                 session.newChat();
+                root.clearInput();
                 root.openForApplication();
             }
         },
@@ -548,8 +552,38 @@ PlasmoidItem {
         PlasmaExtras.MenuItem {
             text: i18n("Quit Happy Bot")
             icon: "application-exit"
-            onClicked: Qt.quit()
+            onClicked: root.quitStandalone()
         }
+    }
+
+    P5Support.DataSource {
+        id: appExit
+        engine: "executable"
+        connectedSources: []
+        onNewData: (source, data) => {
+            disconnectSource(source);
+            if (data["exit code"] !== 0)
+                root.reportQuitFailure();
+        }
+    }
+
+    function reportQuitFailure() {
+        root.openForApplication();
+        session.appendEntry("error", i18n("Could not quit Happy Bot."));
+    }
+
+    function quitStandalone() {
+        // plasmawindowed keeps its event loop running after QML's quit
+        // signal. The launcher can stop the standalone app without the daemon.
+        const paths = QtCore.StandardPaths;
+        const launcher = String(paths.findExecutable("happy-bot-app"))
+            || String(paths.findExecutable("happy-bot-app", [Look.homePath + "/.local/bin"]));
+        if (!launcher) {
+            root.reportQuitFailure();
+            return;
+        }
+        const path = decodeURIComponent(launcher.replace(/^file:\/\//, ""));
+        appExit.connectSource("'" + path.replace(/'/g, "'\\''") + "' --quit");
     }
 
     // The app: hide the host window when it appears; when it appears again (its tray entry was

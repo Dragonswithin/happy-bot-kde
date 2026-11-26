@@ -43,6 +43,9 @@ quit_app() {
     running || return 0
     sleep 0.1
   done
+  running || return 0
+  printf 'happy-bot-app: Happy Bot did not exit\n' >&2
+  return 1
 }
 
 start_app() {
