@@ -71,6 +71,17 @@ class ProgramTests(unittest.TestCase):
 
 
 class OverviewTests(unittest.TestCase):
+    def test_hardware_history_measures_disk_bytes_per_second(self) -> None:
+        history = system_monitor.History(size=3)
+        with mock.patch.object(system_monitor.time, "monotonic", side_effect=[10, 12, 13]):
+            history.hardware([{"id": "gpu", "busy_percent": 20}], {"/dev/sda": 1024})
+            sample = history.hardware([{"id": "gpu", "busy_percent": 45}], {"/dev/sda": 3072})
+            self.assertEqual(sample["gpu"], {"gpu": [20, 45]})
+            self.assertEqual(sample["disk"], [None, 1024])
+            self.assertEqual(sample["disk_by_device"]["/dev/sda"], [None, 1024])
+            history.clear()
+            self.assertEqual(history.hardware([], {"/dev/sda": 4096})["disk"], [None])
+
     def test_history_keeps_the_last_samples_and_the_overview_has_every_part(self) -> None:
         history = system_monitor.History(size=3)
         for load in (10, 20, 30, 40):

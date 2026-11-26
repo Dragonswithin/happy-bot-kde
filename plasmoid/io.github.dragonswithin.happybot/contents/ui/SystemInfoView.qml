@@ -183,6 +183,7 @@ ColumnLayout {
         property string detail: ""
         property var graph: null
         property real graphMaximum: 100
+        property real uptimeFraction: -1
         property real bar: -1  // 0..1 to draw a bar
         Layout.fillWidth: true
         Layout.preferredWidth: 1
@@ -254,6 +255,31 @@ ColumnLayout {
                 values: card.graph || []
                 maximum: card.graphMaximum
             }
+            ColumnLayout {
+                visible: card.uptimeFraction >= 0
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+                Accessible.name: i18n("Time online in the last 24 hours")
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: Kirigami.Units.smallSpacing * 2
+                    radius: height / 2
+                    color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+                    Rectangle {
+                        anchors.right: parent.right
+                        width: Math.max(0, card.uptimeFraction) * parent.width
+                        height: parent.height
+                        radius: parent.radius
+                        color: view.accent
+                    }
+                }
+                PlasmaComponents3.Label {
+                    text: i18n("Last 24 hours")
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.75
+                }
+            }
+
         }
     }
 
@@ -301,6 +327,7 @@ ColumnLayout {
                 section: "gpu-" + index
                 title: view.info.gpus.length > 1 ? i18n("Graphics %1", index + 1) : i18n("Graphics")
                 value: view.percent(modelData.busy_percent)
+                graph: view.info?.history?.gpu?.[modelData.id] ?? null
                 detail: [modelData.name, view.degrees(modelData.temp_c),
                          modelData.memory_total ? i18n("memory %1 of %2", view.size(modelData.memory_used), view.size(modelData.memory_total)) : "",
                          modelData.shared_total ? i18n("shared %1 of %2", view.size(modelData.shared_used), view.size(modelData.shared_total)) : ""]
@@ -331,12 +358,17 @@ ColumnLayout {
             section: "storage"
             title: i18n("Storage")
             value: view.info ? i18np("%1 disk", "%1 disks", view.info.disks.length) : ""
+            graph: view.info?.history?.disk ?? null
+            graphMaximum: 0
+            detail: graph?.length && graph[graph.length - 1] !== null
+                ? i18n("Disk activity: %1 read and written", view.rate(graph[graph.length - 1])) : ""
         }
 
         Card {
             section: "uptime"
             available: !!view.info?.uptime_seconds
             title: i18n("Uptime")
+            uptimeFraction: view.info?.uptime_seconds ? Math.min(1, view.info.uptime_seconds / 86400) : -1
             value: view.info ? view.uptime(view.info.uptime_seconds) : ""
             detail: view.info?.uptime_seconds
                 ? i18n("Started %1", new Date(Date.now() - view.info.uptime_seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)) : ""
@@ -354,7 +386,9 @@ ColumnLayout {
         model: view.detailSection === "storage" ? view.info.disks : []
 
         ColumnLayout {
+            id: disk
             required property var modelData
+            readonly property var activity: view.info?.history?.disk_by_device?.[modelData.device] ?? null
             Layout.fillWidth: true
             spacing: 2
 
@@ -375,6 +409,11 @@ ColumnLayout {
                 from: 0
                 to: Math.max(1, modelData.total)
                 value: modelData.used
+            }
+            Sparkline {
+                visible: disk.activity !== null
+                values: disk.activity || []
+                maximum: 0
             }
         }
     }

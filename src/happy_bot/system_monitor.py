@@ -56,6 +56,29 @@ class History:
     def __init__(self, size: int = HISTORY_SAMPLES) -> None:
         self._lock = threading.Lock()
         self._samples: collections.deque[dict[str, Any]] = collections.deque(maxlen=size)
+        self._hardware = collections.deque(maxlen=size)
+        self._last_disk_counters: dict[str, int] = {}
+
+    def hardware(self, gpus: list[dict[str, Any]], disk_counters: dict[str, int]) -> dict[str, Any]:
+        """Track GPU load and disk throughput during live overview polling."""
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._hardware[-1][0] if self._hardware else None
+            if elapsed is None or elapsed >= 0.75:
+                if elapsed is not None and elapsed > 5:
+                    self._hardware.clear()
+                    elapsed = None
+                rates = {disk: (count - self._last_disk_counters[disk]) / elapsed
+                         for disk, count in disk_counters.items()
+                         if elapsed and disk in self._last_disk_counters and count >= self._last_disk_counters[disk]}
+                self._last_disk_counters = disk_counters
+                loads = {gpu["id"]: gpu["busy_percent"] for gpu in gpus}
+                self._hardware.append((now, loads, rates))
+            return {
+                "gpu": {gpu["id"]: [loads.get(gpu["id"]) for _, loads, _ in self._hardware] for gpu in gpus},
+                "disk": [sum(rates.values()) if rates else None for _, _, rates in self._hardware],
+                "disk_by_device": {disk: [rates.get(disk) for _, _, rates in self._hardware] for disk in disk_counters},
+            }
 
     def add(self, readings: dict[str, Any]) -> None:
         sample = {key: readings.get(key) for key in ("cpu_percent", "cpu_c", "high_c", "available_memory_percent",
@@ -70,6 +93,8 @@ class History:
     def clear(self) -> None:
         with self._lock:
             self._samples.clear()
+            self._hardware.clear()
+            self._last_disk_counters.clear()
 
 
 def _text(path: Path) -> str:
@@ -133,24 +158,24 @@ def _gpus(sys_root: Path = Path("/sys")) -> list[dict[str, Any]]:
         for hwmon in (device / "hwmon").glob("hwmon*"):
             milli = _number(hwmon / "temp1_input")
             temperature = milli / 1000 if milli is not None else temperature
-        found.append({"name": _gpu_name(device), "busy_percent": busy, "temp_c": temperature,
+        found.append({"id": "drm:" + card.name, "name": _gpu_name(device), "busy_percent": busy, "temp_c": temperature,
                       "memory_used": _number(device / "mem_info_vram_used"),
                       "memory_total": _number(device / "mem_info_vram_total"),
                       "shared_used": _number(device / "mem_info_gtt_used"),
                       "shared_total": _number(device / "mem_info_gtt_total")})
     if shutil.which("nvidia-smi"):
         try:
-            out = subprocess.run(["nvidia-smi", "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,"
+            out = subprocess.run(["nvidia-smi", "--query-gpu=uuid,name,utilization.gpu,temperature.gpu,memory.used,"
                                   "memory.total", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True, timeout=3).stdout
         except (OSError, subprocess.TimeoutExpired):
             out = ""
         for line in out.splitlines():
             parts = [part.strip() for part in line.split(",")]
-            if len(parts) == 5 and all(re.fullmatch(r"\d+(\.\d+)?", part) for part in parts[1:]):
-                found.append({"name": parts[0], "busy_percent": float(parts[1]), "temp_c": float(parts[2]),
-                              "memory_used": int(float(parts[3])) * 1024**2,
-                              "memory_total": int(float(parts[4])) * 1024**2, "shared_used": None, "shared_total": None})
+            if len(parts) == 6 and all(re.fullmatch(r"\d+(\.\d+)?", part) for part in parts[2:]):
+                found.append({"id": parts[0], "name": parts[1], "busy_percent": float(parts[2]), "temp_c": float(parts[3]),
+                              "memory_used": int(float(parts[4])) * 1024**2,
+                              "memory_total": int(float(parts[5])) * 1024**2, "shared_used": None, "shared_total": None})
     return found
 
 
@@ -170,6 +195,18 @@ def _disks() -> list[dict[str, Any]]:
         seen.add(parts[0])
         disks.append({"mount": mount, "device": parts[0], "total": usage.total, "used": usage.total - usage.free})
     return disks
+
+
+def _disk_counters(disks: list[dict[str, Any]], path: Path = Path("/proc/diskstats")) -> dict[str, int]:
+    """Read plus written bytes for the block devices behind the displayed mounts."""
+    devices = {Path(disk["device"]).resolve().name: disk["device"] for disk in disks}
+    counters = {}
+    for line in _text(path).splitlines():
+        fields = line.split()
+        if len(fields) >= 10 and fields[2] in devices and fields[5].isdigit() and fields[9].isdigit():
+            # Linux diskstats always counts in 512-byte sectors.
+            counters[devices[fields[2]]] = (int(fields[5]) + int(fields[9])) * 512
+    return counters
 
 
 def batteries(sys_root: Path = Path("/sys")) -> Iterator[dict[str, Any]]:
@@ -203,19 +240,22 @@ def overview(history: History) -> dict[str, Any]:
     total, available = memory.get("MemTotal", 0), memory.get("MemAvailable", 0)
     load = _text(Path("/proc/loadavg")).split()[:3]
     uptime = _text(Path("/proc/uptime")).split()
+    gpus, disks = _gpus(), _disks()
+    hardware = history.hardware(gpus, _disk_counters(disks))
     return {
         "cpu": {"model": _cpu_model(), "cores": os.cpu_count() or 0, "percent": latest.get("cpu_percent"),
                 "temp_c": latest.get("cpu_c"), "high_c": latest.get("high_c"),
                 "load": [float(value) for value in load] if len(load) == 3 else []},
         "memory": {"total": total, "used": total - available, "swap_total": memory.get("SwapTotal", 0),
                    "swap_used": memory.get("SwapTotal", 0) - memory.get("SwapFree", 0)},
-        "gpus": _gpus(),
-        "disks": _disks(),
+        "gpus": gpus,
+        "disks": disks,
         "network": {**_network(), "receive_bps": latest.get("receive_bytes_per_second"),
                     "send_bps": latest.get("send_bytes_per_second")},
         "battery": next((battery for battery in batteries() if battery["percent"] is not None), None),
         "uptime_seconds": float(uptime[0]) if uptime else None,
         "history": {
+            **hardware,
             "cpu": [sample["cpu_percent"] for sample in samples],
             "memory": [None if sample["available_memory_percent"] is None else 100 - sample["available_memory_percent"]
                        for sample in samples],

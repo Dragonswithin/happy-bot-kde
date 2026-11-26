@@ -20,8 +20,8 @@ Item {
             function request(method, path, body, success, failure) {
                 if (path === "/system/overview") {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
-                        memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80]},
-                        gpus: [], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
+                        memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
+                        gpus: [{id: "test", name: "Test GPU", busy_percent: 7}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
                         uptime_seconds: 4500});
                 } else if (path.startsWith("/system/programs?")) {
                     programRequests++;
@@ -165,12 +165,13 @@ Item {
             const storage = findChild(view, "systemCard-storage");
             tryVerify(() => processor.visible && storage.visible);
             compare(processor.expanded, false);
-            for (const section of ["cpu", "memory", "network"]) {
+            for (const section of ["cpu", "memory", "network", "gpu-0", "storage"]) {
                 const chart = findChild(view, "systemGraph-" + section);
                 verify(chart && chart.visible);
             }
             tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
             compare(session.programRequests, 0);
+            compare(findChild(view, "systemCard-uptime").uptimeFraction, 4500 / 86400);
             waitForRendering(view);
             mouseClick(storage);
             tryCompare(storage, "expanded", true);
