@@ -75,7 +75,15 @@ Rectangle {
 
     radius: Kirigami.Units.cornerRadius * 3
     color: Kirigami.Theme.backgroundColor
-    border.color: Qt.alpha(Kirigami.Theme.textColor, 0.2)
+    border.color: welcomeVisible ? Qt.alpha(accent, 0.23) : Qt.alpha(Kirigami.Theme.textColor, 0.2)
+    gradient: welcomeVisible ? welcomeGradient : null
+
+    Gradient {
+        id: welcomeGradient
+        orientation: Gradient.Horizontal
+        GradientStop { position: 0; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.06)) }
+        GradientStop { position: 1; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.18)) }
+    }
     clip: true
 
     required property var session
@@ -102,6 +110,7 @@ Rectangle {
     readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
     readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible
+    readonly property bool welcomeVisible: conversationVisible && !helpVisible && session.entries.count === 0
     readonly property bool sidebarVisible: session.history.length > 0 && !helpVisible
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
@@ -261,7 +270,7 @@ Rectangle {
             id: titleActions
             anchors.fill: parent
             anchors.leftMargin: view.inset
-            anchors.rightMargin: Kirigami.Units.smallSpacing
+            anchors.rightMargin: view.welcomeVisible ? view.inset : Kirigami.Units.smallSpacing
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
@@ -380,9 +389,10 @@ Rectangle {
         // but the field (tests/tst_FieldSide.qml).
         y: view.fieldAtBottom ? view.height - height : viewHeadingRow.height
         height: implicitHeight
-        implicitHeight: composer.implicitHeight + Kirigami.Units.largeSpacing * 2
+        implicitHeight: composer.implicitHeight + composer.anchors.topMargin + composer.anchors.bottomMargin
 
         Rectangle {
+            visible: !view.welcomeVisible
             y: view.fieldAtBottom ? 0 : parent.height - height
             width: parent.width
             height: 1
@@ -393,6 +403,8 @@ Rectangle {
             rows: 1
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
+            anchors.leftMargin: view.welcomeVisible ? view.inset : anchors.margins
+            anchors.rightMargin: anchors.leftMargin
             columnSpacing: Kirigami.Units.largeSpacing
 
             PlasmaExtras.SearchField {
@@ -956,7 +968,7 @@ Rectangle {
             PopupScrollView {
                 popup: view
                 anchors.fill: parent
-                visible: view.conversationVisible && !view.helpVisible && view.session.entries.count === 0
+                visible: view.welcomeVisible
 
                 Flickable {
 
@@ -968,7 +980,6 @@ Rectangle {
 
                     AssistantWelcome {
                         id: welcome
-                        visible: !view.helpVisible
                         locatingApplication: view.session.locatingApplication
                         x: view.inset
                         y: Math.max(view.inset, (welcomeArea.height - height) / 2)

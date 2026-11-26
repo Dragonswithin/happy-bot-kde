@@ -58,27 +58,18 @@ ColumnLayout {
     }).filter(tile => tile !== null)
     spacing: Kirigami.Units.largeSpacing
 
-    Rectangle {
-        id: hero
+    Item {
+        id: greeting
 
-        readonly property int inset: Kirigami.Units.gridUnit
         readonly property real artworkWidth: Math.min(width * 0.32, Kirigami.Units.gridUnit * 8)
         Layout.fillWidth: true
-        implicitHeight: Math.max(Kirigami.Units.gridUnit * 6.5, intro.implicitHeight + inset * 2)
-        radius: Kirigami.Units.cornerRadius * 3
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(welcome.accent, 0.06)) }
-            GradientStop { position: 1; color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(welcome.accent, 0.18)) }
-        }
-        border.color: Qt.alpha(welcome.accent, 0.23)
+        implicitHeight: Math.max(Kirigami.Units.gridUnit * 5.5, intro.implicitHeight)
 
         ColumnLayout {
             id: intro
             anchors.left: parent.left
-            anchors.leftMargin: hero.inset
             anchors.verticalCenter: parent.verticalCenter
-            width: hero.width - hero.artworkWidth - hero.inset * 1.5
+            width: greeting.width - greeting.artworkWidth - Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.smallSpacing
 
             PlasmaComponents3.Label {
@@ -100,8 +91,8 @@ ColumnLayout {
         Item {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: hero.artworkWidth
-            height: Math.min(parent.height - hero.inset, width)
+            width: greeting.artworkWidth
+            height: Math.min(parent.height, width)
             Accessible.ignored: true
 
             GreetingPortrait {
