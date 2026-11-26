@@ -271,6 +271,7 @@ def _operating_system() -> dict[str, str]:
         release = {}
     return {
         "name": release.get("PRETTY_NAME") or release.get("NAME") or platform.system(),
+        "logo": release.get("LOGO") or (f"distributor-logo-{release['ID']}" if release.get("ID") else ""),
         "version": release.get("VERSION") or release.get("VERSION_ID", ""),
         "kernel": platform.release(),
         "architecture": platform.machine(),

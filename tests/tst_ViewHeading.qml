@@ -23,7 +23,7 @@ Item {
                         memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
                         gpus: [{id: "test", name: "Test GPU", busy_percent: 7}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
                         hardware: {model: "Test workstation", board: "Test board", drives: [{device: "/dev/sda", model: "Test drive", total: 200, rotational: 0}]},
-                        os: {name: "Test Linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
+                        os: {name: "Test Linux", logo: "test-linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
                         uptime_seconds: 4500});
                 } else if (path.startsWith("/system/programs?")) {
                     programRequests++;
@@ -178,9 +178,12 @@ Item {
             compare(session.programRequests, 0);
             compare(findChild(view, "systemCard-uptime").uptimeFraction, 4500 / 86400);
             waitForRendering(view);
+            verify(hardware.iconSummary);
+            compare(findChild(view, "systemIcon-hardware").source, "cpu");
             hardware.forceActiveFocus(Qt.TabFocusReason);
             keyClick(Qt.Key_Return);
             tryCompare(hardware, "expanded", true);
+            verify(!hardware.iconSummary);
             verify(hardware.detail.includes("Test board"));
             verify(findChild(view, "systemCard-storage") === null);
             compare(processor.visible, false);
@@ -188,10 +191,12 @@ Item {
             mouseClick(button(view, "Back"));
             tryCompare(processor, "visible", true);
             const os = findChild(view, "systemCard-os");
-            verify(os && os.visible);
+            verify(os && os.visible && os.iconSummary);
+            compare(findChild(view, "systemIcon-os").source, "test-linux");
             os.forceActiveFocus(Qt.TabFocusReason);
             keyClick(Qt.Key_Return);
             tryCompare(os, "expanded", true);
+            verify(!os.iconSummary);
             verify(os.detail.includes("6.0"));
             mouseClick(button(view, "Back"));
             tryCompare(processor, "visible", true);

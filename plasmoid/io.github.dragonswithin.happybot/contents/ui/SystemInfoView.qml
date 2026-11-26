@@ -182,6 +182,9 @@ ColumnLayout {
         objectName: "systemCard-" + section
         readonly property bool expanded: view.detailSection === section
         property string title: ""
+        property string overviewIcon: ""
+        property string overviewIconFallback: "preferences-system"
+        readonly property bool iconSummary: overviewIcon.length > 0 && !expanded
         property string value: ""
         property string detail: ""
         property var graph: null
@@ -191,7 +194,8 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredWidth: 1
         Layout.preferredHeight: expanded ? implicitHeight : Math.max(width, implicitHeight)
-        implicitHeight: column.implicitHeight + Kirigami.Units.largeSpacing * 2
+        implicitHeight: (iconSummary ? iconColumn.implicitHeight : column.implicitHeight)
+            + Kirigami.Units.largeSpacing * 2
         radius: Kirigami.Units.cornerRadius * 2
         visible: available && (!view.detailSection || expanded)
         color: Qt.alpha(hover.hovered && !expanded ? view.accent : Kirigami.Theme.textColor,
@@ -201,7 +205,7 @@ ColumnLayout {
         onActiveFocusChanged: if (activeFocus && !expanded) view.revealCardRequested(card)
         Accessible.role: expanded ? Accessible.Grouping : Accessible.Button
         Accessible.name: card.title
-        Accessible.description: card.value
+        Accessible.description: card.iconSummary ? "" : card.value
         Accessible.onPressAction: if (!expanded) view.openDetails(section)
         Keys.onReturnPressed: if (!expanded) view.openDetails(section)
         Keys.onEnterPressed: if (!expanded) view.openDetails(section)
@@ -210,7 +214,35 @@ ColumnLayout {
         TapHandler { enabled: !card.expanded; onTapped: view.openDetails(card.section) }
 
         ColumnLayout {
+            id: iconColumn
+            anchors.centerIn: parent
+            width: Math.max(0, parent.width - Kirigami.Units.smallSpacing * 2)
+            visible: card.iconSummary
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                objectName: "systemIcon-" + card.section
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(iconColumn.width, Kirigami.Units.iconSizes.huge)
+                Layout.preferredHeight: Layout.preferredWidth
+                source: card.overviewIcon
+                fallback: card.overviewIconFallback
+                Accessible.ignored: true
+            }
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: card.title
+                font: Kirigami.Theme.smallFont
+                wrapMode: Text.Wrap
+                Accessible.ignored: true
+            }
+        }
+
+        ColumnLayout {
             id: column
+            visible: !card.iconSummary
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.smallSpacing
@@ -403,6 +435,8 @@ ColumnLayout {
         Card {
             section: "hardware"
             title: i18n("Hardware")
+            overviewIcon: "cpu"
+            overviewIconFallback: "computer"
             readonly property var inventory: view.info?.hardware
             value: [inventory?.manufacturer, inventory?.model].filter(Boolean).join(" ")
                 || view.info?.cpu?.model || i18n("Hardware details")
@@ -420,6 +454,7 @@ ColumnLayout {
         Card {
             section: "os"
             title: i18n("Operating system")
+            overviewIcon: view.info?.os?.logo || overviewIconFallback
             available: !!view.info?.os
             value: view.info?.os?.name ?? ""
             detail: view.info?.os ? [view.info.os.version ? i18n("Version: %1", view.info.os.version) : "",
