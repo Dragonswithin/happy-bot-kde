@@ -244,6 +244,7 @@ Window {
             height: width
             activity: floating.activity
             mascot: floating.useRobotMascot
+            robotStyle: floating.session.ui.robot_style ?? "pip"
             animate: floating.session.ui.mascot_animations !== false
         }
 

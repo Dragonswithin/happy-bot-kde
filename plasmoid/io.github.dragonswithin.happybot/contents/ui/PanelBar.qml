@@ -63,6 +63,7 @@ Item {
     property string iconName: "search"
     property alias activity: icon.activity
     property alias animateMascot: icon.animateMascot
+    property alias robotStyle: icon.robotStyle
     property int widthInGridUnits: 18
     property bool voiceEnabled: false  // show the microphone at the bar's right end
     property bool listening: false

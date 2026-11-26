@@ -271,9 +271,11 @@ panel widget always look and behave the same.
   greeting sound, start-screen buttons and their order, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
   back in its corner, the popup's size, and in the panel Happy Bot's icon
-  or a search bar, and the bar's width. New setups start with the animated robot.
-  With **Animate the robot** enabled, Happy Bot blinks and glances around
-  on the floating shortcut, in the panel and on the start screen.
+  or a search bar, and the bar's width. In **Happy Bot’s picture**, choose
+  **Robot** and pick a face from the ten portraits. New setups use Pip, the
+  original mint robot. Switching to **Wand** remembers your robot for later.
+  **Animate the robot** enables each character’s idle movements on the floating
+  shortcut, in the panel and on the start screen.
   Enable **Play a greeting sound** to hear a short chirp when the assistant opens.
   The preview button plays it in settings.
   Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the

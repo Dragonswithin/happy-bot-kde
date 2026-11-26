@@ -1,0 +1,25 @@
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <g id="shell">
+    <rect width="48" height="48" fill="black" fill-opacity="0" stroke="none"/>
+    <g stroke="#183840" stroke-linejoin="round">
+      <path d="M11 39h7v5h-7zm19 0h7v5h-7z" fill="#8f5947" stroke-width="2.4"/>
+      <path d="M3 21h42v13H3z" fill="#ab6a4f" stroke-width="2.4"/>
+      <path d="m5 17 6-6h25l7 7v19l-5 5H10l-5-5z" fill="#e99460" stroke-width="2.5"/>
+      <path d="M9 18l5-4h13" fill="none" stroke="#ffe0a6" stroke-width="2" stroke-linecap="round"/>
+      <path d="M14 37.8h10m3 0h4" fill="none" stroke="#965546" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g fill="#55483e"><circle cx="8.5" cy="21" r="1.2"/><circle cx="8.5" cy="36.5" r="1.2"/><circle cx="39.4" cy="37" r="1.2"/></g>
+    <rect x="10" y="18" width="28" height="17" rx="7" fill="#194852"/>
+    <path d="M21 29q3 3.5 6 0" fill="none" stroke="#adfff1" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g id="eyes" fill="#adfff1">
+    <rect x="15" y="22" width="4" height="6" rx="2"/>
+    <rect x="29" y="22" width="4" height="6" rx="2"/>
+  </g>
+  <g id="beacon" stroke="#183840" stroke-linejoin="round" stroke-linecap="round">
+    <rect width="48" height="48" fill="black" fill-opacity="0" stroke="none"/>
+    <path d="m36 7.8 4.5 2.6v5.2L36 18.2l-4.5-2.6v-5.2z" fill="#ffe2a0" stroke-width="2"/>
+    <path d="m34.2 14.8 3.6-3.6" stroke-width="1.8"/>
+  </g>
+</svg>

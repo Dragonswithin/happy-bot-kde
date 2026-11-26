@@ -10,6 +10,7 @@ Item {
 
     required property IconActivity activity
     property bool mascot: true
+    property string robotStyle: "pip"
     property bool animate: true
     readonly property bool moving: animate && visible && Window.window && Window.window.visible
                                    && Window.visibility !== Window.Minimized && Kirigami.Units.longDuration > 1
@@ -48,6 +49,7 @@ Item {
     RobotCharacter {
         anchors.fill: parent
         visible: face.mascot && !face.hot && !face.activity.recording
+        robotStyle: face.robotStyle
         animate: face.animate
         expressionSource: visible ? face.artwork(face.expression) : ""
     }
@@ -56,13 +58,13 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize.width: Math.ceil(face.unit * 48)
-        source: face.mascot && (face.hot || face.activity.recording) ? Look.robotIcon
+        source: face.mascot && (face.hot || face.activity.recording) ? Look.robotImage(face.robotStyle)
               : face.activity.recording ? Look.activeMicrophoneIcon : ""
     }
     Kirigami.Icon {
         anchors.fill: parent
         visible: !face.mascot && !face.activity.recording
-        source: Look.assistantIcon(false)
+        source: Look.assistantIcon(false, face.robotStyle)
     }
 
     Image {

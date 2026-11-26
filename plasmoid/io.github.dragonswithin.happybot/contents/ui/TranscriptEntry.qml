@@ -71,6 +71,7 @@ Item {
     }
     readonly property bool hasChoices: kind === "tool" && cardData !== null && cardData.kind === "choices"
     property bool useRobotMascot: false
+    property string robotStyle: "pip"
     readonly property bool running: kind === "tool" && stage === "running"
     property real now: Date.now()
 
@@ -173,7 +174,7 @@ Item {
                         source: {
                             switch (entry.kind) {
                             case "user": return "im-user";
-                            case "assistant": return entry.useRobotMascot ? Look.robotIcon : "";
+                            case "assistant": return entry.useRobotMascot ? Look.robotImage(entry.robotStyle) : "";
                             case "tool": return entry.hasChoices ? (entry.cardData.follow_up ? "go-next" : "dialog-question")
                                 : entry.stage === "failed" ? "dialog-warning"
                                 : entry.stage === "ok" ? "checkmark" : "chronometer";

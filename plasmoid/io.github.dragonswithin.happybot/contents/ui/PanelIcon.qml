@@ -11,6 +11,7 @@ Loader {
 
     property IconActivity activity
     property bool animateMascot: false
+    property string robotStyle: "pip"
     property bool hovered: false
     required property string iconName
 
@@ -21,6 +22,7 @@ Loader {
         id: character
         MascotIcon {
             activity: icon.activity
+            robotStyle: icon.robotStyle
         }
     }
 

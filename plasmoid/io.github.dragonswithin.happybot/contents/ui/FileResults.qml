@@ -273,7 +273,7 @@ Item {
                                     QQC2.MenuItem {
                                         text: i18n("Ask about this")
                                         icon.name: results.useRobotMascot ? "" : results.assistantIcon
-                                        icon.source: results.useRobotMascot ? Look.robotIcon : ""
+                                        icon.source: results.useRobotMascot ? results.assistantIcon : ""
                                         icon.color: "transparent"
                                         onTriggered: results.fileActionRequested(entry.modelData, "ask")
                                     }

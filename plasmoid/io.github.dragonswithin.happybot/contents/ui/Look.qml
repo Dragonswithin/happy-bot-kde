@@ -24,6 +24,34 @@ QtObject {
     readonly property color mascotAccent: "#72c8bf"
 
     readonly property url robotIcon: Qt.resolvedUrl("../images/happy-bot.svg")
+    // Each pivot is in the same 48-unit drawing as its SVG beacon. Motion
+    // values describe one short gesture before the robot settles and blinks.
+    readonly property var robotStyles: [
+        { id: "pip", name: "Pip", pivot: Qt.point(25, 15), turn: 16, ms: 450 },
+        { id: "rivet", name: "Rivet", pivot: Qt.point(36, 13), turn: 48, ms: 570 },
+        { id: "orbit", name: "Orbit", pivot: Qt.point(24, 10), turn: 24, rise: 1.3, ms: 670 },
+        { id: "watt", name: "Watt", pivot: Qt.point(24, 9), zoom: 0.20, rise: -1.2, ms: 320 },
+        { id: "pixel", name: "Pixel", pivot: Qt.point(24, 8), rise: 1.5, slide: 2, ms: 360 },
+        { id: "sprig", name: "Sprig", pivot: Qt.point(24, 15), turn: 16, ms: 640 },
+        { id: "nixie", name: "Nixie", pivot: Qt.point(24, 8), dim: 0.72, ms: 330 },
+        { id: "sprocket", name: "Sprocket", pivot: Qt.point(37, 12), turn: 90, ms: 720 },
+        { id: "sonar", name: "Sonar", pivot: Qt.point(24, 12), turn: -84, ms: 740 },
+        { id: "dotty", name: "Dotty", pivot: Qt.point(24, 9), turn: 110, ms: 580 }
+    ]
+
+    function robotDesign(style: string): var {
+        return robotStyles.find(design => design.id === style) || robotStyles[0];
+    }
+
+    function robotImage(style: string): url {
+        const id = robotDesign(style).id;
+        return id === "pip" ? robotIcon : Qt.resolvedUrl("../images/robots/" + id + ".svg");
+    }
+
+    function robotThemeIcon(pluginName: string, style: string, pose: string): string {
+        const id = robotDesign(style).id;
+        return pluginName + (id === "pip" ? "" : "-" + id) + (pose ? "-" + pose : "");
+    }
 
     readonly property url activeMicrophoneIcon: Qt.resolvedUrl("../images/microphone-active.svg")
     readonly property url microphoneIcon: Qt.resolvedUrl("../images/microphone.svg")
@@ -38,8 +66,8 @@ QtObject {
         }
     }
 
-    function assistantIcon(useRobotMascot: bool): string {
-        return useRobotMascot ? robotIcon.toString() : "tools-wizard";
+    function assistantIcon(useRobotMascot: bool, style: string): string {
+        return useRobotMascot ? robotImage(style).toString() : "tools-wizard";
     }
 
     readonly property var extensionIcons: ({

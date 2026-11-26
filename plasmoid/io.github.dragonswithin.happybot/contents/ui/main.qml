@@ -142,16 +142,17 @@ PlasmoidItem {
     property int recallIndex: 0
 
     readonly property bool animatePanelMascot: !standalone && session.ui.robot_mascot && session.ui.mascot_animations !== false
+    readonly property string robotStyle: session.ui.robot_style ?? "pip"
 
     // plasmawindowed publishes this string as the tray's theme icon name.
     Plasmoid.icon: {
-        if (session.ui.robot_mascot && iconActivity.trayPose) {
-            return Plasmoid.pluginName + "-" + iconActivity.trayPose;
+        if (session.ui.robot_mascot && (root.standalone || iconActivity.trayPose)) {
+            return Look.robotThemeIcon(Plasmoid.pluginName, root.robotStyle, iconActivity.trayPose);
         }
         if (iconActivity.recording) {
             return Plasmoid.pluginName + "-microphone-active";
         }
-        return root.standalone && session.ui.robot_mascot ? Plasmoid.pluginName : Look.assistantIcon(session.ui.robot_mascot);
+        return Look.assistantIcon(session.ui.robot_mascot, root.robotStyle);
     }
     Plasmoid.title: i18n("Happy Bot")
     Plasmoid.status: {
@@ -306,6 +307,7 @@ PlasmoidItem {
         status: session.status
         iconName: Plasmoid.icon
         activity: iconActivity
+        robotStyle: root.robotStyle
         animateMascot: root.animatePanelMascot
         busy: session.busy
         needsAttention: session.pendingApprovals > 0
@@ -362,6 +364,7 @@ PlasmoidItem {
     // applet never expands into it as a popup (`activationTogglesExpanded`
     // is false), so in the icon form it is unused.
     fullRepresentation: PanelBar {
+        robotStyle: root.robotStyle
         iconDescription: iconActivity.description()
         busy: session.busy
         statusText: session.pendingApprovals > 0 ? i18n("Waiting for your approval — click here")
@@ -433,7 +436,7 @@ PlasmoidItem {
                                         : session.showingRecent && session.hits.length > 0)
         query: root.barText
         selectedIndex: root.barSelectedIndex
-        assistantIcon: Look.assistantIcon(session.ui.robot_mascot)
+        assistantIcon: Look.assistantIcon(session.ui.robot_mascot, root.robotStyle)
         useRobotMascot: session.ui.robot_mascot
         onResultActivated: hit => root.openBarHit(hit)
         onFileActionRequested: (hit, action) => {

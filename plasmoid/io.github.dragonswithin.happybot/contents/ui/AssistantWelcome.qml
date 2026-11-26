@@ -37,6 +37,7 @@ ColumnLayout {
     id: welcome
 
     required property string assistantIcon
+    property string robotStyle: "pip"
     required property color accent
     property bool animateGreeting: false
     // The application Happy Bot was opened from ({app, class, title}), or null.
@@ -118,6 +119,7 @@ ColumnLayout {
                 width: Math.min(parent.height, parent.width * 0.85)
                 height: width
                 iconSource: welcome.assistantIcon
+                robotStyle: welcome.robotStyle
                 accent: welcome.accent
                 animate: welcome.animateGreeting
             }

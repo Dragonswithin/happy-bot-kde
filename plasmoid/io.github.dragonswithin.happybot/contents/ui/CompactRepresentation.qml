@@ -29,6 +29,7 @@ Item {
     property string iconName: "tools-wizard"
     property alias activity: icon.activity
     property alias animateMascot: icon.animateMascot
+    property alias robotStyle: icon.robotStyle
     property bool busy: false
     property bool needsAttention: false
     property bool open: false

@@ -78,9 +78,10 @@ Rectangle {
 
     required property var session
     property bool useRobotMascot: false
+    readonly property string robotStyle: session.ui?.robot_style ?? "pip"
     readonly property color accent: useRobotMascot ? Look.mascotAccent : Kirigami.Theme.highlightColor
     readonly property int inset: Kirigami.Units.largeSpacing * 1.5
-    readonly property string assistantIcon: Look.assistantIcon(useRobotMascot)
+    readonly property string assistantIcon: Look.assistantIcon(useRobotMascot, robotStyle)
     property bool fieldAtBottom: false
     readonly property alias inputText: field.text
     property int selectedIndex: -1
@@ -762,6 +763,7 @@ Rectangle {
 
                             TranscriptEntry {
                                 useRobotMascot: view.useRobotMascot
+                                robotStyle: view.robotStyle
                                 width: transcriptColumn.width
                                 onLinkActivated: link => view.hitActivated(link)
                                 choicesEnabled: !view.session.busy
@@ -791,6 +793,7 @@ Rectangle {
                         y: Math.max(view.inset, (welcomeArea.height - height) / 2)
                         width: Math.max(1, welcomeArea.width - view.inset * 2)
                         assistantIcon: view.assistantIcon
+                        robotStyle: view.robotStyle
                         accent: view.accent
                         animateGreeting: view.useRobotMascot && view.session.ui.mascot_animations !== false
                         helpWith: view.session.helpWith

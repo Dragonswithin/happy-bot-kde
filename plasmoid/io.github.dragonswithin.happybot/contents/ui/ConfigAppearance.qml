@@ -45,7 +45,10 @@ KCM.SimpleKCM {
     property string cfg_daemonUrl: ""
 
     property bool unsavedChanges: false
-    property var ui: null
+    property var savedUi: null
+    property var sending: null
+    property var pending: ({})
+    readonly property var ui: savedUi ? Object.assign({}, savedUi, sending, pending) : null
     property bool appAutostart: false
     property var panelWidgets: []  // [{id, search_bar, bar_width, vertical}], from GET /panel
     readonly property bool onPanel: panelWidgets.length > 0
@@ -57,21 +60,37 @@ KCM.SimpleKCM {
         page.unsavedChanges = false;
     }
 
-    function read() {
+    function read(finished) {
         client.request("GET", "/health", null, function(data) {
-            page.ui = data.ui || null;
+            page.savedUi = data.ui || null;
+            if (finished) finished();
         }, function(data) {
             page.problem = data.error || i18n("The assistant is not running");
+            if (finished) finished();
         });
     }
 
     function save(changes) {
-        client.request("POST", "/ui", { changes: changes }, function(data) {
-            page.ui = data.ui;
+        page.pending = Object.assign({}, page.pending, changes);
+        page.sendPending();
+    }
+
+    // Moving quickly between portraits can select another while the first is saving.
+    function sendPending() {
+        if (page.sending || Object.keys(page.pending).length === 0) return;
+        page.sending = page.pending;
+        page.pending = {};
+        function finished() {
+            page.sending = null;
+            page.sendPending();
+        }
+        client.request("POST", "/ui", { changes: page.sending }, function(data) {
+            page.savedUi = data.ui;
             page.problem = "";
+            finished();
         }, function(data) {
             page.problem = data.error || i18n("That could not be saved");
-            page.read();
+            page.read(finished);
         });
     }
 
@@ -111,29 +130,6 @@ KCM.SimpleKCM {
         onTriggered: page.readApp()
     }
 
-    component PictureChoice: QQC2.RadioDelegate {
-        id: choice
-
-        Layout.fillWidth: true
-        Layout.minimumWidth: 0
-        icon.width: Kirigami.Units.iconSizes.medium
-        icon.height: Kirigami.Units.iconSizes.medium
-        padding: Kirigami.Units.largeSpacing
-        bottomPadding: padding
-        leftInset: 0
-        rightInset: 0
-        topInset: 0
-        bottomInset: 0
-
-        background: Rectangle {
-            radius: Kirigami.Units.cornerRadius * 2
-            color: Qt.alpha(Kirigami.Theme.highlightColor, choice.checked ? 0.12 : choice.hovered ? 0.06 : 0)
-            border.color: choice.visualFocus || choice.checked
-                          ? Kirigami.Theme.highlightColor : Qt.alpha(Kirigami.Theme.textColor, 0.16)
-            border.width: choice.visualFocus ? 2 : 1
-        }
-    }
-
     ColumnLayout {
         spacing: Kirigami.Units.largeSpacing
 
@@ -163,29 +159,16 @@ KCM.SimpleKCM {
             iconName: "preferences-desktop-icons"
             description: i18n("Choose the picture you see in the panel, on the floating button and beside replies.")
             headerArtwork: GreetingPortrait {
-                iconSource: Look.assistantIcon(page.ui?.robot_mascot ?? true)
+                robotStyle: page.ui?.robot_style ?? "pip"
+                iconSource: Look.assistantIcon(page.ui?.robot_mascot ?? true, robotStyle)
                 animate: page.ui?.robot_mascot === true && page.ui?.mascot_animations !== false
             }
 
-            GridLayout {
+            RobotPicker {
                 Layout.fillWidth: true
-                columns: width >= Kirigami.Units.gridUnit * 17 ? 2 : 1
-                uniformCellWidths: true
-                rowSpacing: Kirigami.Units.smallSpacing
-                columnSpacing: Kirigami.Units.largeSpacing
-
-                PictureChoice {
-                    text: i18n("Robot")
-                    icon.source: Look.robotIcon
-                    checked: page.ui !== null && page.ui.robot_mascot
-                    onClicked: if (!page.ui.robot_mascot) page.save({ robot_mascot: true })
-                }
-                PictureChoice {
-                    text: i18n("Wand")
-                    icon.name: "tools-wizard"
-                    checked: page.ui !== null && !page.ui.robot_mascot
-                    onClicked: if (page.ui.robot_mascot) page.save({ robot_mascot: false })
-                }
+                useRobotMascot: page.ui?.robot_mascot ?? true
+                robotStyle: page.ui?.robot_style ?? "pip"
+                onChoiceRequested: changes => page.save(changes)
             }
 
             QQC2.CheckBox {

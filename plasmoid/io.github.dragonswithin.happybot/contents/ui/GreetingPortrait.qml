@@ -7,6 +7,7 @@ import org.kde.kirigami as Kirigami
 Item {
     id: portrait
     required property string iconSource
+    property string robotStyle: "pip"
     property bool animate: false
     property color accent: Look.mascotAccent
     implicitWidth: Kirigami.Units.gridUnit * 4
@@ -42,7 +43,8 @@ Item {
             anchors.centerIn: parent
             width: parent.width * 0.8
             height: width
-            visible: portrait.iconSource === Look.robotIcon.toString()
+            visible: portrait.iconSource === Look.robotImage(portrait.robotStyle).toString()
+            robotStyle: portrait.robotStyle
             animate: portrait.animate
         }
         Kirigami.Icon {

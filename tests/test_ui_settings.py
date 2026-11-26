@@ -10,7 +10,10 @@ are checked to show the mascot only when it is chosen.
 from __future__ import annotations
 
 import sys
+import subprocess
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest import mock
 from pathlib import Path
 from typing import Any
@@ -21,14 +24,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from happy_bot import daemon_routes  # noqa: E402
-from happy_bot.settings import validate_settings  # noqa: E402
+from happy_bot.settings import load_settings, save_settings, validate_settings  # noqa: E402
 from happy_bot import ask_stream  # noqa: E402
-from happy_bot.ui_settings import MASCOT_ICON, UI_DEFAULTS, WAND_ICON, UiSettingsError, assistant_icon, validate_ui  # noqa: E402
+from happy_bot.ui_settings import (MASCOT_ICON, ROBOT_STYLES, UI_DEFAULTS, WAND_ICON, UiSettingsError,
+                                   assistant_icon, validate_ui)  # noqa: E402
 
 
 class NotificationIconTests(unittest.TestCase):
     def test_the_mascot_setting_picks_the_notification_icon(self) -> None:
         self.assertEqual(assistant_icon(UI_DEFAULTS), MASCOT_ICON)
+        for style in ROBOT_STYLES:
+            expected = MASCOT_ICON if style == "pip" else f"{MASCOT_ICON}-{style}"
+            self.assertEqual(assistant_icon({"robot_mascot": True, "robot_style": style}), expected)
+            self.assertEqual(assistant_icon({"robot_mascot": False, "robot_style": style}), WAND_ICON)
         for ui in ({"robot_mascot": False}, None, {"robot_mascot": "yes"}):
             self.assertEqual(assistant_icon(ui), WAND_ICON)
 
@@ -37,14 +45,40 @@ class NotificationIconTests(unittest.TestCase):
         with mock.patch.object(ask_stream.shutil, "which", return_value="/usr/bin/notify-send"), \
                 mock.patch.object(ask_stream, "run_command", side_effect=lambda command, timeout: sent.append(command) or {}), \
                 mock.patch.object(ask_stream.threading, "Thread", side_effect=lambda target, **_: mock.Mock(start=target)):
-            ask_stream.notify_finished("Wallpaper", MASCOT_ICON)
-        self.assertIn(f"--icon={MASCOT_ICON}", sent[0])
+            ask_stream.notify_finished("Wallpaper", assistant_icon({"robot_mascot": True, "robot_style": "orbit"}))
+        self.assertIn(f"--icon={MASCOT_ICON}-orbit", sent[0])
+
+    def test_robot_tray_icons_install_with_their_own_art_and_remove_independently_of_app_icon(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        images = root / "plasmoid" / MASCOT_ICON / "contents/images"
+        reactions = ("busy", "memory", "nudge", "hot", "download", "upload", "transfer", "recording")
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            app_icon = directory / f"{MASCOT_ICON}.svg"
+            app_icon.write_bytes((images / "happy-bot.svg").read_bytes())
+            generator = [sys.executable, str(root / "scripts/mascot_tray_icons.py"), tmp]
+            subprocess.run(generator, check=True)
+            for style in ROBOT_STYLES:
+                base = images / "happy-bot.svg" if style == "pip" else images / "robots" / f"{style}.svg"
+                prefix = assistant_icon({"robot_mascot": True, "robot_style": style})
+                self.assertEqual((directory / f"{prefix}.svg").read_bytes(), base.read_bytes())
+                body = list(ET.parse(base).getroot())
+                for state in reactions:
+                    with self.subTest(style=style, state=state):
+                        pose = list(ET.parse(directory / f"{prefix}-{state}.svg").getroot())
+                        self.assertGreater(len(pose), len(body))
+                        self.assertEqual([ET.tostring(part) for part in pose[:len(body)]],
+                                         [ET.tostring(part) for part in body])
+            self.assertTrue((directory / f"{MASCOT_ICON}-microphone-active.svg").exists())
+            subprocess.run([*generator, "--remove"], check=True)
+            self.assertEqual(list(directory.iterdir()), [app_icon])
 
 
 class UiSchemaTests(unittest.TestCase):
     def test_existing_picture_choice_gets_quiet_feedback_defaults(self) -> None:
         older_ui = validate_ui({"robot_mascot": False})
         self.assertFalse(older_ui["robot_mascot"])
+        self.assertEqual(older_ui["robot_style"], "pip")
         self.assertFalse(older_ui["robot_sounds"])
         self.assertTrue(older_ui["mascot_animations"])
 
@@ -58,6 +92,14 @@ class UiSchemaTests(unittest.TestCase):
                 validate_ui(bad)
         self.assertEqual(validate_settings({})["ui"], UI_DEFAULTS)
 
+    def test_chosen_style_persists_even_with_the_wand_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            save_settings({"ui": {"robot_mascot": False, "robot_style": "sprig"}}, path)
+            ui = load_settings(path)["ui"]
+            self.assertEqual(ui["robot_style"], "sprig")
+            self.assertFalse(ui["robot_mascot"])
+
 
 class FakeDaemon:
     def __init__(self) -> None:
@@ -69,6 +111,17 @@ class FakeDaemon:
 
 
 class ChangeUiRouteTests(unittest.TestCase):
+    def test_style_changes_are_checked_before_replacing_a_saved_robot(self) -> None:
+        daemon = FakeDaemon()
+        for style in ROBOT_STYLES:
+            status, reply = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_style": style}})
+            self.assertEqual((status, reply["ui"]["robot_style"]), (200, style))
+        for invalid in ("", "../other.svg", False, ["sonar"]):
+            with self.subTest(invalid=invalid):
+                status, _ = daemon_routes.change_ui(daemon, {}, {"changes": {"robot_style": invalid}})
+                self.assertEqual(status, 400)
+                self.assertEqual(daemon.settings["ui"]["robot_style"], "dotty")
+
     def test_retired_typing_settings_are_dropped_not_refused(self) -> None:
         # Settings saved before files stopped being searched while typing still load.
         ui = validate_ui({"instant_search": False, "instant_min_chars": 3, "instant_delay_ms": 0,
