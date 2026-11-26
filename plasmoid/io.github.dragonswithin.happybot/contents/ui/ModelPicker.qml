@@ -27,6 +27,7 @@ T.ComboBox {
     objectName: "chatModelPicker"
 
     required property var session
+    property bool nativeLook: false
     property color accent: Kirigami.Theme.highlightColor
 
     readonly property var names: [""].concat(session.models.map(item => item.name))
@@ -46,6 +47,7 @@ T.ComboBox {
     onActivated: index => session.chatModel = names[index]
 
     background: PopupControlBackground {
+        nativeLook: picker.nativeLook
         accent: picker.accent
         highlighted: picker.hovered || picker.down
         emphasized: picker.visualFocus || picker.popup.visible
@@ -93,6 +95,7 @@ T.ComboBox {
         implicitHeight: Math.min(options.contentHeight + topPadding + bottomPadding,
                                  Kirigami.Units.gridUnit * 12)
         background: PopupControlBackground {
+            nativeLook: picker.nativeLook
             accent: picker.accent
             raised: true
         }
@@ -107,6 +110,7 @@ T.ComboBox {
 
     Accessible.name: i18n("AI for this chat")
     AssistantToolTip {
+        nativeLook: picker.nativeLook
         accent: picker.accent
         text: session.chatModel === ""
             ? i18n("Automatic: your AIs are asked in the order set on the AI Model page")

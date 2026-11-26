@@ -30,12 +30,14 @@ ColumnLayout {
 
     property var hits: []
     property int selectedIndex: -1
+    property bool nativeLook: false
     property color accent: Kirigami.Theme.highlightColor
 
     signal activated(var hit)
     signal removeRequested(var hit)
 
     AssistantMenu {
+        nativeLook: chips.nativeLook
         id: recentMenu
         objectName: "recentEntryMenu"
         accent: chips.accent
@@ -131,6 +133,7 @@ ColumnLayout {
                             Accessible.name: Look.hitWhere(chip.modelData).length > 0
                                 ? i18n("%1, in %2", chip.modelData.title, Look.hitWhere(chip.modelData)) : chip.modelData.title
                             AssistantToolTip {
+                                nativeLook: chips.nativeLook
                                 text: Look.hitWhere(chip.modelData)
                                 visible: parent.hovered && chip.modelData.kind !== "quick"
                             }

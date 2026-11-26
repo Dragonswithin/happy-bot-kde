@@ -50,6 +50,7 @@ import org.kde.plasma.components as PlasmaComponents3
 Item {
     id: results
     property var popup: null
+    property bool nativeLook: popup?.nativeLook ?? false
     property color accent: popup?.accent ?? Kirigami.Theme.highlightColor
 
     required property var session
@@ -75,6 +76,7 @@ Item {
     }
 
     WebSiteMenu {
+        nativeLook: results.nativeLook
         accent: results.accent
         id: webMenu
         objectName: "webResultMenu"
@@ -165,6 +167,7 @@ Item {
                 spacing: 0
 
                 RecentChips {
+                    nativeLook: results.nativeLook
                     Layout.fillWidth: true
                     visible: results.chips
                     hits: results.chips ? results.session.hits : []
@@ -266,6 +269,7 @@ Item {
                                 }
 
                                 AssistantMenu {
+                                    nativeLook: results.nativeLook
                                     accent: results.accent
                                     id: appMenu
 
@@ -310,6 +314,7 @@ Item {
                                 }
 
                                 AssistantMenu {
+                                    nativeLook: results.nativeLook
                                     accent: results.accent
                                     id: fileMenu
 
@@ -436,6 +441,7 @@ Item {
                                 : i18n("File search is not responding. Try again in a moment.")
                             wrapMode: Text.Wrap
                             AssistantToolTip {
+                                nativeLook: results.nativeLook
                                 accent: results.accent
                                 text: results.session.searchError
                                 visible: errorHover.hovered && results.session.searchErrorCode !== "not_configured"

@@ -8,8 +8,10 @@ import org.kde.kirigami as Kirigami
 
 QQC2.ToolTip {
     id: tip
+    property bool nativeLook: false
     property color accent: Kirigami.Theme.highlightColor
 
+    Kirigami.Theme.colorSet: nativeLook ? Kirigami.Theme.Tooltip : Kirigami.Theme.Window
     delay: Kirigami.Units.toolTipDelay
     padding: Kirigami.Units.largeSpacing
     width: Math.min(implicitWidth, Kirigami.Units.gridUnit * 20)
@@ -21,6 +23,7 @@ QQC2.ToolTip {
         wrapMode: Text.Wrap
     }
     background: PopupControlBackground {
+        nativeLook: tip.nativeLook
         accent: tip.accent
         raised: true
     }

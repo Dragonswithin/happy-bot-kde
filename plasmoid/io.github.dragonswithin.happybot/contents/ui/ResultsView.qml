@@ -79,6 +79,7 @@ AssistantSurface {
     opacity: (session.capturing && !session.helpWindow) || movePreview.item?.visible ? 0 : 1
     property bool useRobotMascot: false
     readonly property string robotStyle: session.ui?.robot_style ?? "pip"
+    nativeLook: !useRobotMascot
     accent: Look.assistantAccent(useRobotMascot, robotStyle, Kirigami.Theme.highlightColor)
     readonly property string assistantIcon: Look.assistantIcon(useRobotMascot, robotStyle)
     property bool fieldAtBottom: false
@@ -311,6 +312,7 @@ AssistantSurface {
                 text: i18n("Close (Esc)")
                 display: QQC2.AbstractButton.IconOnly
                 AssistantToolTip {
+                    nativeLook: view.nativeLook
                     accent: view.accent
                     text: parent.text
                     visible: parent.hovered
@@ -346,6 +348,7 @@ AssistantSurface {
         icon.name: "go-previous"
         text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
         AssistantToolTip {
+            nativeLook: view.nativeLook
             accent: view.accent
             text: parent.text
             visible: parent.hovered
@@ -436,6 +439,7 @@ AssistantSurface {
                         width: implicitHeight
                         focusPolicy: Qt.TabFocus
                         AssistantToolTip {
+                            nativeLook: view.nativeLook
                             accent: view.accent
                             text: parent.text
                             visible: parent.hovered || parent.activeFocus
@@ -466,6 +470,7 @@ AssistantSurface {
                                 width: parent.implicitWidth
                                 height: width
                                 accent: view.accent
+                                nativeLook: view.nativeLook
                                 recording: view.session.listening
                             }
                         }
@@ -516,6 +521,7 @@ AssistantSurface {
 
             // Which AI this chat uses; only when more than one is set up.
             ModelPicker {
+                nativeLook: view.nativeLook
                 accent: view.accent
                 Layout.row: 0
                 Layout.column: 2
@@ -624,6 +630,7 @@ AssistantSurface {
                                     view.setInput("");
                                 }
                                 AssistantToolTip {
+                                    nativeLook: view.nativeLook
                                     accent: view.accent
                                     text: saved.modelData.title
                                     visible: parent.hovered && titleLabel.truncated
@@ -673,6 +680,7 @@ AssistantSurface {
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                         AssistantToolTip {
+                                            nativeLook: view.nativeLook
                                             accent: view.accent
                                             text: parent.text
                                             visible: parent.hovered
@@ -688,6 +696,7 @@ AssistantSurface {
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                         AssistantToolTip {
+                                            nativeLook: view.nativeLook
                                             accent: view.accent
                                             text: parent.text
                                             visible: parent.hovered
@@ -745,6 +754,7 @@ AssistantSurface {
                 loading: view.session.webStartLoading
                 problem: view.session.webStartProblem
                 accent: view.accent
+                nativeLook: view.nativeLook
                 selectedIndex: view.webStartIndex
                 onSitesChanged: view.webStartIndex = -1
                 onSearchesChanged: view.webStartIndex = -1

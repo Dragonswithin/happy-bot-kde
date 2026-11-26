@@ -56,6 +56,7 @@ import org.kde.plasma.components as PlasmaComponents3
 Item {
     id: bar
 
+    property bool nativeLook: false
     property color accent: Kirigami.Theme.highlightColor
     property bool busy: false
     property string statusText: ""
@@ -157,6 +158,7 @@ Item {
             height: width
             visible: bar.voiceEnabled
             accent: bar.accent
+            nativeLook: bar.nativeLook
             recording: bar.listening
         }
 
@@ -202,6 +204,7 @@ Item {
         Accessible.onPressAction: bar.micClicked()
 
         AssistantToolTip {
+            nativeLook: bar.nativeLook
             accent: bar.accent
             text: bar.listening ? i18n("Stop listening") : i18n("Talk to Happy Bot")
             visible: micButton.containsMouse
@@ -225,6 +228,7 @@ Item {
         Accessible.onPressAction: bar.iconClicked()
 
         AssistantToolTip {
+            nativeLook: bar.nativeLook
             accent: bar.accent
             text: bar.iconDescription || i18n("Open Happy Bot")
             visible: logoButton.containsMouse

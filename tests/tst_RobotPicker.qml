@@ -65,14 +65,17 @@ Item {
             compare(picker.changes.length, ids.length - 1);  // Pip was already selected.
         }
 
-        function test_wandRemembersTheRobot() {
+        function test_wandIsAThemeAndExistingSelectionIsRecognized() {
+            picker.useRobotMascot = false;
+            picker.robotStyle = "sonar";
+            verify(tile("wand").checked);
+            verify(tile("sonar").visible && !tile("sonar").checked);
             mouseClick(tile("sonar"));
-            mouseClick(findChild(picker, "useWand"));
+            compare(picker.changes[0], {robot_mascot: true, robot_style: "sonar"});
+            mouseClick(tile("wand"));
             compare(picker.changes[1], {robot_mascot: false});
-            verify(!tile("sonar").visible);
-            mouseClick(findChild(picker, "useRobot"));
-            compare(picker.changes[2], {robot_mascot: true});
-            verify(tile("sonar").visible && tile("sonar").checked);
+            compare(picker.robotStyle, "sonar");
+            verify(tile("wand").checked);
         }
 
         function test_soundCheckboxIsOnInitiallyAndCanBeClearedBeforeChoosing() {
@@ -100,8 +103,8 @@ Item {
             keyClick(Qt.Key_Right);
             compare(picker.robotStyle, "watt");
             keyClick(Qt.Key_End);
-            compare(picker.robotStyle, "dotty");
-            verify(tile("dotty").activeFocus);
+            compare(picker.selectedTheme, "wand");
+            verify(tile("wand").activeFocus);
         }
     }
 }

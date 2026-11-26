@@ -70,6 +70,7 @@ Item {
         }
 
         function test_startScreenTiles(data) {
+            view.useRobotMascot = true;
             view.fieldAtBottom = data.saved;
             session.history = data.saved ? [{ id: "a", title: "Saved chat", updated: 0 }] : [];
             const width = view.width;
@@ -129,6 +130,8 @@ Item {
             session.voiceEnabled = false;
             view.useRobotMascot = false;
             compare(panelResults.mainItem.accent, view.accent);
+            verify(view.nativeLook && panelResults.mainItem.nativeLook && mic.nativeLook);
+            compare(view.gradient, null);
             session.ui = Object.assign({}, session.ui, {robot_style: "pip"});
         }
 

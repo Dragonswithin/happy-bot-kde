@@ -289,9 +289,9 @@ panel widget always look and behave the same.
   start-screen buttons and their order, the hotkey, starting
   Happy Bot at login, how faded the floating Happy Bot is and putting it
   back in its corner, the popup's size, and in the panel Happy Bot's icon
-  or a search bar, and the bar's width. In **Happy Bot’s picture**, choose
-  **Robot** and pick a face from the ten portraits. New setups use Pip, the
-  original mint robot. Switching to **Wand** remembers your robot for later.
+  or a search bar, and the bar's width. In **Appearance → Theme**, choose one of ten mascots or **Wand**, which
+  follows KDE’s icons and colors. New setups use Pip, the original mint robot.
+  Choosing Wand keeps your sound selections.
   **Animate the robot** enables each character’s idle movements on the floating
   shortcut, in the panel and on the start screen.
   **Also change sounds** is checked by default. Picking a robot gives each event

@@ -54,6 +54,7 @@ PlasmaCore.Dialog {
 
     mainItem: AssistantSurface {
         id: surface
+        nativeLook: !dialog.useRobotMascot
         accent: Look.assistantAccent(dialog.useRobotMascot, dialog.session.ui.robot_style ?? "pip",
                                      Kirigami.Theme.highlightColor)
         width: Math.max(dialog.visualParent ? dialog.visualParent.width : 0,
@@ -94,6 +95,7 @@ PlasmaCore.Dialog {
             selectedIndex: dialog.selectedIndex
             assistantIcon: dialog.assistantIcon
             useRobotMascot: dialog.useRobotMascot
+            nativeLook: surface.nativeLook
             accent: surface.accent
 
             onResultActivated: hit => dialog.resultActivated(hit)

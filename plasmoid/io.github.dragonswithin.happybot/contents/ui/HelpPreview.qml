@@ -72,6 +72,7 @@ ColumnLayout {
                         enabled: !preview.working
                         display: controls.width < Kirigami.Units.gridUnit * 29 ? QQC2.AbstractButton.IconOnly : QQC2.AbstractButton.TextBesideIcon
                         AssistantToolTip {
+                            nativeLook: preview.popup?.nativeLook ?? false
                             accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
                             text: parent.text
                             visible: parent.hovered
@@ -116,6 +117,7 @@ ColumnLayout {
                         visible: preview.hasImage
                         enabled: screenshot.zoom > 1
                         AssistantToolTip {
+                            nativeLook: preview.popup?.nativeLook ?? false
                             accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
                             text: parent.text
                             visible: parent.hovered
@@ -129,6 +131,7 @@ ColumnLayout {
                         visible: preview.hasImage
                         enabled: screenshot.zoom < screenshot.maximumZoom
                         AssistantToolTip {
+                            nativeLook: preview.popup?.nativeLook ?? false
                             accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
                             text: parent.text
                             visible: parent.hovered
@@ -141,6 +144,7 @@ ColumnLayout {
                         visible: preview.hasImage
                         Accessible.name: i18n("Fit screenshot to window")
                         AssistantToolTip {
+                            nativeLook: preview.popup?.nativeLook ?? false
                             accent: preview.popup?.accent ?? Kirigami.Theme.highlightColor
                             text: i18n("Fit the entire screenshot. Scroll over the picture to zoom.")
                             visible: parent.hovered

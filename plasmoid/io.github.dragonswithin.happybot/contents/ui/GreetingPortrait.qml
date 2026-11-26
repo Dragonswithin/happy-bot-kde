@@ -20,9 +20,10 @@ Item {
         height: width
         radius: width / 2
         color: "transparent"
-        border.color: Qt.alpha(portrait.accent, 0.25)
+        border.color: character.visible ? Qt.alpha(portrait.accent, 0.25) : "transparent"
 
         Rectangle {
+            visible: character.visible
             anchors.centerIn: parent
             width: parent.width * 0.76
             height: width
@@ -31,6 +32,7 @@ Item {
             border.color: Qt.alpha(portrait.accent, 0.19)
         }
         Rectangle {
+            visible: character.visible
             x: parent.width * 0.15 - width / 2
             y: parent.height * 0.145 - height / 2
             width: Kirigami.Units.smallSpacing * 1.6
@@ -53,6 +55,8 @@ Item {
             height: width
             visible: !character.visible
             source: visible ? portrait.iconSource : ""
+            isMask: true
+            color: Kirigami.Theme.textColor
         }
     }
 }

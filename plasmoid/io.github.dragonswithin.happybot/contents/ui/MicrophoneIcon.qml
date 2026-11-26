@@ -4,16 +4,27 @@
 
 import QtQuick
 import QtQuick.Shapes
+import org.kde.kirigami as Kirigami
 
 Item {
     id: icon
     objectName: "themedMicrophone"
     required property color accent
+    property bool nativeLook: false
     property bool recording: false
     readonly property color outline: Qt.tint("#183840", Qt.alpha(accent, 0.16))
     Accessible.ignored: true
 
+    Kirigami.Icon {
+        anchors.fill: parent
+        visible: icon.nativeLook
+        source: icon.recording ? "media-playback-stop" : "audio-input-microphone"
+        isMask: true
+        color: icon.recording ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+    }
+
     Shape {
+        visible: !icon.nativeLook
         anchors.centerIn: parent
         width: 32
         height: 32

@@ -370,6 +370,7 @@ PlasmoidItem {
     // applet never expands into it as a popup (`activationTogglesExpanded`
     // is false), so in the icon form it is unused.
     fullRepresentation: PanelBar {
+        nativeLook: !session.ui.robot_mascot
         accent: root.assistantAccent
         robotStyle: root.robotStyle
         iconDescription: iconActivity.description()

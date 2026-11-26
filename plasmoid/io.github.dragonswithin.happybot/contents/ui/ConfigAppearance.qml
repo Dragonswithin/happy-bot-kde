@@ -128,9 +128,9 @@ KCM.SimpleKCM {
         SettingsSection {
             Layout.fillWidth: true
             enabled: page.ui !== null
-            title: i18n("Happy Bot’s picture")
+            title: i18n("Theme")
             iconName: "preferences-desktop-icons"
-            description: i18n("Choose the picture you see in the panel, on the floating button and beside replies.")
+            description: i18n("Choose a mascot and its colors, or use Wand to match your KDE desktop.")
             headerArtwork: GreetingPortrait {
                 accent: Look.assistantAccent(page.ui?.robot_mascot ?? true, robotStyle, Kirigami.Theme.highlightColor)
                 robotStyle: page.ui?.robot_style ?? "pip"

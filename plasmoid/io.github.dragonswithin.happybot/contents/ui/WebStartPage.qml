@@ -18,6 +18,7 @@ Item {
     property bool loading: false
     property string problem: ""
     property int selectedIndex: -1
+    property bool nativeLook: false
     property color accent: Kirigami.Theme.highlightColor
     readonly property int itemCount: sites.length + searches.length
     readonly property int inset: Kirigami.Units.largeSpacing * 1.5
@@ -70,6 +71,7 @@ Item {
     }
 
     WebSiteMenu {
+        nativeLook: page.nativeLook
         accent: page.accent
         id: siteMenu
         objectName: "webSiteMenu"
@@ -146,6 +148,7 @@ Item {
                             Accessible.name: text
                             Accessible.description: modelData.pinned ? i18n("Pinned site. Open the context menu for options.") : i18n("Open the context menu to pin or hide this site.")
                             AssistantToolTip {
+                                nativeLook: page.nativeLook
                                 accent: page.accent
                                 text: tile.text === tile.domain ? tile.domain : tile.text + "\n" + tile.domain
                                 visible: parent.hovered

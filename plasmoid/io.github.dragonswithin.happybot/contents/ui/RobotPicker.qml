@@ -16,32 +16,21 @@ ColumnLayout {
     Layout.minimumWidth: 0
     spacing: Kirigami.Units.smallSpacing
 
-    function chooseRobot(style: string) {
-        if (robotStyle !== style) choiceRequested({robot_style: style});
-    }
+    readonly property string selectedTheme: useRobotMascot ? robotStyle : "wand"
+    readonly property var themeChoices: Look.robotStyles.concat([{id: "wand", name: i18n("Wand")}])
 
-    RowLayout {
-        spacing: Kirigami.Units.largeSpacing
-        QQC2.RadioButton {
-            objectName: "useRobot"
-            text: i18n("Robot")
-            checked: picker.useRobotMascot
-            onClicked: if (!picker.useRobotMascot) picker.choiceRequested({robot_mascot: true})
-        }
-        QQC2.RadioButton {
-            objectName: "useWand"
-            text: i18n("Wand")
-            icon.name: "tools-wizard"
-            checked: !picker.useRobotMascot
-            onClicked: if (picker.useRobotMascot) picker.choiceRequested({robot_mascot: false})
-        }
+    function chooseTheme(theme: string) {
+        if (selectedTheme === theme)
+            return;
+        choiceRequested(theme === "wand" ? {robot_mascot: false}
+                        : useRobotMascot ? {robot_style: theme}
+                        : {robot_mascot: true, robot_style: theme});
     }
 
     QQC2.CheckBox {
         objectName: "followMascotSounds"
         Layout.fillWidth: true
         Layout.minimumWidth: 0
-        visible: picker.useRobotMascot
         text: i18n("Also change sounds")
         QQC2.ToolTip.text: i18n("Choosing another robot changes the theme of every event sound. Each event keeps its on or off setting.")
         QQC2.ToolTip.visible: hovered || visualFocus
@@ -53,7 +42,6 @@ ColumnLayout {
         id: gallery
         Layout.fillWidth: true
         Layout.minimumWidth: 0
-        visible: picker.useRobotMascot
         columns: Math.max(1, Math.min(5, Math.floor((width + columnSpacing)
                  / (Kirigami.Units.gridUnit * 4.5 + columnSpacing))))
         uniformCellWidths: true
@@ -62,7 +50,7 @@ ColumnLayout {
 
         Repeater {
             id: robots
-            model: Look.robotStyles
+            model: picker.themeChoices
             QQC2.RadioDelegate {
                 id: tile
                 required property var modelData
@@ -70,7 +58,9 @@ ColumnLayout {
                 objectName: "robot-" + modelData.id
                 text: modelData.name
                 Accessible.name: text
-                checked: picker.robotStyle === modelData.id
+                checked: picker.selectedTheme === modelData.id
+                readonly property bool wand: modelData.id === "wand"
+                readonly property color accent: Look.assistantAccent(!wand, modelData.id, Kirigami.Theme.highlightColor)
                 activeFocusOnTab: checked || activeFocus
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
@@ -82,7 +72,7 @@ ColumnLayout {
                 topInset: 0
                 bottomInset: 0
 
-                onClicked: picker.chooseRobot(modelData.id)
+                onClicked: picker.chooseTheme(modelData.id)
                 Keys.onPressed: event => {
                     let next = index;
                     switch (event.key) {
@@ -94,7 +84,7 @@ ColumnLayout {
                     case Qt.Key_End: next = robots.count - 1; break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
-                        picker.chooseRobot(modelData.id);
+                        picker.chooseTheme(modelData.id);
                         event.accepted = true;
                         return;
                     default: return;
@@ -102,15 +92,15 @@ ColumnLayout {
                     event.accepted = true;
                     next = Math.max(0, Math.min(next, robots.count - 1));
                     robots.itemAt(next).forceActiveFocus(Qt.TabFocusReason);
-                    picker.chooseRobot(Look.robotStyles[next].id);
+                    picker.chooseTheme(picker.themeChoices[next].id);
                 }
 
                 background: Rectangle {
                     radius: Kirigami.Units.cornerRadius * 2
-                    color: Qt.alpha(Look.robotDesign(tile.modelData.id).accent,
+                    color: Qt.alpha(tile.accent,
                                     tile.checked ? 0.14 : tile.hovered ? 0.07 : 0)
                     border.width: tile.visualFocus ? 2 : 1
-                    border.color: tile.checked || tile.visualFocus ? Look.robotDesign(tile.modelData.id).accent
+                    border.color: tile.checked || tile.visualFocus ? tile.accent
                                  : Qt.alpha(Kirigami.Theme.textColor, 0.16)
                 }
 
@@ -120,9 +110,18 @@ ColumnLayout {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium * 1.25
                         Layout.preferredHeight: Layout.preferredWidth
-                        source: Look.robotImage(tile.modelData.id)
+                        visible: !tile.wand
+                        source: visible ? Look.robotImage(tile.modelData.id) : ""
                         sourceSize.width: Math.ceil(width)
                         fillMode: Image.PreserveAspectFit
+                        Accessible.ignored: true
+                    }
+                    Kirigami.Icon {
+                        visible: tile.wand
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium * 1.25
+                        Layout.preferredHeight: Layout.preferredWidth
+                        source: "tools-wizard"
                         Accessible.ignored: true
                     }
                     QQC2.Label {
@@ -144,7 +143,7 @@ ColumnLayout {
                     visible: tile.checked
                     source: "emblem-checked"
                     isMask: true
-                    color: Look.robotDesign(tile.modelData.id).accent
+                    color: tile.accent
                     Accessible.ignored: true
                 }
             }
