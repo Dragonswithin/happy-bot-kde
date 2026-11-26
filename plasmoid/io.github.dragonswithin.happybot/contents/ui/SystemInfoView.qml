@@ -15,17 +15,12 @@ import org.kde.plasma.components as PlasmaComponents3
  * System info: what the computer is doing, live, so System Monitor is rarely needed. ResultsView.qml
  * shows it while `session.showingSystem` is true (the start screen's optional "System info" button).
  *
- * Cards for the processor (load, temperature, cores, load averages), memory (and swap), each
- * graphics card (busy share, its own and shared memory, temperature), the network (download and
- * upload speed), and the battery when there is one, with small graphs of the last minutes for load,
- * memory and network; then each disk's space, and how long the computer has been on. Below,
- * the programs using the most CPU or memory (switchable), with their CPU share of the whole computer
- * and memory; the user's own programs have Stop, which asks first ("unsaved work is lost") and then
- * asks the program to quit (`POST /system/stop`). Other users' programs and the ones that keep the
- * desktop running are shown without it.
+ * The overview shows summary cards. Opening a card reveals its readings and charts.
+ * Processor and Memory details also show the busiest programs and let users stop
+ * their own programs after confirming.
  *
  * Data comes from the daemon (src/happy_bot/system_routes.py): `GET /system/overview` every
- * `overviewMs` and `GET /system/programs` every `programsMs`, only while the view is visible; the
+ * `overviewMs` while visible and `GET /system/programs` every `programsMs` in Processor or Memory details; the
  * graphs' history is kept by the daemon, so it is there as soon as the view opens. Sizes are shown
  * in powers of 1024 with GB/MB, speeds per second. The view keeps only the latest replies.
  */
@@ -36,6 +31,8 @@ ColumnLayout {
     required property var session
     property var info: null
     property var programs: []
+    property string detailSection: ""
+    readonly property bool programsVisible: detailSection === "cpu" || detailSection === "memory"
     property string sort: "cpu"
     property int confirmPid: -1
     property string message: ""
@@ -43,6 +40,24 @@ ColumnLayout {
     readonly property int programsMs: 2000
 
     spacing: Kirigami.Units.largeSpacing
+
+    function openDetails(section) {
+        if (section === "cpu" || section === "memory")
+            view.sort = section;
+        view.detailSection = section;
+    }
+
+    function back() {
+        if (!view.detailSection)
+            return false;
+        view.detailSection = "";
+        view.confirmPid = -1;
+        view.message = "";
+        view.programs = [];
+        return true;
+    }
+
+    onVisibleChanged: if (!visible) back()
 
     function size(bytes) {
         if (bytes === null || bytes === undefined) {
@@ -83,8 +98,13 @@ ColumnLayout {
     }
 
     function refreshPrograms() {
-        view.session.request("GET", "/system/programs?sort=" + view.sort, null, data => view.programs = data.programs || [],
-                             data => {});
+        if (!view.programsVisible)
+            return;
+        const sort = view.sort;
+        view.session.request("GET", "/system/programs?sort=" + sort, null, data => {
+            if (view.programsVisible && view.sort === sort)
+                view.programs = data.programs || [];
+        }, () => {});
     }
 
     function stop(program) {
@@ -107,7 +127,7 @@ ColumnLayout {
         interval: view.programsMs
         repeat: true
         triggeredOnStart: true
-        running: view.visible
+        running: view.visible && view.programsVisible
         onTriggered: view.refreshPrograms()
     }
 
@@ -154,19 +174,34 @@ ColumnLayout {
     // One reading: a heading, its main value, a detail line, and optionally a graph or a bar.
     component Card: Rectangle {
         id: card
+        required property string section
+        property bool available: true
+        objectName: "systemCard-" + section
+        readonly property bool expanded: view.detailSection === section
         property string title: ""
         property string value: ""
         property string detail: ""
         property var graph: null
         property real graphMaximum: 100
         property real bar: -1  // 0..1 to draw a bar
-        default property alias extra: more.data
         Layout.fillWidth: true
         Layout.preferredWidth: 1
         implicitHeight: column.implicitHeight + Kirigami.Units.largeSpacing * 2
         radius: Kirigami.Units.cornerRadius * 2
-        color: Qt.alpha(Kirigami.Theme.textColor, 0.04)
-        border.color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+        visible: available && (!view.detailSection || expanded)
+        color: Qt.alpha(hover.hovered && !expanded ? view.accent : Kirigami.Theme.textColor,
+                        hover.hovered && !expanded ? 0.14 : 0.04)
+        border.color: activeFocus ? view.accent : Qt.alpha(Kirigami.Theme.textColor, 0.12)
+        activeFocusOnTab: !expanded
+        Accessible.role: expanded ? Accessible.Grouping : Accessible.Button
+        Accessible.name: card.title
+        Accessible.description: card.value
+        Accessible.onPressAction: if (!expanded) view.openDetails(section)
+        Keys.onReturnPressed: if (!expanded) view.openDetails(section)
+        Keys.onEnterPressed: if (!expanded) view.openDetails(section)
+        Keys.onSpacePressed: if (!expanded) view.openDetails(section)
+        HoverHandler { id: hover; cursorShape: card.expanded ? Qt.ArrowCursor : Qt.PointingHandCursor }
+        TapHandler { enabled: !card.expanded; onTapped: view.openDetails(card.section) }
 
         ColumnLayout {
             id: column
@@ -174,10 +209,21 @@ ColumnLayout {
             anchors.margins: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.smallSpacing
 
-            PlasmaComponents3.Label {
-                text: card.title
-                font: Kirigami.Theme.smallFont
-                opacity: 0.7
+            RowLayout {
+                Layout.fillWidth: true
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    text: card.title
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.75
+                }
+                Kirigami.Icon {
+                    visible: !card.expanded
+                    source: "go-next"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                    Layout.preferredHeight: Layout.preferredWidth
+                    Accessible.ignored: true
+                }
             }
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
@@ -188,7 +234,7 @@ ColumnLayout {
             }
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
-                visible: card.detail.length > 0
+                visible: card.expanded && card.detail.length > 0
                 text: card.detail
                 font: Kirigami.Theme.smallFont
                 opacity: 0.75
@@ -196,20 +242,15 @@ ColumnLayout {
             }
             QQC2.ProgressBar {
                 Layout.fillWidth: true
-                visible: card.bar >= 0
+                visible: card.expanded && card.bar >= 0
                 from: 0
                 to: 1
                 value: Math.max(0, card.bar)
             }
             Sparkline {
-                visible: card.graph !== null
+                visible: card.expanded && card.graph !== null
                 values: card.graph || []
                 maximum: card.graphMaximum
-            }
-            ColumnLayout {
-                id: more
-                Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
             }
         }
     }
@@ -223,14 +264,15 @@ ColumnLayout {
     GridLayout {
         Layout.fillWidth: true
         visible: view.info !== null
-        columns: view.width >= Kirigami.Units.gridUnit * 24 ? 2 : 1
+        columns: !view.detailSection && view.width >= Kirigami.Units.gridUnit * 24 ? 2 : 1
         columnSpacing: Kirigami.Units.smallSpacing
         rowSpacing: Kirigami.Units.smallSpacing
 
         Card {
+            section: "cpu"
             title: i18n("Processor")
             value: view.info ? view.percent(view.info.cpu.percent) : ""
-            detail: view.info ? [view.degrees(view.info.cpu.temp_c),
+            detail: view.info ? [view.info.cpu.model || "", view.degrees(view.info.cpu.temp_c),
                                  i18np("%1 core", "%1 cores", view.info.cpu.cores),
                                  view.info.cpu.load.length ? i18n("load %1", view.info.cpu.load.map(v => v.toFixed(1)).join(" ")) : ""]
                                 .filter(part => part.length > 0).join(" · ") : ""
@@ -238,6 +280,7 @@ ColumnLayout {
         }
 
         Card {
+            section: "memory"
             title: i18n("Memory")
             value: view.info ? i18n("%1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total)) : ""
             detail: view.info && view.info.memory.swap_total > 0
@@ -250,7 +293,9 @@ ColumnLayout {
 
             Card {
                 required property var modelData
-                title: i18n("Graphics")
+                required property int index
+                section: "gpu-" + index
+                title: view.info.gpus.length > 1 ? i18n("Graphics %1", index + 1) : i18n("Graphics")
                 value: view.percent(modelData.busy_percent)
                 detail: [modelData.name, view.degrees(modelData.temp_c),
                          modelData.memory_total ? i18n("memory %1 of %2", view.size(modelData.memory_used), view.size(modelData.memory_total)) : "",
@@ -260,6 +305,7 @@ ColumnLayout {
         }
 
         Card {
+            section: "network"
             title: view.info && view.info.network.interface ? i18n("Network (%1)", view.info.network.interface) : i18n("Network")
             value: view.info ? "↓ " + view.rate(view.info.network.receive_bps) : ""
             detail: view.info ? "↑ " + view.rate(view.info.network.send_bps) : ""
@@ -268,7 +314,8 @@ ColumnLayout {
         }
 
         Card {
-            visible: !!(view.info && view.info.battery)
+            section: "battery"
+            available: !!(view.info && view.info.battery)
             title: i18n("Battery")
             value: view.info && view.info.battery ? view.info.battery.percent + "%" : ""
             detail: view.info && view.info.battery
@@ -276,17 +323,31 @@ ColumnLayout {
                   .filter(part => part.length > 0).join(" · ") : ""
             bar: view.info && view.info.battery ? view.info.battery.percent / 100 : -1
         }
+        Card {
+            section: "storage"
+            title: i18n("Storage")
+            value: view.info ? i18np("%1 disk", "%1 disks", view.info.disks.length) : ""
+        }
+
+        Card {
+            section: "uptime"
+            available: !!view.info?.uptime_seconds
+            title: i18n("Uptime")
+            value: view.info ? view.uptime(view.info.uptime_seconds) : ""
+            detail: view.info?.uptime_seconds
+                ? i18n("Started %1", new Date(Date.now() - view.info.uptime_seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)) : ""
+        }
     }
 
     Kirigami.Heading {
-        visible: view.info !== null
+        visible: view.detailSection === "storage"
         level: 5
         text: i18n("Disks")
         opacity: 0.7
     }
 
     Repeater {
-        model: view.info ? view.info.disks : []
+        model: view.detailSection === "storage" ? view.info.disks : []
 
         ColumnLayout {
             required property var modelData
@@ -314,14 +375,8 @@ ColumnLayout {
         }
     }
 
-    PlasmaComponents3.Label {
-        visible: !!(view.info && view.info.uptime_seconds)
-        text: view.info ? i18n("On for %1", view.uptime(view.info.uptime_seconds)) : ""
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
-    }
-
     RowLayout {
+        visible: view.programsVisible
         Layout.fillWidth: true
         Layout.topMargin: Kirigami.Units.largeSpacing
 
@@ -351,14 +406,14 @@ ColumnLayout {
 
     Kirigami.InlineMessage {
         Layout.fillWidth: true
-        visible: view.message.length > 0
+        visible: view.programsVisible && view.message.length > 0
         text: view.message
         showCloseButton: true
         onVisibleChanged: if (!visible) view.message = ""
     }
 
     Repeater {
-        model: view.programs
+        model: view.programsVisible ? view.programs : []
 
         ColumnLayout {
             id: program

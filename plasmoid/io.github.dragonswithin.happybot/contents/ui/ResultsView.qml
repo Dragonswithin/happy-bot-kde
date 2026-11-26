@@ -361,7 +361,7 @@ AssistantSurface {
             } else if (view.fixVisible) {
                 view.session.stopFixing();
             } else if (view.systemVisible) {
-                view.session.closeSystemInfo();
+                if (!systemInfo.back()) view.session.closeSystemInfo();
             } else if (view.articleVisible) {
                 if (!articleView.back()) {  // back through the pages followed, then to the matches
                     view.session.closeArticle();
@@ -510,7 +510,7 @@ AssistantSurface {
                     } else if (view.articleVisible) {
                         view.session.closeArticle();
                     } else if (view.systemVisible) {
-                        view.session.closeSystemInfo();
+                        if (!systemInfo.back()) view.session.closeSystemInfo();
                     } else if (view.session.finding) {
                         view.session.stopFinding();
                     } else {
@@ -779,6 +779,7 @@ AssistantSurface {
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
                 Flickable {
+                    id: systemFlick
 
                     acceptedButtons: Qt.NoButton
                     contentWidth: width
@@ -790,6 +791,7 @@ AssistantSurface {
                     SystemInfoView {
                         accent: view.accent
                         id: systemInfo
+                        onDetailSectionChanged: systemFlick.contentY = 0
                         x: view.inset
                         y: view.inset
                         width: parent.width - view.inset * 2

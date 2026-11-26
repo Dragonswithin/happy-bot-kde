@@ -431,8 +431,8 @@ Status: built, exit check not yet passed (see Phase 10 findings).
 **Phase 11: Start screen and System info** (requested by the maintainer on
 2026-11-25). The screen Happy Bot opens on is the "start screen"; its
 buttons are chosen and ordered in the settings, and an optional System info
-button shows live readings and the busiest programs so System Monitor is
-rarely needed.
+button opens a live overview of summary cards. Each card opens its own details,
+with the busiest programs in Processor and Memory.
 *Exit:* a person switches System info on and reorders the buttons on the
 Appearance page and sees the start screen follow in the panel popup and the
 floating Happy Bot; System info shows live load, memory, graphics, network

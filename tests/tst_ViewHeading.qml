@@ -16,7 +16,18 @@ Item {
         id: view
         session: HappyBot.AssistantSession {
             id: session
-            function request(method, path, body, success, failure) {}
+            property int programRequests: 0
+            function request(method, path, body, success, failure) {
+                if (path === "/system/overview") {
+                    success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
+                        memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50]},
+                        gpus: [], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
+                        uptime_seconds: 4500});
+                } else if (path.startsWith("/system/programs?")) {
+                    programRequests++;
+                    success({programs: []});
+                }
+            }
         }
     }
 
@@ -146,6 +157,30 @@ Item {
             keyClick(Qt.Key_Return);
             tryCompare(session, "chatModel", "Local AI");
             compare(picker.displayText, "Local AI");
+        }
+
+        function test_systemInfoOpensCardsThenDetails() {
+            session.showSystemInfo();
+            const processor = findChild(view, "systemCard-cpu");
+            const storage = findChild(view, "systemCard-storage");
+            tryVerify(() => processor.visible && storage.visible);
+            compare(processor.expanded, false);
+            compare(session.programRequests, 0);
+            waitForRendering(view);
+            mouseClick(storage);
+            tryCompare(storage, "expanded", true);
+            compare(processor.visible, false);
+            compare(session.programRequests, 0);
+            mouseClick(button(view, "Back"));
+            tryCompare(processor, "visible", true);
+            waitForRendering(view);
+            mouseClick(processor);
+            tryCompare(processor, "expanded", true);
+            tryVerify(() => session.programRequests > 0);
+            mouseClick(button(view, "Back"));
+            tryCompare(storage, "visible", true);
+            mouseClick(button(view, "Back"));
+            tryCompare(heading, "text", "Start screen");
         }
 
         function test_articleAndSelection() {
