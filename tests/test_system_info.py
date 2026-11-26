@@ -60,6 +60,16 @@ class ProgramTests(unittest.TestCase):
         self.assertFalse(by_memory[0]["mine"])
         self.assertTrue(next(item for item in by_memory if item["name"] == "plasmashell")["protected"])
 
+    def test_program_sort_orders_before_applying_the_limit(self) -> None:
+        programs = system_monitor.Programs(self.proc)
+        with mock.patch.object(programs, "_user", side_effect=lambda uid: "Zoe" if uid == ME else "amy"):
+            status, reply = system_routes.programs(mock.Mock(programs=programs), {"sort": ["user"]}, {})
+            self.assertEqual(status, 200)
+            self.assertEqual([item["pid"] for item in reply["programs"]], [200, 100, 300])
+            self.assertEqual(programs.top("user", 1, descending=True)[0]["pid"], 300)
+            self.assertEqual(programs.top("memory", 1, descending=False)[0]["pid"], 300)
+            self.assertEqual(programs.top("memory", 1)[0]["pid"], 200)
+
     def test_only_the_users_own_ordinary_programs_are_stopped(self) -> None:
         with mock.patch.object(system_monitor.os, "kill") as kill:
             self.assertEqual(system_monitor.stop(100, self.proc), "Asked firefox to quit.")

@@ -17,6 +17,7 @@ Item {
         session: HappyBot.AssistantSession {
             id: session
             property int programRequests: 0
+            property string lastProgramPath: ""
             function request(method, path, body, success, failure) {
                 if (path === "/system/overview") {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
@@ -27,6 +28,7 @@ Item {
                         uptime_seconds: 4500});
                 } else if (path.startsWith("/system/programs?")) {
                     programRequests++;
+                    lastProgramPath = path;
                     success({programs: []});
                 }
             }
@@ -163,15 +165,17 @@ Item {
 
         function test_systemInfoOpensCardsThenDetails() {
             session.showSystemInfo();
-            const processor = findChild(view, "systemCard-cpu");
+            const processor = findChild(view, "systemCard-resources");
             const hardware = findChild(view, "systemCard-hardware");
             tryVerify(() => processor.visible && hardware.visible);
             compare(processor.expanded, false);
-            for (const section of ["cpu", "memory", "network", "gpu-0", "disk-activity"]) {
+            for (const section of ["resources", "network", "gpu-0", "disk-activity"]) {
                 const chart = findChild(view, "systemGraph-" + section);
                 verify(chart && chart.visible);
             }
-            tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
+            verify(findChild(view, "systemSecondaryGraph-resources").visible);
+            verify(findChild(view, "systemCard-memory") === null);
+            tryVerify(() => processor.height >= processor.width - 1);
             const activity = findChild(view, "systemCard-disk-activity");
             verify(activity && activity.visible && activity !== hardware);
             verify(!findChild(view, "systemGraph-hardware").visible);
@@ -204,6 +208,13 @@ Item {
             mouseClick(processor);
             tryCompare(processor, "expanded", true);
             tryVerify(() => session.programRequests > 0);
+            tryCompare(session, "lastProgramPath", "/system/programs?sort=cpu&order=desc");
+            mouseClick(findChild(view, "systemSort-memory"));
+            tryCompare(session, "lastProgramPath", "/system/programs?sort=memory&order=desc");
+            mouseClick(findChild(view, "systemSort-memory"));
+            tryCompare(session, "lastProgramPath", "/system/programs?sort=memory&order=asc");
+            mouseClick(findChild(view, "systemSort-user"));
+            tryCompare(session, "lastProgramPath", "/system/programs?sort=user&order=asc");
             mouseClick(button(view, "Back"));
             tryCompare(hardware, "visible", true);
             mouseClick(button(view, "Back"));

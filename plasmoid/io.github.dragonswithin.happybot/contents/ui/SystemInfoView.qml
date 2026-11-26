@@ -16,11 +16,11 @@ import org.kde.plasma.components as PlasmaComponents3
  * shows it while `session.showingSystem` is true (the start screen's optional "System info" button).
  *
  * The overview shows summary cards. Opening a card reveals its readings and charts.
- * Processor and Memory details also show the busiest programs and let users stop
+ * CPU & Memory details show a sortable list of programs and let users stop
  * their own programs after confirming.
  *
  * Data comes from the daemon (src/happy_bot/system_routes.py): `GET /system/overview` every
- * `overviewMs` while visible and `GET /system/programs` every `programsMs` in Processor or Memory details; the
+ * `overviewMs` while visible and `GET /system/programs` every `programsMs` in CPU & Memory details; the
  * graphs' history is kept by the daemon, so it is there as soon as the view opens. Sizes are shown
  * in powers of 1024 with GB/MB, speeds per second. The view keeps only the latest replies.
  */
@@ -34,8 +34,13 @@ ColumnLayout {
     signal revealCardRequested(Item card)
     property string detailSection: ""
     readonly property bool overviewDetail: ["hardware", "os", "uptime"].includes(detailSection)
-    readonly property bool programsVisible: detailSection === "cpu" || detailSection === "memory"
+    readonly property bool programsVisible: detailSection === "resources"
     property string sort: "cpu"
+    property bool sortDescending: true
+    property int programRequest: 0
+    readonly property real userColumnWidth: Kirigami.Units.gridUnit * 4
+    readonly property real cpuColumnWidth: Kirigami.Units.gridUnit * 3
+    readonly property real memoryColumnWidth: Kirigami.Units.gridUnit * 4
     property int confirmPid: -1
     property string message: ""
     readonly property int overviewMs: 1000
@@ -44,8 +49,6 @@ ColumnLayout {
     spacing: Kirigami.Units.largeSpacing
 
     function openDetails(section) {
-        if (section === "cpu" || section === "memory")
-            view.sort = section;
         view.forceActiveFocus();
         view.detailSection = section;
     }
@@ -56,6 +59,7 @@ ColumnLayout {
         view.detailSection = "";
         view.confirmPid = -1;
         view.message = "";
+        view.programRequest++;
         view.programs = [];
         return true;
     }
@@ -103,11 +107,18 @@ ColumnLayout {
     function refreshPrograms() {
         if (!view.programsVisible)
             return;
-        const sort = view.sort;
-        view.session.request("GET", "/system/programs?sort=" + sort, null, data => {
-            if (view.programsVisible && view.sort === sort)
+        const request = ++view.programRequest;
+        const order = view.sortDescending ? "desc" : "asc";
+        view.session.request("GET", "/system/programs?sort=" + view.sort + "&order=" + order, null, data => {
+            if (view.programsVisible && view.programRequest === request)
                 view.programs = data.programs || [];
         }, () => {});
+    }
+
+    function sortPrograms(column) {
+        view.sortDescending = view.sort === column ? !view.sortDescending : column !== "user";
+        view.sort = column;
+        view.refreshPrograms();
     }
 
     function stop(program) {
@@ -188,6 +199,9 @@ ColumnLayout {
         property string value: ""
         property string detail: ""
         property var graph: null
+        property string secondaryValue: ""
+        property string secondaryDetail: ""
+        property var secondaryGraph: null
         property real graphMaximum: 100
         property real uptimeFraction: -1
         property real bar: -1  // 0..1 to draw a bar
@@ -292,6 +306,27 @@ ColumnLayout {
                 values: card.graph || []
                 maximum: card.graphMaximum
             }
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                visible: card.secondaryGraph !== null
+                text: card.secondaryValue
+                elide: Text.ElideRight
+                font: Kirigami.Theme.smallFont
+            }
+            Sparkline {
+                objectName: "systemSecondaryGraph-" + card.section
+                visible: card.secondaryGraph !== null
+                values: card.secondaryGraph || []
+                stroke: Kirigami.Theme.textColor
+            }
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                visible: card.expanded && card.secondaryDetail.length > 0
+                text: card.secondaryDetail
+                font: Kirigami.Theme.smallFont
+                opacity: 0.75
+                wrapMode: Text.Wrap
+            }
             ColumnLayout {
                 visible: card.uptimeFraction >= 0
                 Layout.fillWidth: true
@@ -345,23 +380,21 @@ ColumnLayout {
         visible: view.info !== null && !view.overviewDetail
 
         Card {
-            section: "cpu"
-            title: i18n("Processor")
-            value: view.info ? view.percent(view.info.cpu.percent) : ""
+            section: "resources"
+            title: i18n("CPU & Memory")
+            value: view.info ? i18n("CPU %1", view.percent(view.info.cpu.percent)) : ""
             detail: view.info ? [view.info.cpu.model || "", view.degrees(view.info.cpu.temp_c),
-                                 i18np("%1 core", "%1 cores", view.info.cpu.cores),
+                                 i18np("%1 logical CPU", "%1 logical CPUs", view.info.cpu.cores),
                                  view.info.cpu.load.length ? i18n("load %1", view.info.cpu.load.map(v => v.toFixed(1)).join(" ")) : ""]
                                 .filter(part => part.length > 0).join(" · ") : ""
-            graph: view.info ? view.info.history.cpu : null
-        }
-
-        Card {
-            section: "memory"
-            title: i18n("Memory")
-            value: view.info ? i18n("%1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total)) : ""
-            detail: view.info && view.info.memory.swap_total > 0
+            graph: view.info?.history?.cpu ?? null
+            secondaryValue: view.info ? (expanded
+                ? i18n("Memory %1 of %2", view.size(view.info.memory.used), view.size(view.info.memory.total))
+                : i18n("Memory %1", view.percent(view.info.memory.total > 0
+                    ? 100 * view.info.memory.used / view.info.memory.total : null))) : ""
+            secondaryDetail: view.info?.memory?.swap_total > 0
                 ? i18n("Swap: %1 of %2", view.size(view.info.memory.swap_used), view.size(view.info.memory.swap_total)) : ""
-            graph: view.info ? view.info.history.memory : null
+            secondaryGraph: view.info?.history?.memory ?? null
         }
 
         Repeater {
@@ -561,6 +594,7 @@ ColumnLayout {
         visible: view.programsVisible
         Layout.fillWidth: true
         Layout.topMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
 
         Kirigami.Heading {
             Layout.fillWidth: true
@@ -570,20 +604,27 @@ ColumnLayout {
         }
 
         Repeater {
-            model: [{ sort: "cpu", label: i18n("CPU") }, { sort: "memory", label: i18n("Memory") }]
+            model: [
+                { key: "user", label: i18n("User"), width: view.userColumnWidth },
+                { key: "cpu", label: i18n("CPU"), width: view.cpuColumnWidth },
+                { key: "memory", label: i18n("Memory"), width: view.memoryColumnWidth }
+            ]
 
             PlasmaComponents3.ToolButton {
                 required property var modelData
-                text: modelData.label
-                checkable: true
-                checked: view.sort === modelData.sort
-                onClicked: {
-                    view.sort = modelData.sort;
-                    checked = Qt.binding(() => view.sort === modelData.sort);
-                    view.refreshPrograms();
-                }
+                readonly property bool sorted: view.sort === modelData.key
+                objectName: "systemSort-" + modelData.key
+                Layout.preferredWidth: modelData.width
+                text: !sorted ? modelData.label : (view.sortDescending
+                    ? i18n("%1 ↓", modelData.label) : i18n("%1 ↑", modelData.label))
+                Accessible.name: !sorted ? i18n("Sort by %1", modelData.label)
+                    : (view.sortDescending ? i18n("%1, descending", modelData.label)
+                                           : i18n("%1, ascending", modelData.label))
+                onClicked: view.sortPrograms(modelData.key)
             }
         }
+
+        Item { Layout.preferredWidth: Kirigami.Units.gridUnit * 2 }
     }
 
     Kirigami.InlineMessage {
@@ -609,24 +650,31 @@ ColumnLayout {
 
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
-                    text: program.modelData.mine ? program.modelData.name
-                        : i18n("%1 (%2)", program.modelData.name, program.modelData.user)
+                    text: program.modelData.name
                     elide: Text.ElideRight
                     opacity: program.modelData.mine ? 1 : 0.7
                 }
                 PlasmaComponents3.Label {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 3
+                    Layout.preferredWidth: view.userColumnWidth
+                    text: program.modelData.user
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    font: Kirigami.Theme.smallFont
+                }
+                PlasmaComponents3.Label {
+                    Layout.preferredWidth: view.cpuColumnWidth
                     horizontalAlignment: Text.AlignRight
                     text: program.modelData.cpu_percent.toFixed(1) + "%"
                     font: Kirigami.Theme.smallFont
                 }
                 PlasmaComponents3.Label {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                    Layout.preferredWidth: view.memoryColumnWidth
                     horizontalAlignment: Text.AlignRight
                     text: view.size(program.modelData.memory)
                     font: Kirigami.Theme.smallFont
                 }
                 PlasmaComponents3.ToolButton {
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
                     icon.name: "process-stop"
                     enabled: program.modelData.mine && !program.modelData.protected
                     opacity: enabled ? 1 : 0

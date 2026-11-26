@@ -4,7 +4,7 @@ The start screen's System info view (SystemInfoView.qml) polls these while it is
 
 - ``GET /system/overview``: processor, memory, graphics, disks, network, battery and uptime, with the
   last minutes of history for the graphs (``system_monitor.overview``); about every second.
-- ``GET /system/programs?sort=cpu|memory``: the busiest programs (``system_monitor.Programs.top``);
+- ``GET /system/programs?sort=cpu|memory|user&order=asc|desc``: the busiest programs (``system_monitor.Programs.top``);
   every two seconds. Each look measures CPU use since the previous one, from any client.
 - ``POST /system/stop`` (``{"pid"}``): ask one of the user's own programs to quit
   (``system_monitor.stop``). The view asks the user first; the daemon refuses other users' programs
@@ -34,7 +34,10 @@ def overview(server: "AssistantServer", query: dict[str, list[str]], body: dict[
 
 def programs(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     sort = (query.get("sort") or ["cpu"])[0]
-    return 200, {"ok": True, "sort": sort, "programs": server.programs.top("memory" if sort == "memory" else "cpu")}
+    if sort not in {"cpu", "memory", "user"}:
+        sort = "cpu"
+    order = (query.get("order") or ["asc" if sort == "user" else "desc"])[0]
+    return 200, {"ok": True, "sort": sort, "programs": server.programs.top(sort, descending=order != "asc")}
 
 
 def stop(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:

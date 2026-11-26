@@ -324,6 +324,7 @@ class Programs:
         self._lock = threading.Lock()
         self._previous: dict[int, int] = {}
         self._previous_time = 0.0
+        self._sample: list[dict[str, Any]] = []
         self._ticks = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
         self._page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
         self._users: dict[int, str] = {}
@@ -360,25 +361,33 @@ class Programs:
                           "uid": uid})
         return found
 
-    def top(self, sort: str = "cpu", limit: int = PROGRAMS_LISTED) -> list[dict[str, Any]]:
-        """The ``limit`` programs using the most CPU (``sort`` "cpu") or memory ("memory")."""
-        now = time.monotonic()
-        current = self._read()
+    def top(self, sort: str = "cpu", limit: int = PROGRAMS_LISTED, *, descending: bool | None = None) -> list[dict[str, Any]]:
+        """Sort programs by CPU usage, resident memory, or username before applying the row limit."""
         with self._lock:
+            now = time.monotonic()
             elapsed = now - self._previous_time
-            cores = os.cpu_count() or 1
-            fresh = 0 < elapsed < 30
-            for item in current:
-                before = self._previous.get(item["pid"])
-                used = item["cpu_ticks"] - before if fresh and before is not None else 0
-                item["cpu_percent"] = round(max(0, used) / self._ticks / elapsed / cores * 100, 1) if fresh else 0.0
-            self._previous = {item["pid"]: item["cpu_ticks"] for item in current}
-            self._previous_time = now
+            # Sorting or two open views can request the same sample in quick succession.
+            if not self._sample or not 0 <= elapsed < 0.5:
+                self._sample = self._read()
+                cores = os.cpu_count() or 1
+                fresh = 0 < elapsed < 30
+                for item in self._sample:
+                    before = self._previous.get(item["pid"])
+                    used = item["cpu_ticks"] - before if fresh and before is not None else 0
+                    item["cpu_percent"] = round(max(0, used) / self._ticks / elapsed / cores * 100, 1) if fresh else 0.0
+                    item["user"] = self._user(item["uid"])
+                self._previous = {item["pid"]: item["cpu_ticks"] for item in self._sample}
+                self._previous_time = now
+            keys = {
+                "cpu": lambda item: (item["cpu_percent"], item["memory"], -item["pid"]),
+                "memory": lambda item: (item["memory"], item["cpu_percent"], -item["pid"]),
+                "user": lambda item: (item["user"].casefold(), item["name"].casefold(), item["pid"]),
+            }
+            reverse = sort != "user" if descending is None else descending
+            ranked = sorted(self._sample, key=keys.get(sort, keys["cpu"]), reverse=reverse)[:limit]
         mine = os.getuid()
-        key = (lambda item: item["memory"]) if sort == "memory" else (lambda item: (item["cpu_percent"], item["memory"]))
-        ranked = sorted(current, key=key, reverse=True)[:limit]
         return [{"pid": item["pid"], "name": item["name"], "cpu_percent": item["cpu_percent"], "memory": item["memory"],
-                 "user": self._user(item["uid"]), "mine": item["uid"] == mine,
+                 "user": item["user"], "mine": item["uid"] == mine,
                  "protected": item["name"] in PROTECTED} for item in ranked]
 
 
