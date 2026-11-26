@@ -100,7 +100,7 @@ Rectangle {
     readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
     readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible
-    readonly property bool sidebarVisible: session.history.length > 0
+    readonly property bool sidebarVisible: session.history.length > 0 && !helpVisible
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
@@ -108,11 +108,11 @@ Rectangle {
         ? fixCard.naturalHeight + inset * 2
         : articleVisible
         ? (articleView.webMode ? maximumHeight : articleView.naturalHeight + inset * 2)
-        : systemVisible
+        : systemVisible || helpVisible
         ? maximumHeight
         : filesVisible
         ? fileResults.naturalHeight
-        : helpVisible || view.session.entries.count === 0
+        : view.session.entries.count === 0
             ? welcomeArea.contentHeight
             : transcriptColumn.implicitHeight + view.inset * 2
     readonly property real bodyHeight: sidebarVisible
@@ -146,7 +146,7 @@ Rectangle {
 
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits + (sidebarVisible ? sidebarWidth : 0)
+    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits + (session.history.length > 0 ? sidebarWidth : 0)
     // Rounded, and computed only from exact sizes (plain columns, never a
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
@@ -841,29 +841,27 @@ Rectangle {
                 }
             }
 
+            HelpPreview {
+                id: helpPreview
+                anchors.fill: parent
+                visible: view.conversationVisible && view.helpVisible
+                session: view.session
+                onFocusQuestion: view.focusInput()
+                onExplainRequested: {
+                    if (!view.inputText.trim()) view.setInput(i18n("What does this error mean and how can I fix it?"));
+                    view.focusInput();
+                }
+            }
+
             PlasmaComponents3.ScrollView {
                 anchors.fill: parent
-                visible: view.conversationVisible && (view.helpVisible || view.session.entries.count === 0)
+                visible: view.conversationVisible && !view.helpVisible && view.session.entries.count === 0
 
                 Flickable {
                     id: welcomeArea
                     contentWidth: width
-                    contentHeight: (view.helpVisible ? helpPreview.implicitHeight : welcome.implicitHeight) + view.inset * 2
+                    contentHeight: welcome.implicitHeight + view.inset * 2
                     clip: true
-
-                    HelpPreview {
-                        id: helpPreview
-                        x: view.inset
-                        y: view.inset
-                        width: Math.max(1, welcomeArea.width - view.inset * 2)
-                        visible: view.helpVisible
-                        session: view.session
-                        onFocusQuestion: view.focusInput()
-                        onExplainRequested: {
-                            if (!view.inputText.trim()) view.setInput(i18n("What does this error mean and how can I fix it?"));
-                            view.focusInput();
-                        }
-                    }
 
                     AssistantWelcome {
                         id: welcome

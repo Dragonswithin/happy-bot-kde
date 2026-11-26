@@ -170,7 +170,9 @@ used.
   has open and, for an AI marked as seeing pictures, a screenshot of the
   window. Click "Help with …" to capture the window and see its preview,
   then type your question and press Enter. "Desktop help" previews the
-  desktop when there’s no app window. **Retake** keeps your question.
+  desktop when there’s no app window. The whole screenshot fits in the
+  preview initially. Scroll over a detail to zoom, drag to pan, and click
+  **Fit** to see the whole image again. **Retake** keeps your question.
   **Point** circles a detail and **Crop** keeps the area you drag over
   (both use Python Pillow). Clear **Include screenshot with this request**
   to leave images out of that turn. You can still include reviewed error text. Follow-ups can

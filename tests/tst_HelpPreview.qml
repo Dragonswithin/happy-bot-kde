@@ -42,6 +42,8 @@ Item {
         }
 
         function init() {
+            view.heightInGridUnits = 26;
+            session.history = [];
             session.busy = false;
             session.resetTranscript();
             session.helpWith = { app: "Kate", window: "{kate}" };
@@ -62,6 +64,90 @@ Item {
             session.capture.success({ id, url: Qt.resolvedUrl(
                 "../plasmoid/io.github.dragonswithin.happybot/contents/images/happy-bot.svg").toString(), models: ["Vision"] });
             tryVerify(() => !!findVisible(view, item => item.Accessible.name === "Screenshot preview" && item.status === Image.Ready));
+        }
+
+        function fixtureUrl(width, height, fill) {
+            const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width
+                + '" height="' + height + '"><rect width="100%" height="100%" fill="' + fill + '"/></svg>';
+            return "data:image/svg+xml," + encodeURIComponent(svg);
+        }
+
+        function captureImage(id, width, height) {
+            session.capture.success({ id, url: fixtureUrl(width, height, "teal"), models: ["Vision"] });
+            const image = findVisible(view, item => item.Accessible.name === "Screenshot preview");
+            tryCompare(image, "status", Image.Ready);
+            wait(35);  // let the tool row and preview receive their final sizes
+            return image;
+        }
+
+        function verifyFit(image) {
+            const frame = image.parent;
+            compare(frame.zoom, 1);
+            verify(image.width <= frame.width + 1 && image.height <= frame.height + 1);
+            verify(Math.abs(image.width - frame.width) < 1 || Math.abs(image.height - frame.height) < 1);
+            fuzzyCompare(image.x + image.width / 2, frame.width / 2, 0.5);
+            fuzzyCompare(image.y + image.height / 2, frame.height / 2, 0.5);
+        }
+
+        function originalPoint(image, x, y) {
+            const point = image.mapFromItem(image.parent, x, y);
+            return Qt.point(point.x / image.width, point.y / image.height);
+        }
+
+        function test_wheelPanAndMarkOriginalPixels() {
+            session.history = [{ id: "test", title: "Test" }];
+            const windowWidth = view.width;
+            clickTile("Help with Kate");
+            const image = captureImage("wide", 1920, 1080);
+            const frame = image.parent;
+            verifyFit(image);
+            compare(frame.width, windowWidth); // the picture can use the saved-chat sidebar's space
+            compare(image.sourceSize.width, 1920);
+            const initialWidth = image.width;
+            const x = Math.round(frame.width * 0.59), y = Math.round(frame.height * 0.43);
+            const anchor = originalPoint(image, x, y);
+            mouseWheel(frame, x, y, 0, 480);
+            verify(image.width > 2 * initialWidth);
+            const after = originalPoint(image, x, y);
+            fuzzyCompare(anchor.x, after.x, 0.002);
+            fuzzyCompare(anchor.y, after.y, 0.002);
+            mouseDrag(frame, x, y, -55, 25);
+            const panned = originalPoint(image, x, y);
+            verify(panned.x > anchor.x && panned.y < anchor.y);
+            clickTile("Point");
+            const target = originalPoint(image, x, y);
+            mouseClick(frame, x, y);
+            fuzzyCompare(session.edit.body.coordinates[0], target.x, 0.002);
+            fuzzyCompare(session.edit.body.coordinates[1], target.y, 0.002);
+            const magnification = frame.zoom;
+            session.edit.success({ id: "marked", url: fixtureUrl(1920, 1080, "red") });
+            tryCompare(image, "status", Image.Ready);
+            compare(frame.zoom, magnification);
+            clickTile("Crop");
+            wait(35);
+            const topLeft = originalPoint(image, x - 24, y - 18);
+            const bottomRight = originalPoint(image, x, y);
+            mouseDrag(frame, x, y, -24, -18);
+            const crop = session.edit.body.coordinates;
+            compare(session.edit.body.action, "crop");
+            fuzzyCompare(crop[0], topLeft.x, 0.002);
+            fuzzyCompare(crop[1], topLeft.y, 0.002);
+            fuzzyCompare(crop[2], bottomRight.x, 0.002);
+            fuzzyCompare(crop[3], bottomRight.y, 0.002);
+            session.edit.failure({error: "Test"});
+            clickTile("Fit");
+            verifyFit(image);
+            clickTile("Zoom in");
+            verify(frame.zoom > 1);
+            clickTile("Zoom out");
+            verifyFit(image);
+            clickTile("Zoom in");
+            clickTile("Retake");
+            captureImage("portrait", 900, 1600);
+            verifyFit(image);
+            view.heightInGridUnits = 16;
+            wait(35);
+            verifyFit(image);
         }
 
         function test_retakeErrorAndPerRequestChoice() {
