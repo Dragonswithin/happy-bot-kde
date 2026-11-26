@@ -133,6 +133,22 @@ class FakeDaemon:
 
 
 class ChangeUiRouteTests(unittest.TestCase):
+    def test_wand_sound_theme_follows_appearance_and_keeps_mutes(self) -> None:
+        daemon = FakeDaemon()
+
+        def save(**changes):
+            status, data = daemon_routes.change_ui(daemon, {}, {"changes": changes})
+            self.assertEqual(status, 200, data)
+            return data["ui"]["event_sounds"]
+
+        save(event_sounds={"reminder": {"enabled": True}})
+        wand = save(robot_mascot=False)
+        self.assertEqual({row["theme"] for row in wand.values()}, {"wand"})
+        self.assertEqual([event for event, row in wand.items() if row["enabled"]], ["reminder"])
+        self.assertEqual({row["theme"] for row in save(robot_mascot=True).values()}, {"pip"})
+        self.assertEqual(save(event_sounds={"open": {"theme": "wand"}})["open"]["theme"], "wand")
+        self.assertEqual(save(sounds_follow_mascot=False, robot_mascot=False)["reminder"]["theme"], "pip")
+
     def test_sound_choices_follow_the_robot_only_when_requested(self) -> None:
         daemon = FakeDaemon()
 

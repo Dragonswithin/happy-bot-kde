@@ -13,9 +13,9 @@ from happy_bot import ask_stream, daemon_routes, sounds, ui_settings
 
 
 class EventSoundTests(unittest.TestCase):
-    def test_each_robot_has_a_distinct_recording_for_each_event(self):
+    def test_each_theme_has_a_distinct_recording_for_each_event(self):
         signatures = set()
-        for robot in ui_settings.ROBOT_STYLES:
+        for robot in ui_settings.SOUND_THEMES:
             for event in ui_settings.SOUND_EVENTS:
                 with self.subTest(robot=robot, event=event):
                     with wave.open(str(sounds._asset(robot, event)), "rb") as audio:

@@ -79,6 +79,22 @@ SCORES = {
 }
 
 
+# Wand uses short, fixed-pitch desktop cues with a soft bell attack.
+WAND_VOICE = Voice(392, ((1, 1, 6), (2, .14, 14), (3.98, .08, 27)), attack=.012)
+WAND_SCORES = {
+    "open": Score(.066, ((0, 210, 7, 1),)),
+    "error": Score(.095, ((0, 112, 0, .9), (134, 190, -3, 1))),
+    "complete": Score(.081, ((0, 138, 4, .82), (150, 248, 9, 1))),
+    "alarm": Score(.14, ((0, 170, 5, 1), (233, 170, 5, .94), (610, 245, 5, 1))),
+    "reminder": Score(.08, ((0, 175, 2, 1), (205, 224, 2, .65))),
+    "attention": Score(.085, ((0, 124, 9, 1), (160, 173, 5, .82))),
+    "mic_ready": Score(.058, ((0, 85, 12, 1),)),
+    "mic_done": Score(.057, ((0, 105, 2, 1),)),
+    "background": Score(.069, ((0, 215, 0, 1), (22, 190, 7, .36))),
+    "nudge": Score(.06, ((0, 158, 4, 1),)),
+}
+
+
 def render_note(voice: Voice, pitch: int, length: int) -> list[float]:
     hz = voice.root_hz * 2 ** (pitch / 12)
     duration = length / RATE
@@ -129,3 +145,5 @@ if __name__ == "__main__":
     for name, voice in VOICES.items():
         for event, score in SCORES.items():
             write_cue(SOUNDS / name / f"{event}.wav", voice, event, score)
+    for event, score in WAND_SCORES.items():
+        write_cue(SOUNDS / "wand" / f"{event}.wav", WAND_VOICE, event, score)

@@ -16,12 +16,13 @@ QtObject {
         if (!saved) return null;
         const value = Object.assign({}, saved);
         for (const change of pending) {
-            const previousRobot = value.robot_style;
+            const previousTheme = value.robot_mascot ? value.robot_style : "wand";
             const sounds = Object.assign({}, value.event_sounds);
             Object.assign(value, change);
-            if (value.sounds_follow_mascot && value.robot_style !== previousRobot) {
+            const theme = value.robot_mascot ? value.robot_style : "wand";
+            if (value.sounds_follow_mascot && theme !== previousTheme) {
                 for (const event of Object.keys(sounds))
-                    sounds[event] = Object.assign({}, sounds[event], {theme: value.robot_style});
+                    sounds[event] = Object.assign({}, sounds[event], {theme});
             }
             if (change.event_sounds) {
                 for (const [event, fields] of Object.entries(change.event_sounds))

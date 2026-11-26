@@ -8,7 +8,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from .ui_settings import MASCOT_ICON, ROBOT_STYLES, SOUND_EVENTS
+from .ui_settings import MASCOT_ICON, SOUND_THEMES, SOUND_EVENTS
 
 # The recorder holds this through capture so an overlapping cue cannot be
 # transcribed as speech. Its own ready cue plays under the same lock.
@@ -16,7 +16,7 @@ audio_lock = threading.RLock()
 
 
 def _asset(theme: str, event: str) -> Path | None:
-    if theme not in ROBOT_STYLES or event not in SOUND_EVENTS:
+    if theme not in SOUND_THEMES or event not in SOUND_EVENTS:
         return None
     # Running directly from the checkout, a local applet install, or a distribution package.
     packages = [Path(__file__).resolve().parents[2] / "plasmoid"]
@@ -58,7 +58,7 @@ def _play_file(path: Path) -> bool:
 def play(ui: dict, event: str, *, wait: bool = False) -> bool:
     """Play the user's choice. Scheduled jobs and the mic-ready cue wait for playback."""
     choice = ui.get("event_sounds", {}).get(event, {})
-    if not choice.get("enabled") or choice.get("theme") not in ROBOT_STYLES:
+    if not choice.get("enabled") or choice.get("theme") not in SOUND_THEMES:
         return False
     theme = choice["theme"]
     if wait:

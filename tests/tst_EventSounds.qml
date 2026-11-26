@@ -37,18 +37,30 @@ Item {
             waitForPolish(editor);
         }
 
-        function test_quietEventsHaveAllTenChoicesAndAPreview() {
+        function test_quietEventsHaveAllSoundThemesAndAPreview() {
             const ids = ["open", "error", "complete", "alarm", "reminder", "attention",
                          "mic_ready", "mic_done", "background", "nudge"];
             for (const id of ids) {
                 const themes = findChild(editor, "theme-" + id);
-                compare(themes.count, 10);
+                compare(themes.count, 11);
+                compare(themes.valueAt(10), "wand");
                 verify(!findChild(editor, "enable-" + id).checked);
                 findChild(editor, "preview-" + id).clicked();
                 compare(sounds.signalArguments[sounds.count - 1][0], id);
                 compare(sounds.signalArguments[sounds.count - 1][1], id === "alarm" ? "watt" : "pip");
             }
             compare(api.requests.length, 0);
+        }
+
+        function test_wandFollowsAppearanceInQueuedEdits() {
+            store.saved = {robot_mascot: true, robot_style: "watt", sounds_follow_mascot: true,
+                           event_sounds: {alarm: {enabled: true, theme: "watt"}}};
+            store.save({robot_mascot: false});
+            compare(findChild(editor, "theme-alarm").currentText, "Wand");
+            verify(findChild(editor, "enable-alarm").checked);
+            findChild(editor, "preview-alarm").clicked();
+            compare(sounds.signalArguments[0][0], "alarm");
+            compare(sounds.signalArguments[0][1], "wand");
         }
 
         function test_quickEditsKeepTheirOrder() {

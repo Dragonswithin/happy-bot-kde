@@ -11,6 +11,7 @@ ColumnLayout {
     signal edited(string event, var fields)
     signal previewRequested(string event, string theme)
 
+    readonly property var themes: Look.appearanceThemes(i18n("Wand"))
     spacing: Kirigami.Units.largeSpacing
     readonly property var groups: [
         { title: i18n("Assistant"), icon: "audio-volume-high-symbolic", events: [
@@ -35,7 +36,7 @@ ColumnLayout {
             required property int index
             title: modelData.title
             iconName: modelData.icon
-            description: index === 0 ? i18n("Choose which events play a sound. You can preview any robot, even when the event is off.") : ""
+            description: index === 0 ? i18n("Choose which events play a sound. You can preview any sound theme, even when the event is off.") : ""
             Repeater {
                 model: group.modelData.events
                 GridLayout {
@@ -62,10 +63,10 @@ ColumnLayout {
                         Layout.fillWidth: row.columns === 2
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 7
                         Accessible.name: i18n("Sound for %1", row.modelData.label)
-                        model: Look.robotStyles
+                        model: editor.themes
                         textRole: "name"
                         valueRole: "id"
-                        currentIndex: Look.robotStyles.findIndex(robot => robot.id === row.choice.theme)
+                        currentIndex: editor.themes.findIndex(theme => theme.id === row.choice.theme)
                         wheelEnabled: false
                         onActivated: index => editor.edited(row.eventId, {theme: valueAt(index)})
                     }

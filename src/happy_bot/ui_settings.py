@@ -79,6 +79,7 @@ UI_RANGES: dict[str, tuple[int, int]] = {
     "floating_popup_x": (-1, 100_000), "floating_popup_y": (-1, 100_000),
     "floating_x": (-1, 100_000), "floating_y": (-1, 100_000),
 }
+SOUND_THEMES = (*ROBOT_STYLES, "wand")
 WAND_ICON = "tools-wizard"
 MASCOT_ICON = "io.github.dragonswithin.happybot"
 RETIRED_UI_KEYS = ("instant_search", "instant_min_chars", "instant_delay_ms", "instant_results")
@@ -99,12 +100,17 @@ def _sound_edits(previous: dict[str, Any], edits: Any) -> Any:
     return sounds
 
 
+def _appearance_sound_theme(ui: dict[str, Any]) -> str:
+    return ui["robot_style"] if ui["robot_mascot"] else "wand"
+
+
 def merge_ui(current: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
     """Merge an incremental /ui edit, including robot changes and partial event edits, in order."""
     merged = {**current, **changes}
     sounds = current["event_sounds"]
-    if merged["sounds_follow_mascot"] is True and merged["robot_style"] != current["robot_style"]:
-        sounds = {event: {**fields, "theme": merged["robot_style"]} for event, fields in sounds.items()}
+    theme = _appearance_sound_theme(merged)
+    if merged["sounds_follow_mascot"] is True and theme != _appearance_sound_theme(current):
+        sounds = {event: {**fields, "theme": theme} for event, fields in sounds.items()}
     if "robot_sounds" in changes:
         sounds = _sound_edits(sounds, {"open": {"enabled": changes["robot_sounds"]}})
     merged["event_sounds"] = _sound_edits(sounds, changes.get("event_sounds", {}))
@@ -132,13 +138,13 @@ def validate_ui(raw: Any) -> dict[str, Any]:
     if ui["robot_style"] not in ROBOT_STYLES:
         raise UiSettingsError(f"'ui': 'robot_style' must be one of {', '.join(ROBOT_STYLES)}")
     # Older installations had a greeting switch and a robot, but no per-event preferences.
-    sounds = _sound_edits(_default_sounds(ui["robot_style"], ui["robot_sounds"]), raw.get("event_sounds", {}))
+    sounds = _sound_edits(_default_sounds(_appearance_sound_theme(ui), ui["robot_sounds"]), raw.get("event_sounds", {}))
     if not isinstance(sounds, dict) or sounds.keys() != set(SOUND_EVENTS):
         raise UiSettingsError("'ui': 'event_sounds' must map known sound events to their settings")
     for event, fields in sounds.items():
         if (not isinstance(fields, dict) or fields.keys() != {"enabled", "theme"}
-                or not isinstance(fields["enabled"], bool) or fields["theme"] not in ROBOT_STYLES):
-            raise UiSettingsError(f"'ui': sound '{event}' needs an enabled switch and a known robot theme")
+                or not isinstance(fields["enabled"], bool) or fields["theme"] not in SOUND_THEMES):
+            raise UiSettingsError(f"'ui': sound '{event}' needs an enabled switch and a known sound theme")
     ui["event_sounds"] = sounds
     ui["robot_sounds"] = sounds["open"]["enabled"]
     buttons = ui["start_screen"]

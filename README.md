@@ -291,17 +291,17 @@ panel widget always look and behave the same.
   back in its corner, the popup's size, and in the panel Happy Bot's icon
   or a search bar, and the bar's width. In **Appearance → Theme**, choose one of ten mascots or **Wand**, which
   follows KDE’s icons and colors. New setups use Pip, the original mint robot.
-  Choosing Wand keeps your sound selections.
+  Wand includes a set of short, understated desktop sounds.
   **Animate the robot** enables each character’s idle movements on the floating
   shortcut, in the panel and on the start screen.
-  **Also change sounds** is checked by default. Picking a robot gives each event
-  that robot’s sound and keeps its on/off setting. Uncheck it to keep your mix.
+  **Also change sounds** is checked by default. Picking a theme gives each event
+  that theme’s sound and keeps its on/off setting. Uncheck it to keep your mix.
   Under **Floating Happy Bot → Shortcut size**, choose 50% to 200% of the
   usual size. **Popup size** controls the window that opens when you click.
   Turn on **Dock to screen edge** to tuck the shortcut into a small tab on
   the nearest left or right edge. Hover over the tab to reveal the shortcut,
   then click to open Happy Bot. Drag the shortcut to change sides or height.
-- **Sounds** lets you enable, choose and preview any of ten mascot sounds for
+- **Sounds** lets you enable, choose and preview any of eleven sound themes for
   each event. Events include opening Happy Bot, an error, a long task finishing,
   an alarm or timer, a reminder, a request for your attention, microphone ready,
   recording finished, a background job finishing, and a new mascot nudge. A

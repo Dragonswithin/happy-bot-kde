@@ -37,6 +37,10 @@ QtObject {
         { id: "dotty", name: "Dotty", accent: "#ca8cc0", pivot: Qt.point(24, 9), turn: 110, ms: 580 }
     ]
 
+    function appearanceThemes(wandName: string): var {
+        return robotStyles.concat([{id: "wand", name: wandName}]);
+    }
+
     function robotDesign(style: string): var {
         return robotStyles.find(design => design.id === style) || robotStyles[0];
     }

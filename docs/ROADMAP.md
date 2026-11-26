@@ -1425,12 +1425,12 @@ battery, disk and restart indicators once a minute. Every 15 minutes it
 reads available pacman, apt or dnf update metadata from local caches.
 Appearance’s **Show helpful nudges** switch disables these checks.
 
-Each of the ten robots has its own set of short sounds for opening the
+Each of the ten robots and Wand has its own set of short sounds for opening the
 assistant, an error, long task completion, an alarm, a reminder, a request
 for attention, microphone ready, recording finished, background job completion
-and a newly active nudge. Settings → Sounds has a robot choice, preview and
+and a newly active nudge. Settings → Sounds has a sound theme choice, preview and
 on/off control for each event. Appearance → **Also change sounds** applies
-the selected robot’s theme to all ten events while preserving their on/off
+the selected appearance theme’s sounds to all ten events while preserving their on/off
 settings. Existing greeting preferences carry forward. Alarms and reminders
 read the chosen sound when their scheduled notification is delivered.
 

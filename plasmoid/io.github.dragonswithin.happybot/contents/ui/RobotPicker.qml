@@ -17,7 +17,7 @@ ColumnLayout {
     spacing: Kirigami.Units.smallSpacing
 
     readonly property string selectedTheme: useRobotMascot ? robotStyle : "wand"
-    readonly property var themeChoices: Look.robotStyles.concat([{id: "wand", name: i18n("Wand")}])
+    readonly property var themeChoices: Look.appearanceThemes(i18n("Wand"))
 
     function chooseTheme(theme: string) {
         if (selectedTheme === theme)
@@ -32,7 +32,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         text: i18n("Also change sounds")
-        QQC2.ToolTip.text: i18n("Choosing another robot changes the theme of every event sound. Each event keeps its on or off setting.")
+        QQC2.ToolTip.text: i18n("Choosing another appearance theme changes every event sound to match. Each event keeps its on or off setting.")
         QQC2.ToolTip.visible: hovered || visualFocus
         checked: picker.soundsFollowMascot
         onToggled: picker.choiceRequested({sounds_follow_mascot: checked})

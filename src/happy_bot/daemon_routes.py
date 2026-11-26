@@ -225,8 +225,8 @@ def play_sound(server: "AssistantServer", query: dict[str, list[str]], body: dic
 
 def preview_sound(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     event, theme = body.get("event"), body.get("theme")
-    if event not in ui_settings.SOUND_EVENTS or theme not in ui_settings.ROBOT_STYLES:
-        return _error(400, "Choose a listed event and robot sound.", "invalid")
+    if event not in ui_settings.SOUND_EVENTS or theme not in ui_settings.SOUND_THEMES:
+        return _error(400, "Choose a listed event and sound theme.", "invalid")
     if server.voice.active:
         return _error(409, "Finish voice input before previewing a sound.", "busy")
     if not sounds.preview(theme, event):
