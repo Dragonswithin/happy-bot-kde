@@ -194,8 +194,39 @@ def _disks() -> list[dict[str, Any]]:
         except OSError:
             continue
         seen.add(parts[0])
-        disks.append({"mount": mount, "device": parts[0], "total": usage.total, "used": usage.total - usage.free})
+        disks.append({"mount": mount, "device": parts[0], "filesystem": parts[2], "total": usage.total, "used": usage.total - usage.free})
     return disks
+
+
+def _hardware_inventory(sys_root: Path = Path("/sys")) -> dict[str, Any]:
+    dmi = sys_root / "class/dmi/id"
+    drives = []
+    for block in sorted((sys_root / "block").glob("*")):
+        device = block / "device"
+        if not device.exists() or block.name.startswith("sr"):
+            continue
+        sectors = _number(block / "size")
+        if not sectors:
+            continue
+        drives.append({
+            "device": "/dev/" + block.name,
+            "model": _text(device / "model") or _text(device / "name"),
+            "total": sectors * 512,
+            "rotational": _number(block / "queue/rotational"),
+        })
+    graphics = [
+        _gpu_name(card / "device")
+        for card in sorted((sys_root / "class/drm").glob("card*"))
+        if re.fullmatch(r"card[0-9]+", card.name) and (card / "device").exists()
+    ]
+    return {
+        "manufacturer": _text(dmi / "sys_vendor"),
+        "model": _text(dmi / "product_name"),
+        "board": _text(dmi / "board_name"),
+        "firmware": _text(dmi / "bios_version"),
+        "drives": drives,
+        "graphics": graphics,
+    }
 
 
 def _disk_counters(disks: list[dict[str, Any]], path: Path = Path("/proc/diskstats")) -> dict[str, int]:
@@ -265,6 +296,7 @@ def overview(history: History) -> dict[str, Any]:
         "memory": {"total": total, "used": total - available, "swap_total": memory.get("SwapTotal", 0),
                    "swap_used": memory.get("SwapTotal", 0) - memory.get("SwapFree", 0)},
         "os": _operating_system(),
+        "hardware": _hardware_inventory(),
         "gpus": gpus,
         "disks": disks,
         "network": {**_network(), "receive_bps": latest.get("receive_bytes_per_second"),

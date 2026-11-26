@@ -432,8 +432,9 @@ Status: built, exit check not yet passed (see Phase 10 findings).
 2026-11-25). The screen Happy Bot opens on is the "start screen"; its
 buttons are chosen and ordered in the settings, and an optional System info
 button opens Live activity and System overview cards. Disk activity shows
-throughput, while Storage shows capacity and free space. System overview
-also shows hardware, the operating system, and uptime. Each card opens
+throughput. System overview includes Hardware, which shows physical drives
+and mounted storage capacity alongside system components, plus separate
+Operating system and Uptime cards. Each card opens
 its own details, with the busiest programs in Processor and Memory.
 *Exit:* a person switches System info on and reorders the buttons on the
 Appearance page and sees the start screen follow in the panel popup and the

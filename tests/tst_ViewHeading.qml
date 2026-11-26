@@ -22,6 +22,7 @@ Item {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
                         memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], gpu: {test: [3, 7]}, disk: [42, 61]},
                         gpus: [{id: "test", name: "Test GPU", busy_percent: 7}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
+                        hardware: {model: "Test workstation", board: "Test board", drives: [{device: "/dev/sda", model: "Test drive", total: 200, rotational: 0}]},
                         os: {name: "Test Linux", version: "1", kernel: "6.0", architecture: "x86_64", desktop: "KDE", session: "wayland"},
                         uptime_seconds: 4500});
                 } else if (path.startsWith("/system/programs?")) {
@@ -163,8 +164,8 @@ Item {
         function test_systemInfoOpensCardsThenDetails() {
             session.showSystemInfo();
             const processor = findChild(view, "systemCard-cpu");
-            const storage = findChild(view, "systemCard-storage");
-            tryVerify(() => processor.visible && storage.visible);
+            const hardware = findChild(view, "systemCard-hardware");
+            tryVerify(() => processor.visible && hardware.visible);
             compare(processor.expanded, false);
             for (const section of ["cpu", "memory", "network", "gpu-0", "disk-activity"]) {
                 const chart = findChild(view, "systemGraph-" + section);
@@ -172,14 +173,16 @@ Item {
             }
             tryVerify(() => Math.abs(processor.width - processor.height) <= 1);
             const activity = findChild(view, "systemCard-disk-activity");
-            verify(activity && activity.visible && activity !== storage);
-            verify(!findChild(view, "systemGraph-storage").visible);
+            verify(activity && activity.visible && activity !== hardware);
+            verify(!findChild(view, "systemGraph-hardware").visible);
             compare(session.programRequests, 0);
             compare(findChild(view, "systemCard-uptime").uptimeFraction, 4500 / 86400);
             waitForRendering(view);
-            storage.forceActiveFocus(Qt.TabFocusReason);
+            hardware.forceActiveFocus(Qt.TabFocusReason);
             keyClick(Qt.Key_Return);
-            tryCompare(storage, "expanded", true);
+            tryCompare(hardware, "expanded", true);
+            verify(hardware.detail.includes("Test board"));
+            verify(findChild(view, "systemCard-storage") === null);
             compare(processor.visible, false);
             compare(session.programRequests, 0);
             mouseClick(button(view, "Back"));
@@ -197,7 +200,7 @@ Item {
             tryCompare(processor, "expanded", true);
             tryVerify(() => session.programRequests > 0);
             mouseClick(button(view, "Back"));
-            tryCompare(storage, "visible", true);
+            tryCompare(hardware, "visible", true);
             mouseClick(button(view, "Back"));
             tryCompare(heading, "text", "Start screen");
         }

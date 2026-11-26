@@ -71,6 +71,20 @@ class ProgramTests(unittest.TestCase):
 
 
 class OverviewTests(unittest.TestCase):
+    def test_hardware_inventory_lists_unmounted_drives_and_skips_virtual_devices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            drive = root / "block/nvme0n1"
+            (drive / "device").mkdir(parents=True)
+            (drive / "device/model").write_text("Test NVMe")
+            (drive / "size").write_text("8")
+            (root / "block/loop0").mkdir()
+            (root / "block/loop0/size").write_text("4")
+            inventory = system_monitor._hardware_inventory(root)
+            self.assertEqual(inventory["drives"], [
+                {"device": "/dev/nvme0n1", "model": "Test NVMe", "total": 4096, "rotational": None},
+            ])
+
     def test_hardware_history_measures_disk_bytes_per_second(self) -> None:
         history = system_monitor.History(size=3)
         with mock.patch.object(system_monitor.time, "monotonic", side_effect=[10, 12, 13]):
@@ -88,7 +102,7 @@ class OverviewTests(unittest.TestCase):
             history.add({"cpu_percent": load, "available_memory_percent": 75, "receive_bytes_per_second": 5})
         self.assertEqual([sample["cpu_percent"] for sample in history.samples()], [20, 30, 40])
         overview = system_monitor.overview(history)
-        self.assertEqual(set(overview), {"cpu", "memory", "os", "gpus", "disks", "network", "battery", "uptime_seconds", "history"})
+        self.assertEqual(set(overview), {"cpu", "memory", "os", "hardware", "gpus", "disks", "network", "battery", "uptime_seconds", "history"})
         self.assertEqual((overview["cpu"]["percent"], overview["history"]["memory"]), (40, [25, 25, 25]))
         history.clear()
         self.assertEqual(history.samples(), [])

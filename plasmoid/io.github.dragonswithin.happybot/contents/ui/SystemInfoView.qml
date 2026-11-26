@@ -33,7 +33,7 @@ ColumnLayout {
     property var programs: []
     signal revealCardRequested(Item card)
     property string detailSection: ""
-    readonly property bool overviewDetail: ["storage", "hardware", "os", "uptime"].includes(detailSection)
+    readonly property bool overviewDetail: ["hardware", "os", "uptime"].includes(detailSection)
     readonly property bool programsVisible: detailSection === "cpu" || detailSection === "memory"
     property string sort: "cpu"
     property int confirmPid: -1
@@ -401,19 +401,20 @@ ColumnLayout {
         visible: view.info !== null && (!view.detailSection || view.overviewDetail)
 
         Card {
-            section: "storage"
-            title: i18n("Storage")
-            value: view.info ? i18np("%1 disk", "%1 disks", view.info.disks.length) : ""
-            detail: i18n("Capacity and free space")
-        }
-
-        Card {
             section: "hardware"
             title: i18n("Hardware")
-            value: view.info ? i18np("%1 core", "%1 cores", view.info.cpu.cores) : ""
-            detail: view.info ? [view.info.cpu.model || "",
-                                 i18n("Installed memory: %1", view.size(view.info.memory.total)),
-                                 ...view.info.gpus.map(gpu => gpu.name)].filter(label => label.length > 0).join("\n") : ""
+            readonly property var inventory: view.info?.hardware
+            value: [inventory?.manufacturer, inventory?.model].filter(Boolean).join(" ")
+                || view.info?.cpu?.model || i18n("Hardware details")
+            detail: view.info ? [view.info.cpu.model
+                                     ? i18n("Processor: %1 (%2 logical CPUs)", view.info.cpu.model, view.info.cpu.cores)
+                                     : i18n("Logical CPUs: %1", view.info.cpu.cores),
+                                 i18n("System memory: %1", view.size(view.info.memory.total)),
+                                 ...Array.from(new Set([...(inventory?.graphics ?? []), ...view.info.gpus.map(gpu => gpu.name)]))
+                                    .map(name => i18n("Graphics: %1", name)),
+                                 inventory?.board ? i18n("Motherboard: %1", inventory.board) : "",
+                                 inventory?.firmware ? i18n("Firmware version: %1", inventory.firmware) : ""]
+                               .filter(Boolean).join("\n") : ""
         }
 
         Card {
@@ -441,14 +442,47 @@ ColumnLayout {
     }
 
     Kirigami.Heading {
-        visible: view.detailSection === "storage" || view.detailSection === "disk-activity"
+        visible: view.detailSection === "hardware" && (view.info?.hardware?.drives?.length ?? 0) > 0
         level: 5
-        text: view.detailSection === "storage" ? i18n("Disk capacity") : i18n("Activity by device")
+        text: i18n("Physical drives")
+    }
+
+    Repeater {
+        model: view.detailSection === "hardware" ? view.info?.hardware?.drives ?? [] : []
+
+        ColumnLayout {
+            required property var modelData
+            Layout.fillWidth: true
+            spacing: 2
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                text: modelData.model || modelData.device
+                wrapMode: Text.Wrap
+            }
+
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                text: [modelData.model ? modelData.device : "", view.size(modelData.total),
+                       modelData.rotational === 1 ? i18n("Rotational") :
+                       modelData.rotational === 0 ? i18n("Non-rotational") : ""].filter(Boolean).join(" · ")
+                font: Kirigami.Theme.smallFont
+                opacity: 0.75
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
+    Kirigami.Heading {
+        visible: (view.detailSection === "hardware" || view.detailSection === "disk-activity")
+            && (view.info?.disks?.length ?? 0) > 0
+        level: 5
+        text: view.detailSection === "hardware" ? i18n("Mounted storage") : i18n("Activity by device")
         opacity: 0.7
     }
 
     Repeater {
-        model: view.detailSection === "storage" || view.detailSection === "disk-activity" ? view.info?.disks ?? [] : []
+        model: view.detailSection === "hardware" || view.detailSection === "disk-activity" ? view.info?.disks ?? [] : []
 
         ColumnLayout {
             id: disk
@@ -460,11 +494,13 @@ ColumnLayout {
             RowLayout {
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
-                    text: modelData.mount
+                    text: view.detailSection === "hardware"
+                        ? [modelData.mount, modelData.device, modelData.filesystem].filter(Boolean).join(" · ")
+                        : modelData.mount
                     elide: Text.ElideMiddle
                 }
                 PlasmaComponents3.Label {
-                    text: view.detailSection === "storage"
+                    text: view.detailSection === "hardware"
                         ? i18n("%1 free of %2", view.size(modelData.total - modelData.used), view.size(modelData.total))
                         : view.rate(disk.activity?.length ? disk.activity[disk.activity.length - 1] : null)
                     font: Kirigami.Theme.smallFont
@@ -473,7 +509,7 @@ ColumnLayout {
             }
             QQC2.ProgressBar {
                 Layout.fillWidth: true
-                visible: view.detailSection === "storage"
+                visible: view.detailSection === "hardware"
                 from: 0
                 to: Math.max(1, modelData.total)
                 value: modelData.used
