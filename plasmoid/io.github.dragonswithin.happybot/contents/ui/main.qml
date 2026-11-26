@@ -458,6 +458,33 @@ PlasmoidItem {
         onAskRequested: text => root.askFromBar(text)
     }
 
+    // Plasma exports these actions to the system tray when running standalone.
+    // The shortcut menus use the same actions so labels and behavior stay in sync.
+    Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            id: configureHappyBot
+            text: i18n("Configure Happy Bot…")
+            icon.name: "configure"
+            onTriggered: root.openSettings()
+        },
+        PlasmaCore.Action {
+            id: newConversation
+            text: i18n("New conversation")
+            icon.name: "document-new"
+            onTriggered: {
+                session.newChat();
+                root.openForApplication();
+            }
+        },
+        PlasmaCore.Action {
+            id: sendFeedback
+            text: i18n("Send feedback…")
+            icon.name: "tools-report-bug"
+            visible: root.feedbackUrl.length > 0
+            onTriggered: root.openLocation(root.feedbackUrl)
+        }
+    ]
+
     // The applet's own right-click menu, with the entries a user needs from
     // Plasma's standard widget menu.
     PlasmaExtras.Menu {
@@ -465,22 +492,22 @@ PlasmoidItem {
         visualParent: root
 
         PlasmaExtras.MenuItem {
-            text: i18n("Configure Happy Bot…")
-            icon: "configure"
-            onClicked: root.openSettings()
+            text: configureHappyBot.text
+            icon: configureHappyBot.icon.name
+            onClicked: configureHappyBot.trigger()
         }
 
         PlasmaExtras.MenuItem {
-            text: i18n("New conversation")
-            icon: "document-new"
-            onClicked: session.newChat()
+            text: newConversation.text
+            icon: newConversation.icon.name
+            onClicked: newConversation.trigger()
         }
 
         PlasmaExtras.MenuItem {
-            text: i18n("Send feedback…")
-            icon: "tools-report-bug"
-            visible: root.feedbackUrl.length > 0
-            onClicked: root.openLocation(root.feedbackUrl)
+            text: sendFeedback.text
+            icon: sendFeedback.icon.name
+            visible: sendFeedback.visible
+            onClicked: sendFeedback.trigger()
         }
 
         PlasmaExtras.MenuItem {
@@ -500,22 +527,22 @@ PlasmoidItem {
         visualParent: root
 
         PlasmaExtras.MenuItem {
-            text: i18n("Configure Happy Bot…")
-            icon: "configure"
-            onClicked: root.openSettings()
+            text: configureHappyBot.text
+            icon: configureHappyBot.icon.name
+            onClicked: configureHappyBot.trigger()
         }
 
         PlasmaExtras.MenuItem {
-            text: i18n("New conversation")
-            icon: "document-new"
-            onClicked: session.newChat()
+            text: newConversation.text
+            icon: newConversation.icon.name
+            onClicked: newConversation.trigger()
         }
 
         PlasmaExtras.MenuItem {
-            text: i18n("Send feedback…")
-            icon: "tools-report-bug"
-            visible: root.feedbackUrl.length > 0
-            onClicked: root.openLocation(root.feedbackUrl)
+            text: sendFeedback.text
+            icon: sendFeedback.icon.name
+            visible: sendFeedback.visible
+            onClicked: sendFeedback.trigger()
         }
 
         PlasmaExtras.MenuItem {
