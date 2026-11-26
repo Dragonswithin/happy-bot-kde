@@ -31,24 +31,69 @@ whatever the assistant read for you.
 
 ## Sending a Change
 
-1. Read `docs/ROADMAP.md` first. It sets the product goal (one bar, any AI,
+1. Read the [roadmap](docs/ROADMAP.md) first. It sets the product goal (one bar, any AI,
    your existing tools through MCP, one app) and the phase order.
-   `docs/FEATURES.md` is the backlog. For anything bigger than a fix,
+   The [feature backlog](docs/FEATURES.md) tracks individual requests. For anything bigger than a fix,
    open an issue first so we can agree on the shape.
 2. Code must not assume any model, vendor or endpoint. Local services
    may be offered as suggestions, but the user chooses.
-3. Anything that deletes or changes the system must go through the
-   approval flow. Root actions belong to an external broker, never to
-   Happy Bot itself.
-4. Run the checks in the README's **Checks** section, at least:
-
-   ```bash
-   python3 -m unittest discover -s tests
-   QT_FORCE_STDERR_LOGGING=1 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml plasmoid/*/contents/ui/*.qml
-   ```
-
+3. Route the assistant's tool calls through the permission gate. Deletions
+   and OS-level changes need approval each time. Root actions belong to an
+   external broker.
+4. Run the [checks](#checks) from the checkout.
 5. Every new source file starts with a header comment that says what it is
    responsible for. Follow the existing files.
 
 By contributing you agree that your change is released under the project's
-MIT license (`LICENSE`).
+MIT license ([LICENSE](LICENSE)).
+
+## Checks
+
+Run the Python tests and check the shell and QML sources. The examples use
+the Qt 6 tool paths on Arch Linux.
+
+```bash
+python3 -m unittest discover -s tests
+python3 -m compileall -q src/happy_bot
+printf '%s\0' scripts/*.sh launchers/happy-bot-app | xargs -0 -n1 bash -n
+QT_FORCE_STDERR_LOGGING=1 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml plasmoid/*/contents/ui/*.qml
+/usr/lib/qt6/bin/qmltestrunner -input tests
+systemd-analyze --user verify systemd/user/happy-bot-daemon.service
+```
+
+For a live check after installing, run `happy-bot doctor` and open the
+widget in its own window. To see load errors in the terminal, use
+`QT_FORCE_STDERR_LOGGING=1 plasmawindowed io.github.dragonswithin.happybot`.
+
+## Trying a change locally
+
+To try this checkout with empty settings, start a second daemon and use
+its environment in a subshell. The final command removes its temporary
+settings and history. Tools connected to this daemon can still act on your
+desktop.
+
+```bash
+scripts/throwaway_daemon.sh start
+(
+    eval "$(scripts/throwaway_daemon.sh env)"
+    python3 -m happy_bot.cli doctor
+)
+scripts/throwaway_daemon.sh stop
+```
+
+The daemon authenticates local clients using a per-start token in
+`$XDG_RUNTIME_DIR/happy-bot/token` (mode 0600). It checks the HTTP Host
+and rejects requests with an Origin header. The CLI and widget read the
+token themselves.
+
+- **Preview a view.** For a self-contained QML component, run
+  `scripts/preview_qml.sh AnswerBody.qml "$XDG_RUNTIME_DIR/happy-bot/answer.png" 'text: "Hello"'`.
+- **Check model compatibility.** `happy-bot model check --all` sends small
+  requests to your configured models. The Python tests also replay saved
+  responses offline. To preview a fixture recording, run
+  `scripts/record_model_replies.py LABEL=MODEL`. Add `--record` to make the
+  requests and save the replies.
+- **Translate the widget.** Run `scripts/translations.sh template` to
+  generate the gettext template. Translations go in `po/<language>.po`.
+  Run `scripts/translations.sh merge` to refresh them after a string
+  changes. Both installers compile the translations.
