@@ -77,6 +77,15 @@ class NotificationIconTests(unittest.TestCase):
 
 
 class UiSchemaTests(unittest.TestCase):
+    def test_popup_positions_survive_a_settings_reload(self) -> None:
+        ui = validate_ui({"panel_popup_x": 120, "panel_popup_y": 85,
+                          "floating_popup_x": 40, "floating_popup_y": 0,
+                          "floating_x": 900, "floating_y": 300})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            save_settings({"ui": ui}, path)
+            self.assertEqual(load_settings(path)["ui"], ui)
+
     def test_greeting_migrates_to_the_configured_robot(self) -> None:
         old = validate_ui({"robot_style": "orbit", "robot_sounds": True})
         self.assertTrue(old["sounds_follow_mascot"])

@@ -122,6 +122,9 @@ Rectangle {
         ? Math.max(contentHeight, Math.min(historyHeader.height + historyColumn.implicitHeight, Kirigami.Units.gridUnit * 16))
         : contentHeight
 
+    property var windowPosition: null
+    signal windowMoved(point position, bool finished)
+
     signal queryEdited(string text)
     signal accepted(string text)
     signal askRequested(string text)
@@ -227,6 +230,37 @@ Rectangle {
             height: 1
             color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
         }
+        MouseArea {
+            id: titleDrag
+            anchors.fill: parent
+            enabled: view.windowPosition !== null
+            cursorShape: dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            preventStealing: true
+            property point grabPoint
+            property bool dragging: false
+
+            onPressed: mouse => {
+                grabPoint = mapToItem(null, mouse.x, mouse.y);
+                dragging = false;
+            }
+            onPositionChanged: mouse => {
+                const point = mapToItem(null, mouse.x, mouse.y);
+                const dx = point.x - grabPoint.x;
+                const dy = point.y - grabPoint.y;
+                if (!dragging && Math.abs(dx) + Math.abs(dy) < Qt.styleHints.startDragDistance)
+                    return;
+                dragging = true;
+                const origin = view.windowPosition();
+                view.windowMoved(Qt.point(origin.x + dx, origin.y + dy), false);
+            }
+            onReleased: {
+                if (dragging)
+                    view.windowMoved(view.windowPosition(), true);
+                dragging = false;
+            }
+            onCanceled: dragging = false
+        }
+
         RowLayout {
             id: headerRow
             anchors.fill: parent

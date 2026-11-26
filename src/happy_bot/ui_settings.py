@@ -24,6 +24,8 @@ so the panel's popup looks and behaves like the app's. Only what concerns the pa
       "floating_opacity": 40,     # how visible the floating Happy Bot is while not in use, 15 to 100 percent
       "search_bookmarks": false,  # search results include browser bookmarks (browsers.py)
       "search_history": false,    # ... and recently visited websites; both read on this computer only
+      "panel_popup_x": -1, "panel_popup_y": -1,       # from the panel screen’s top left
+      "floating_popup_x": -1, "floating_popup_y": -1, # from the shortcut screen’s top left
       "web_pins": [],             # homepages chosen to always appear on the web start page
       "web_hidden": [],           # homepages excluded from its frequent sites
       "floating_x": -1,           # its place, logical pixels from the screen's top left;
@@ -63,6 +65,8 @@ UI_DEFAULTS: dict[str, Any] = {
     "robot_mascot": True, "robot_style": "pip", "mascot_animations": True, "robot_sounds": False, "mascot_nudges": True,
     "sounds_follow_mascot": True, "event_sounds": _default_sounds("pip"),
     "popup_width": 30, "popup_height": 26, "search_bookmarks": False, "search_history": False,
+    "panel_popup_x": -1, "panel_popup_y": -1,
+    "floating_popup_x": -1, "floating_popup_y": -1,
     "web_pins": [], "web_hidden": [],
     "floating_docked": False, "floating_size": 100, "floating_opacity": 40, "floating_x": -1, "floating_y": -1,
     "imported": [], "start_screen": ["files", "web", "help"],
@@ -71,6 +75,8 @@ START_BUTTONS = ("files", "web", "help", "system")
 ROBOT_STYLES = ("pip", "rivet", "orbit", "watt", "pixel", "sprig", "nixie", "sprocket", "sonar", "dotty")
 UI_RANGES: dict[str, tuple[int, int]] = {
     "popup_width": (20, 70), "popup_height": (12, 50), "floating_opacity": (15, 100), "floating_size": (50, 200),
+    "panel_popup_x": (-1, 100_000), "panel_popup_y": (-1, 100_000),
+    "floating_popup_x": (-1, 100_000), "floating_popup_y": (-1, 100_000),
     "floating_x": (-1, 100_000), "floating_y": (-1, 100_000),
 }
 WAND_ICON = "tools-wizard"

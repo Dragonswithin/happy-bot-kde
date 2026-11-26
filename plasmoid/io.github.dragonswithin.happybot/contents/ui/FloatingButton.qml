@@ -95,6 +95,10 @@ Window {
     readonly property int openWidth: Math.min(screenWidth, Math.max(1, view.width))
     readonly property int openHeight: Math.min(screenHeight, Math.max(1, view.height))
 
+    property point popupPosition: Qt.point(-1, -1)
+    property point draggedPopupPosition: popupPosition
+    signal popupMoved(int x, int y)
+
     signal clicked()
     signal menuRequested()
     signal moved(int x, int y)
@@ -135,12 +139,17 @@ Window {
         if (mouse.dragging) {
             return;
         }
+        if (expanded && draggedPopupPosition.x >= 0) {
+            place(draggedPopupPosition.x, draggedPopupPosition.y);
+            return;
+        }
         const top = placedY + Math.round((size - closedHeight) / 2);
         place(growLeft ? shortcutX + size - width : shortcutX, growUp ? top + closedHeight - height : top);
     }
 
     function open() {
         floating.expanded = true;
+        layout();
         // Ask for keyboard focus once the "may take the keyboard" change has reached the compositor.
         Qt.callLater(function() {
             floating.requestActivate();
@@ -159,6 +168,7 @@ Window {
     function close() {
         if (floating.expanded) {
             floating.expanded = false;
+            layout();
             floating.dismissed();
         }
     }
@@ -226,6 +236,15 @@ Window {
             selectedIndex: floating.selectedIndex
             widthInGridUnits: floating.widthInGridUnits
             heightInGridUnits: floating.heightInGridUnits
+
+            windowPosition: () => Qt.point(floating.LayerShell.Window.margins.left,
+                                           floating.LayerShell.Window.margins.top)
+            onWindowMoved: (position, finished) => {
+                floating.place(position.x, position.y);
+                floating.draggedPopupPosition = windowPosition();
+                if (finished)
+                    floating.popupMoved(floating.draggedPopupPosition.x, floating.draggedPopupPosition.y);
+            }
 
             onQueryEdited: text => floating.queryEdited(text)
             onAccepted: text => floating.accepted(text)

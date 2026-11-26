@@ -281,7 +281,7 @@ PlasmoidItem {
         session: session
         widthInGridUnits: session.ui.popup_width
         heightInGridUnits: session.ui.popup_height
-        visualParent: root
+        anchorItem: root
         location: Plasmoid.location
         onQueryEdited: text => root.handleEdited(text)
         onAccepted: text => root.handleAccepted(text)
@@ -329,6 +329,8 @@ PlasmoidItem {
             session: session
             posX: session.ui.floating_x
             posY: session.ui.floating_y
+            popupPosition: Qt.point(session.ui.floating_popup_x ?? -1, session.ui.floating_popup_y ?? -1)
+            onPopupMoved: (x, y) => session.saveUi({ floating_popup_x: x, floating_popup_y: y })
             idleOpacity: session.ui.floating_opacity / 100
             activity: iconActivity
             busy: session.busy
