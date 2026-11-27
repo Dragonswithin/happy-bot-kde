@@ -71,6 +71,7 @@ import datetime
 import json
 import os
 import platform
+import re
 import threading
 import time
 from typing import Any, Callable
@@ -154,7 +155,9 @@ def system_prompt(
         "- Use the tools. Do not guess at facts about this computer, its files, or current events; look them up.",
         "- You can act on this computer with the tools: open and arrange windows, start applications, change "
         "settings, sound, network and displays, work with files, and run shell commands. Prefer a specific tool "
-        "over a shell command when one fits. Do the task; do not just describe how.",
+        "over a shell command when one fits. When asked how to do something, explain the steps. "
+        "Only act when asked to perform the action. For a specific drive, verify its mount point or ask which "
+        "drive the user means. Never substitute home trash or suggest deleting raw trash files.",
         "- To operate another application's window (click a button, choose a menu entry, fill a field), call "
         "ui_snapshot first, then ui_press or ui_set_text with a ref from it, then ui_snapshot again to see what "
         "changed. 'This window' or 'this dialog' means the window named 'current'. Window titles change as you "
@@ -237,6 +240,10 @@ def run_turn(
     report_context: bool = False,
 ) -> None:
     """Run the turn whose user message is the last entry of ``history`` (see module docstring)."""
+    request = next((message.text for message in reversed(history) if message.role == "user"), "")
+    if re.match(r"^\s*(?:please\s+)?(?:how (?:can|do|should|would) (?:i|we)\b|how to\b|"
+                r"(?:show|tell) me how\b|(?:can|could) you (?:show|tell) me how\b)", request, re.I):
+        registry = registry.reads_only()
     specs = registry.specs()
     succeeded: set[tuple[str, str]] = set()  # danger calls that already succeeded this turn
     actions: list[dict[str, str]] = []
@@ -291,9 +298,13 @@ def run_turn(
             return
 
         handed_back = False
+        approval_stopped = False
         for call in calls:
             if cancel.is_set():
                 history.append(Message("tool", "Not run: the user cancelled.", tool_call_id=call.id))
+                continue
+            if approval_stopped:
+                history.append(Message("tool", "Skipped after approval was withheld.", tool_call_id=call.id))
                 continue
             risk, summary, detail = registry.assess(call.name, call.arguments)
             outcome = "not_run"
@@ -315,6 +326,7 @@ def run_turn(
                 else:
                     allowed, refusal = (True, "") if gate is None else gate.check(
                         call.id, call.name, call.arguments, risk, summary, detail)
+                    approval_stopped = not allowed
                     ok, text = _run_with_context(registry, call, emit, cancel) if allowed else (False, refusal)
                     outcome = ("done" if ok else "failed") if allowed else "declined"
             if ok and risk == RISK_DANGER:
@@ -331,6 +343,15 @@ def run_turn(
                 event["card"] = card
             emit(event)
             handed_back = handed_back or bool(ok and tool and tool.ends_turn)
+        if approval_stopped:
+            if cancel.is_set():
+                finish("cancelled")
+                return
+            message = "I stopped when approval was withheld. The requested action did not run."
+            history.append(Message("assistant", message))
+            emit({"type": "text_delta", "text": message})
+            finish("answered")
+            return
         if handed_back:
             finish("answered")
             return

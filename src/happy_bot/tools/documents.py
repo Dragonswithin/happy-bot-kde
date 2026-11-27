@@ -23,6 +23,8 @@ import difflib
 import filecmp
 import hashlib
 import os
+import re
+import stat
 import shutil
 import tarfile
 import tempfile
@@ -30,6 +32,7 @@ import time
 import zipfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 from .. import undo_journal
 from ..shell_risk import SYSTEM_PATHS
@@ -292,13 +295,85 @@ def _trash_items() -> list[tuple[str, str]]:
     return items
 
 
+def _mounted_volumes() -> set[Path]:
+    mounts = set()
+    for line in Path("/proc/self/mountinfo").read_text().splitlines():
+        fields, _, device = line.partition(" - ")
+        if device.split()[1].startswith("/dev/"):
+            path = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), fields.split()[4])
+            mounts.add(Path(path))
+    return mounts
+
+
+def _volume_trash(mount: Path, home_trash: Path | None = None) -> list[str]:
+    """Read freedesktop trash metadata without changing the drive or following trash symlinks."""
+    uid = os.getuid()
+    roots = [mount / f".Trash-{uid}"]
+    shared = mount / ".Trash"
+    if not shared.is_symlink() and shared.is_dir() and shared.stat().st_mode & stat.S_ISVTX:
+        roots.append(shared / str(uid))
+    if home_trash is not None:
+        roots.append(home_trash)
+    return _trash_originals(roots, mount)
+
+
+def _trash_originals(roots: list[Path], mount: Path) -> list[str]:
+    paths = []
+    for root in roots:
+        info = root / "info"
+        if root.is_symlink() or not root.is_dir() or root.stat().st_uid != os.getuid() or info.is_symlink():
+            continue
+        files = root / "files"
+        if files.is_dir() and not files.is_symlink():
+            for item in files.iterdir():
+                if not (info / (item.name + ".trashinfo")).is_file():
+                    paths.append(f"{item} (trash metadata missing; original location unknown)")
+        for entry in info.iterdir() if info.is_dir() else ():
+            if entry.suffix != ".trashinfo" or entry.is_symlink() or not entry.is_file():
+                continue
+            try:
+                lines = entry.read_text(encoding="utf-8", errors="replace").splitlines()
+            except FileNotFoundError:
+                continue  # restored or emptied while listing
+            for line in lines:
+                if line.startswith("Path="):
+                    paths.append(str(mount / unquote(line[5:])))
+                    break
+    return paths
+
+
 def list_trash(arguments: dict[str, Any]) -> str:
-    items = _trash_items()
+    drive = str(arguments.get("mount_point") or "")
+    data_home = Path(os.getenv("XDG_DATA_HOME") or Path.home() / ".local/share").resolve()
+    if drive:
+        mount = Path(drive).resolve()
+        mounts = _mounted_volumes()
+        if not Path(drive).is_absolute() or mount not in mounts:
+            raise ToolFailure("Choose the exact mounted drive path: " + ", ".join(map(str, sorted(mounts))))
+        home_mount = max((m for m in mounts if data_home.is_relative_to(m)), key=lambda m: len(m.parts), default=None)
+        originals = _volume_trash(mount, data_home / "Trash" if mount == home_mount else None)
+    else:
+        try:
+            originals = [original for _, original in _trash_items()]
+        except ToolFailure:
+            originals = _trash_originals([data_home / "Trash"], data_home)
+            for mount in _mounted_volumes():
+                originals.extend(_volume_trash(mount))
+            originals = sorted(set(originals))
     wanted = str(arguments.get("contains") or "").lower()
-    shown = [original for _, original in items if wanted in original.lower()]
+    shown = [original for original in originals if wanted in original.lower()]
     if shown:
-        return "\n".join(shown[:MAX_LISTED * 2])
-    return f"Nothing in the trash matches '{wanted}'." if wanted else "The trash is empty."
+        listing = "\n".join(shown[:MAX_LISTED * 2])
+        if drive:
+            return (f"Trash on {mount}:\n{listing}\n"
+                    "To clear only this drive, open Trash in Dolphin, choose Details in the View menu, select entries by original "
+                    "location, then delete the selected entries. Empty Trash affects all drives. Entries missing "
+                    "metadata may be invisible in Trash: open their listed parent folder in Dolphin, review the "
+                    "individual entries and select only the intended ones before pressing Shift+Delete. "
+                    "Avoid terminal wildcards and leave the trash folders themselves in place.")
+        return listing
+    return f"Nothing in the trash matches '{wanted}'." if wanted else (
+        f"No trash entries on {mount}." if drive else "No trash entries found.")
 
 
 def restore_from_trash(arguments: dict[str, Any]) -> str:
@@ -397,7 +472,8 @@ def document_tools() -> list[Tool]:
                             "newer_than_days": {"type": "number"}, "extensions": paths}, ["folder"]),
              RISK_READ, find_files, summarize=lambda a: f"Look through {a.get('folder', '?')}"),
         Tool("list_trash", "What is in the trash, with where each item came from.",
-             object_schema({"contains": {"type": "string"}}), RISK_READ, list_trash,
+             object_schema({"contains": {"type": "string"}, "mount_point": {"type": "string",
+                            "description": "For a specific drive, supply its verified absolute mount point."}}), RISK_READ, list_trash,
              summarize=lambda a: "Look in the trash"),
         Tool("restore_from_trash", "Put a trashed item back where it came from.",
              object_schema({"original_path": path}, ["original_path"]), RISK_CHANGE, restore_from_trash,

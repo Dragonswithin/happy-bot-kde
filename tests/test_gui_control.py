@@ -67,6 +67,16 @@ class ElementTests(unittest.TestCase):
             self.assertFalse(accessibility.REF_PATTERN.match(text), text)
 
 
+class AccessibilityWorkerTests(unittest.TestCase):
+    def test_worker_loss_is_reported_and_next_request_starts_a_new_worker(self):
+        self.assertIsNone(accessibility.last_snapshot(0))
+        accessibility._process.kill()
+        accessibility._process.join()
+        with self.assertRaisesRegex(accessibility.AccessibilityUnavailable, "disconnected"):
+            accessibility.last_snapshot(0)
+        self.assertIsNone(accessibility.last_snapshot(0))
+
+
 class KeyParsingTests(unittest.TestCase):
     def test_combinations(self) -> None:
         ctrl, shift, alt = 0xFFE3, 0xFFE1, 0xFFE9

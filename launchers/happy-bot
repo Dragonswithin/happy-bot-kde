@@ -20,4 +20,5 @@ sys.path.insert(0, str(next((path for path in _candidates if (path / "happy_bot"
 
 from happy_bot.cli import main  # noqa: E402 - path set up above
 
-raise SystemExit(main())
+if __name__ == "__main__":
+    raise SystemExit(main())

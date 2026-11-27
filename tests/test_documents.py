@@ -17,6 +17,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -37,6 +38,28 @@ class DocumentTests(unittest.TestCase):
         (self.root / "docs" / "a.txt").write_text("alpha\nbeta\n")
         (self.root / "docs" / "b.txt").write_text("alpha\nbeta\n")
         (self.root / "docs" / "c.txt").write_text("alpha\ngamma\n")
+
+    def test_scoped_trash_and_gio_fallback(self):
+        data = self.root / "home"
+        mount = self.root / "Storage"
+        home_info = data / "Trash/info"
+        info = mount / f".Trash-{os.getuid()}/info"
+        for folder, path in ((home_info, "/home/example"), (info, "my%20file")):
+            folder.mkdir(parents=True)
+            (folder / "one.trashinfo").write_text("[Trash Info]\nPath=" + path + "\n")
+        with mock.patch.dict(os.environ, XDG_DATA_HOME=str(data)), \
+                mock.patch.object(documents, "_mounted_volumes", return_value={mount}), \
+                mock.patch.object(documents, "_trash_items", side_effect=ToolFailure("unsupported")):
+            scoped = documents.list_trash({"mount_point": str(mount)})
+            self.assertIn(str(mount / "my file"), scoped)
+            self.assertNotIn("/home/example", scoped)
+            files = info.parent / "files"
+            files.mkdir()
+            (files / "unindexed").touch()
+            self.assertIn("original location unknown", documents.list_trash({"mount_point": str(mount)}))
+            self.assertIn("/home/example", documents.list_trash({}))
+            with self.assertRaisesRegex(ToolFailure, "exact mounted drive"):
+                documents.list_trash({"mount_point": "/unknown"})
 
     def test_archives_round_trip_and_never_replace(self) -> None:
         for name in ("pack.zip", "pack.tar.gz"):

@@ -177,7 +177,7 @@ class GateTests(unittest.TestCase):
         self.assertFalse(self.broker.resolve(approval_id, "allow"))
         self.assertEqual(self.broker.wait(approval_id, self.cancel, 1)[0], "deny")
 
-    def test_agent_loop_does_not_run_a_refused_call_and_tells_the_model(self) -> None:
+    def test_refusal_stops_batch_and_returns_control_without_another_model_request(self) -> None:
         ran: list[str] = []
         registry = ToolRegistry([
             Tool("wipe", "x", object_schema(), RISK_DANGER, lambda a: ran.append("wipe") or "wiped",
@@ -200,13 +200,14 @@ class GateTests(unittest.TestCase):
         self.answer_when_asked("deny")
         history = [Message("user", "clean up")]
         run_turn(provider, history, registry, self.events.append, self.cancel, gate=self.gate())
-        self.assertEqual(ran, ["look"])
+        self.assertEqual(ran, [])
         kinds = [event["type"] for event in self.events]
         self.assertEqual(kinds, ["tool_call", "approval_required", "approval_resolved", "tool_result",
-                                 "tool_call", "tool_result", "text_delta", "done"])
+                                 "text_delta", "done"])
         self.assertEqual(self.events[0]["summary"], "Wipe everything")
         self.assertFalse(self.events[3]["ok"])
-        self.assertIn("declined", provider.seen[1][-2].text)
+        self.assertEqual(len(provider.seen), 1)
+        self.assertEqual([m.tool_call_id for m in history if m.role == "tool"], ["1", "2"])
 
     def test_a_call_that_cannot_succeed_fails_before_the_user_is_asked(self) -> None:
         from happy_bot.tools.files import file_tools
@@ -587,7 +588,7 @@ class ApprovalOverHttpTests(unittest.TestCase):
                     "provider": "openai_compatible", "base_url": model.base_url, "model": "fake-model"}},
                     "active_model": "m"})
                 command = json.dumps({"command": f"rm {target}"})
-                model.replies += [chunks_for(tool_calls=[("c1", "run_command", command)]), chunks_for("Kept it."),
+                model.replies += [chunks_for(tool_calls=[("c1", "run_command", command)]),
                                   chunks_for(tool_calls=[("c2", "run_command", command)]), chunks_for("Removed.")]
                 headers = {"Authorization": f"Bearer {server.auth_token}", "Content-Type": "application/json"}
 

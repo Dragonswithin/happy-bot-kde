@@ -307,6 +307,15 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual([m.text for m in second_request[-2:]], ["echo: a", "echo: b"])
         self.assert_history_valid()
 
+    def test_how_can_i_question_blocks_unrequested_delete_before_approval(self):
+        self.history[-1] = Message("user", "How can I clear the trash on my storage drive?")
+        self.registry = self.registry.with_tools([
+            Tool("delete", "Delete.", object_schema(), RISK_DANGER, self.ran.append)])
+        self.run_loop(ScriptedProvider([call("1", "delete"), call("2", "echo", text="inspect")],
+                                       [TextDelta("Open Trash in Dolphin.")]))
+        self.assertEqual(self.ran, [{"text": "inspect"}])
+        self.assertFalse(next(e for e in self.events if e["type"] == "tool_result")["ok"])
+
     def test_a_tool_card_travels_with_its_successful_result_only(self) -> None:
         self.registry = ToolRegistry([
             Tool("echo", "Echo.", object_schema(), RISK_READ, lambda a: "sunny", card=lambda text: {"kind": "weather", "now": text}),
