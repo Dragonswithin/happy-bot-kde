@@ -223,7 +223,7 @@ PositionedWindow {
     onPlacedYChanged: layout()
     // A click anywhere else takes focus away: close, as the panel popup does; not while `holdOpen`
     // (the application is briefly made active for a "Help with …" screenshot).
-    property bool holdOpen: false
+    readonly property bool holdOpen: session.capturing || view.windowPinned
     onActiveChanged: if (!active && expanded && !holdOpen) close()
 
     Timer {

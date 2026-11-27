@@ -495,7 +495,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Web and local code search | Web finder and configurable search tools, indexed file search, and local file-content tools. | Phase 14 verifies DuckDuckGo, Tavily, SearXNG, and Google through compatible integrations, and adds an explicit grep/ripgrep code search workflow. |
 | Approved shell execution | Existing approval cards, streamed command output, and Stop. | Covered. Keep checking approval, cancellation, and output in normal workflows. |
 | Live context tracker | The chat meter shows per-request usage, configured capacity, a labeled estimate or provider count, and a near-limit warning. | Built in Phase 13. |
-| Pin chat above windows | The floating shortcut stays accessible and the popup normally dismisses on focus loss. | Phase 13 adds explicit Pin/Unpin for the opened assistant. |
+| Pin chat above windows | Pin window beside Close keeps the panel or floating popup visible while another app has keyboard focus. | Built in Phase 13. |
 | Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
 | Prayer times and Hijri calendar | Timers and reminders. | Phase 15 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
 | Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
@@ -1542,6 +1542,13 @@ configured capacity. Unknown capacity is shown as unavailable, with a
 fallback window used internally for history trimming. Changing models
 estimates the selected model's context, and restarting or reopening a chat
 restores the appropriate baseline or saved reading.
+
+**Phase 13 window pinning.** Pin window applies to the current popup until
+it closes. Unpin restores click-away dismissal. Saved conversation pins still
+control history ordering and retention. In a nested Plasma Wayland session,
+both launchers kept a pinned chat visible over a maximized editor while the
+editor received typed text. Unpin, click-away, quick reopen, return to Start,
+drag placement, and closing and reopening unpinned were checked on both.
 
 ## Decisions
 

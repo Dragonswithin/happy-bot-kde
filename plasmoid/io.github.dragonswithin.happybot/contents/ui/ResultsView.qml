@@ -107,7 +107,9 @@ AssistantSurface {
             view.focusInput();
         }
     }
-    readonly property bool sidebarVisible: !helpVisible && (historyOpen || (conversationVisible && !welcomeVisible && session.hasTranscript))
+    readonly property bool chatNavigationVisible: conversationVisible && !helpVisible
+    onChatNavigationVisibleChanged: if (!chatNavigationVisible) historyOpen = false
+    readonly property bool sidebarVisible: chatNavigationVisible && (historyOpen || (!welcomeVisible && session.hasTranscript))
     readonly property var drawerChats: {
         const rows = session.history.slice();
         const id = session.conversationId;
@@ -118,9 +120,11 @@ AssistantSurface {
             rows.unshift({id: "", title: i18n("Unsent message")});
         return rows;
     }
+    property bool windowPinned: false
     property bool startOnNextOpen: false
     property double hiddenAt: 0
     function popupHidden() {
+        windowPinned = false;
         hiddenAt = Date.now();
         historyOpen = false;
     }
@@ -376,6 +380,23 @@ AssistantSurface {
             }
 
             PlasmaComponents3.ToolButton {
+                objectName: "windowPin"
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 1.5
+                icon.name: "pin"
+                text: checked ? i18n("Unpin window") : i18n("Pin window")
+                display: QQC2.AbstractButton.IconOnly
+                checkable: true
+                checked: view.windowPinned
+                onClicked: view.windowPinned = checked
+                AssistantToolTip {
+                    nativeLook: view.nativeLook
+                    accent: view.accent
+                    text: parent.text
+                    visible: parent.hovered || parent.visualFocus
+                }
+            }
+
+            PlasmaComponents3.ToolButton {
                 Layout.preferredHeight: Kirigami.Units.gridUnit * 1.5
                 objectName: "assistantClose"
                 icon.name: "window-close"
@@ -480,7 +501,7 @@ AssistantSurface {
             PlasmaComponents3.ToolButton {
                 Layout.row: 0
                 Layout.column: 1
-                visible: !view.helpVisible
+                visible: view.chatNavigationVisible
                 icon.name: view.sidebarVisible ? "go-next" : "go-previous"
                 text: view.sidebarVisible ? i18n("Return to start screen") : i18n("Previous chats")
                 display: QQC2.AbstractButton.IconOnly

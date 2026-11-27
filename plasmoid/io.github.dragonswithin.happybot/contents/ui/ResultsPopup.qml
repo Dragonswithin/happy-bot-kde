@@ -99,8 +99,8 @@ PositionedWindow {
     LayerShell.Window.scope: "happy-bot-panel-popup"
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityOnDemand
 
-    // Hold focus-loss dismissal during a "Help with …" screenshot.
-    property bool holdOpen: false
+    // Pinned windows and ongoing Help captures stay open when another app takes focus.
+    readonly property bool holdOpen: session.capturing || resultsView.windowPinned
     onActiveChanged: {
         if (!active && visible && !holdOpen)
             Qt.callLater(dismissIfInactive);

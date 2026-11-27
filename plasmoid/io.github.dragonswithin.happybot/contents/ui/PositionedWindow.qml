@@ -19,7 +19,8 @@ Window {
     signal popupMoved(int x, int y)
 
     color: "transparent"
-    flags: Qt.FramelessWindowHint
+    // Match the Wayland top layer when running under X11.
+    flags: Qt.FramelessWindowHint | (Qt.platform.pluginName === "xcb" ? Qt.WindowStaysOnTopHint : 0)
     LayerShell.Window.layer: LayerShell.Window.LayerTop
     LayerShell.Window.anchors: LayerShell.Window.AnchorTop | LayerShell.Window.AnchorLeft
     // Coordinates are relative to the screen, including the space reserved by panels.

@@ -116,6 +116,8 @@ Item {
             waitForRendering(view);
             mouseClick(button(view, data.text));
             tryCompare(heading, "text", data.text);
+            verify(!button(view, "Previous chats"));
+            verify(!view.sidebarVisible);
             compare(view.gradient, surface);
             compare(view.width, width);
             compare(view.height, view.heightInGridUnits * Kirigami.Units.gridUnit);
@@ -319,14 +321,34 @@ Item {
         }
 
         function test_articleAndSelection() {
+            view.historyOpen = true;
             session.startFinding("web");
+            verify(!view.historyOpen && !view.chatNavigationVisible);
             session.openArticle("Robots", "Robots");
+            verify(!view.chatNavigationVisible);
             compare(heading.text, "Wikipedia");
             session.closeArticle();
             compare(heading.text, "Search the web");
             session.stopFinding();
             session.fixing = { text: "hello", app: "Kate" };
             compare(heading.text, "Fix selected text");
+            verify(!view.chatNavigationVisible);
+        }
+
+        function test_windowPinTogglesAndClearsOnDismiss() {
+            const pin = findChild(view, "windowPin");
+            compare(pin.text, "Pin window");
+            mouseClick(pin);
+            verify(view.windowPinned);
+            compare(pin.text, "Unpin window");
+            mouseClick(pin);
+            verify(!view.windowPinned);
+            mouseClick(pin);
+            mouseClick(findChild(view, "assistantClose"));
+            view.popupHidden();
+            view.prepareOpen(Date.now());
+            verify(!pin.checked);
+            compare(heading.text, "Start screen");
         }
 
         function test_closeButtonThenImmediateReopenStartsFresh() {
