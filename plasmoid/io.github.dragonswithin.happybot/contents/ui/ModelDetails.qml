@@ -115,12 +115,12 @@ Kirigami.FormLayout {
         Kirigami.FormData.label: i18n("Context window:")
         Layout.minimumWidth: Kirigami.Units.gridUnit * 9
         editable: true
-        from: 1024
+        from: 0
         to: 10000000
         stepSize: 1024
-        value: section.model ? section.model.context_window : 32768
-        textFromValue: (value, locale) => i18n("%1 tokens", Number(value).toLocaleString(locale, "f", 0))
-        valueFromText: (text, locale) => parseInt(String(text).replace(/[^0-9]/g, "")) || 1024
+        value: section.model ? section.model.context_window : 0
+        textFromValue: (value, locale) => value > 0 ? i18n("%1 tokens", Number(value).toLocaleString(locale, "f", 0)) : i18n("Unknown")
+        valueFromText: (text, locale) => { const tokens = parseInt(String(text).replace(/[^0-9]/g, "")); return tokens > 0 ? Math.max(1024, tokens) : 0; }
         onValueModified: section.update("context_window", value)
     }
 

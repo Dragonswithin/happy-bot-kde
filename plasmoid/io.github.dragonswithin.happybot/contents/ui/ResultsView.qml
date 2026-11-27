@@ -532,13 +532,24 @@ AssistantSurface {
                 }
             }
 
-            // Which AI this chat uses; only when more than one is set up.
-            ModelPicker {
-                nativeLook: view.nativeLook
-                accent: view.accent
+            RowLayout {
                 Layout.row: 0
                 Layout.column: 2
-                session: view.session
+                spacing: Kirigami.Units.smallSpacing
+
+                ModelPicker {
+                    nativeLook: view.nativeLook
+                    accent: view.accent
+                    session: view.session
+                }
+
+                ContextMeter {
+                    objectName: "assistantContextMeter"
+                    visible: view.conversationVisible && !!view.session.contextModel
+                    nativeLook: view.nativeLook
+                    accent: view.accent
+                    session: view.session
+                }
             }
         }
     }

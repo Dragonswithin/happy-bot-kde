@@ -173,6 +173,26 @@ Item {
     property double conversationCreatedAt: 0
     property var models: []
     property string chatModel: ""
+    property var contextUsage: null
+    readonly property var contextModel: models.find(item => item.name === (chatModel || contextUsage?.model))
+        ?? models[0] ?? null
+    property int contextRevision: 0
+    onChatModelChanged: {
+        contextUsage = null;
+        refreshContextUsage();
+    }
+
+    function refreshContextUsage() {
+        const revision = ++session.contextRevision;
+        if (!session.models.length || session.busy)
+            return;
+        const params = "?id=" + encodeURIComponent(session.conversationId)
+            + "&model=" + encodeURIComponent(session.chatModel);
+        request("GET", "/context/usage" + params, null, data => {
+            if (!session.busy && revision === session.contextRevision)
+                session.contextUsage = data.context_usage?.model ? data.context_usage : null;
+        }, () => {});
+    }
     property var helpWith: null
     property string helpWithIcon: ""  // the application's icon name, for the welcome screen only
     property bool helpChat: false  // this chat began with "Help with …": requests carry the full context
@@ -340,6 +360,7 @@ Item {
             if (session.chatModel && !session.models.some(item => item.name === session.chatModel)) {
                 session.chatModel = "";
             }
+            if (!session.contextUsage) session.refreshContextUsage();
             session.setStatus("idle", i18n("Ready"));
         }, function(data) {
             session.setStatus("offline", data.error || i18n("The assistant is not running"));
@@ -822,6 +843,12 @@ Item {
             session.walkthrough = false;
             session.helpWindow = null;
             session.chatModel = session.models.some(item => item.name === data.model) ? data.model : "";
+            ++session.contextRevision;
+            const sample = data.context_usage;
+            const model = session.models.find(item => item.name === sample?.model);
+            session.contextUsage = model && (model.context_window || null) === sample.capacity
+                && (!session.chatModel || session.chatModel === model.name) ? sample : null;
+            if (!session.contextUsage) session.refreshContextUsage();
             session.replay(data.events || []);
         }, function(data) {
             if (session.conversationClearRevision !== revision) return;
@@ -950,6 +977,7 @@ Item {
     }
 
     function resetTranscript() {
+        session.contextUsage = null;
         session.conversationId = "";
         session.conversationCreatedAt = 0;
         session.chatModel = "";
@@ -959,6 +987,7 @@ Item {
         session.walkthrough = false;
         resetHelpEditor();
         session.entries.clear();
+        session.refreshContextUsage();
     }
 
     /** Sends one request to the assistant. Returns false if it was not sent. */
@@ -972,6 +1001,7 @@ Item {
             text += "\n\n" + session.helpErrorText.trim();
         session.showingTasks = false;
         session.showingSystem = false;  // the answer must show, not System info
+        ++session.contextRevision;
         session.busy = true;
         if (!session.conversationId) session.conversationCreatedAt = Date.now() / 1000;
         setStatus("thinking", i18n("Thinking"));
@@ -1078,6 +1108,9 @@ Item {
             session.conversationId = event.conversation_id;
             session.conversationCreatedAt = Number(event.created || session.conversationCreatedAt);
             (event.warnings || []).forEach(warning => session.appendEntry("notice", warning));
+            break;
+        case "context_usage":
+            session.contextUsage = event;
             break;
         case "thinking":
             setStatus("thinking", i18n("Thinking"));

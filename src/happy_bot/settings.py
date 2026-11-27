@@ -31,7 +31,7 @@ Schema (version 1)::
           "model": "<model id>",              # required; as the service names it
           "api_key": "",                      # default ""; sent as a bearer token when set
           "headers": {"Name": "value"},       # default {}; extra request headers some services need
-          "context_window": 32768,            # default 32768; tokens, used to trim long conversations
+          "context_window": 32768,            # 0 when unknown; tokens, used to trim long conversations
           "vision": false,                    # default false; whether the model accepts images
           "input_price": 0,                   # default 0; cost per million input tokens, in the user's
           "output_price": 0,                  #   currency, for spending totals and the limit (spend.py)
@@ -164,7 +164,7 @@ from .tools.shell import DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, SUPPORTED
 
 SETTINGS_VERSION = 1
 PROVIDER_KINDS = ("openai_compatible", "openai_responses")  # see providers/__init__.py
-DEFAULT_CONTEXT_WINDOW = 32768
+DEFAULT_CONTEXT_WINDOW = 0
 APPROVAL_POLICIES = ("danger", "changes", "everything")
 FOLDER_NAMES = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 DEFAULT_HISTORY_DAYS = 30
@@ -372,8 +372,8 @@ def _validate_model(name: str, raw: Any) -> dict[str, Any]:
     )
     window = raw.get("context_window", DEFAULT_CONTEXT_WINDOW)
     _require(
-        isinstance(window, int) and not isinstance(window, bool) and 1024 <= window <= 10_000_000,
-        f"{where}: 'context_window' must be a whole number of tokens, at least 1024",
+        isinstance(window, int) and not isinstance(window, bool) and (window == 0 or 1024 <= window <= 10_000_000),
+        f"{where}: 'context_window' must be 0 (unknown) or a whole number of tokens from 1024 to 10000000",
     )
     _require(isinstance(raw.get("vision", False), bool), f"{where}: 'vision' must be true or false")
     _require(isinstance(raw.get("hand_over_long", False), bool), f"{where}: 'hand_over_long' must be true or false")

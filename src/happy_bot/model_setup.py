@@ -116,6 +116,8 @@ def use(server: "AssistantServer", body: dict[str, Any]) -> dict[str, Any]:
     kept = previous["models"].get(name, {})
     if not entry["api_key"] and kept.get("api_key"):
         entry["api_key"] = kept["api_key"]  # re-adding a stored model without retyping its key
+    if not entry["context_window"] and kept.get("context_window"):
+        entry["context_window"] = kept["context_window"]
     order = [other for other in previous.get("model_order", []) if other != name]
     if job == "main":
         order.insert(0, name)

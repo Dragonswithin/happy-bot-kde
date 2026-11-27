@@ -103,7 +103,8 @@ from . import app_context, desktop_actions, remembered_facts
 from . import settings as settings_store
 from . import sounds, spend, ui_settings
 from .agent_loop import run_turn, system_prompt
-from .conversation import Message
+from .conversation import Message, trim_history
+from .context_meter import FALLBACK_WINDOW, estimate
 from .desktop_context import run_command
 from .permissions import PermissionGate
 from .redaction import is_local_address
@@ -204,13 +205,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         if dry_run:
             registry = registry.reads_only()
             message = (DRY_RUN_PREFIX + message)[:MAX_MESSAGE_CHARS]
-        unavailable = [GROUP_DESCRIPTIONS[group] for group in agent["disabled_tool_groups"]]
-        wikipedia = settings.get("wikipedia") or {}
-        reader = settings["tool_servers"].get(wikipedia.get("server") or "") or {}
-        lent = reader.get("enabled", True) and (reader.get("tools") is None or "zim_query" in reader["tools"])
-        wikipedia_tool = bridged_name(wikipedia["server"], "zim_query") if reader and lent else ""
-        system = Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
-                                                 agent["confirm_plans"], settings.get("routines"), wikipedia_tool))
+        system = _system_message(settings, agent)
         if conversation.history and conversation.history[0].role == "system":
             conversation.history[0] = system
         else:
@@ -359,6 +354,63 @@ def _model_memory(history: list[Message], facts: list[str], allowed: bool) -> li
     return prepared
 
 
+def _system_message(settings, agent):
+    unavailable = [GROUP_DESCRIPTIONS[group] for group in agent["disabled_tool_groups"]]
+    wikipedia = settings.get("wikipedia") or {}
+    reader = settings["tool_servers"].get(wikipedia.get("server") or "") or {}
+    lent = reader.get("enabled", True) and (reader.get("tools") is None or "zim_query" in reader["tools"])
+    wikipedia_tool = bridged_name(wikipedia["server"], "zim_query") if reader and lent else ""
+    return Message("system", system_prompt(settings.get("folders"), agent["instructions"], unavailable,
+                                           agent["confirm_plans"], settings.get("routines"), wikipedia_tool))
+
+
+def _prepare_model_input(history, model, agent, turn_image=None, walkthrough=False):
+    local = is_local_address(model["base_url"])
+    policy = agent.get("app_context", app_context.DEFAULT_POLICY)
+    facts = [remembered_facts.display(fact) for fact in agent.get("remembered_facts", [])
+             if local or not fact["local_only"]]
+    memories = _model_memory(history, facts, app_context.shows_context(policy, local))
+    prepared = app_context.for_model(memories, policy, local, bool(model.get("vision")), turn_image)
+    if walkthrough:
+        prepared[0] = replace(prepared[0], text=prepared[0].text + "\nThe user chose a walkthrough. "
+                             "Give one action they can take now and what they should see. Wait for their reply before continuing.")
+    return prepared
+
+
+def preview_context(server, conversation_id: str, chosen: str) -> dict:
+    settings = server.settings
+    agent = settings["agent"]
+    names = [chosen] if chosen in settings["models"] else ([] if chosen else settings["model_order"])
+    chain, _ = _usable(settings, names)
+    if not chain:
+        return {}
+    name, model, _ = chain[0]
+    conversation = server.conversations.get(conversation_id) if conversation_id else None
+    if conversation_id and conversation is None:
+        return {}
+    if conversation is not None:
+        if not conversation.turn_lock.acquire(blocking=False):
+            return {}
+        try:
+            history = list(conversation.history)
+        finally:
+            conversation.turn_lock.release()
+    else:
+        history = []
+    system = _system_message(settings, agent)
+    if history and history[0].role == "system":
+        history[0] = system
+    else:
+        history.insert(0, system)
+    registry, _ = build_registry(server.mcp, settings, lambda: server.settings, server.mutate_settings)
+    registry = registry.with_tools(choice_tools())
+    if not app_context.shows_context(agent.get("app_context", app_context.DEFAULT_POLICY), is_local_address(model["base_url"])):
+        registry = registry.without(frozenset({"recall"}))
+    capacity = model["context_window"]
+    outgoing = trim_history(_prepare_model_input(history, model, agent), capacity or FALLBACK_WINDOW)
+    return {"model": name, **estimate(outgoing, registry.specs(), capacity)}
+
+
 def _attempt(provider, name: str, model: dict[str, Any], conversation, registry, emit, gate, agent,
              hold_first_error: bool, hand_over: bool = False, turn_image: str | None = None,
              walkthrough: bool = False) -> dict[str, Any] | None:
@@ -377,6 +429,8 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
             return
         if event["type"] in ("thinking", "text_delta", "tool_call"):
             progressed[0] = True
+        if event["type"] == "context_usage":
+            event = {**event, "model": name}
         if event["type"] == "done":
             usage = event.get("usage") or {}
             event = {**event, "model": name,
@@ -394,18 +448,11 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
         registry = registry.without(frozenset({"recall"}))
 
     def prepare(history):
-        facts = [remembered_facts.display(fact) for fact in agent.get("remembered_facts", [])
-                 if local or not fact["local_only"]]
-        memories = _model_memory(history, facts, allow_facts)
-        prepared = app_context.for_model(memories, policy, local, bool(model.get("vision")), turn_image)
-        if walkthrough:
-            prepared[0] = Message("system", prepared[0].text + "\nThe user chose a walkthrough. Give one action "
-                                  "they can take now and what they should see. Wait for their reply before continuing.")
-        return prepared
+        return _prepare_model_input(history, model, agent, turn_image, walkthrough)
 
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
              max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate, redact=not local,
-             prepare=prepare)
+             prepare=prepare, report_context=True)
     return held[0] if held else None
 
 

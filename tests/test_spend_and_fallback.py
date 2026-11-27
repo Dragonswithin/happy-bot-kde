@@ -160,7 +160,9 @@ class ModelOrderTests(unittest.TestCase):
         conversation, events = Conversation(), []
         chain = [("big", HOSTED, Failing()), ("small", LOCAL, Answering())]
         ask_stream._run_chain(chain, conversation, ToolRegistry([]), events.append, None, self.agent)
-        self.assertIn("big did not answer", events[0]["message"])
+        self.assertIn("big did not answer", next(event["message"] for event in events if event["type"] == "notice"))
+        self.assertEqual([event["model"] for event in events if event["type"] == "context_usage"],
+                         ["big", "small", "small"])
         done = events[-1]
         self.assertEqual((done["type"], done["model"], done["usage"]["input_tokens"]), ("done", "small", 10))
 

@@ -42,6 +42,7 @@ class Conversation:
     updated: float = field(default_factory=time.time)
     pinned: bool = False
     model: str = ""
+    context_usage: dict[str, Any] = field(default_factory=dict)
     turn_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     cancel: threading.Event = field(default_factory=threading.Event, repr=False)
     last_used: float = field(default_factory=time.monotonic)
@@ -50,6 +51,9 @@ class Conversation:
         """Keep an event for replay. Text pieces are joined; liveness-only events (start, thinking,
         progress lines) are dropped."""
         kind = event.get("type")
+        if kind == "context_usage":
+            self.context_usage = dict(event)
+            return
         if kind in ("start", "thinking", "tool_progress"):
             return
         if kind == "text_delta" and self.events and self.events[-1].get("type") == "text_delta":
@@ -63,7 +67,7 @@ class Conversation:
     def to_record(self) -> dict[str, Any]:
         return {
             "id": self.id, "title": self.title, "created": self.created, "updated": self.updated, "pinned": self.pinned,
-            "model": self.model,
+            "model": self.model, "context_usage": self.context_usage,
             "messages": [message_to_json(message) for message in self.history], "events": self.events,
         }
 
@@ -78,6 +82,7 @@ def conversation_from_record(record: dict[str, Any]) -> Conversation:
         updated=float(record.get("updated") or time.time()),
         pinned=record.get("pinned") is True,
         model=str(record.get("model") or ""),
+        context_usage=dict(record["context_usage"]) if isinstance(record.get("context_usage"), dict) else {},
     )
 
 

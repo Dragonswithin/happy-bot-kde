@@ -37,6 +37,22 @@ def done_core(event: dict) -> dict:
     """A ``done`` event without its usage and model details, which vary by model."""
     return {key: event[key] for key in ("type", "stop", "actions") if key in event}
 
+class ContextEstimateTests(unittest.TestCase):
+    def test_counts_only_prepared_input_and_flags_uncounted_images(self) -> None:
+        from happy_bot.context_meter import estimate
+
+        base = [Message("system", "User instructions"), Message("user", "Explain this")]
+        with_image = [base[0], Message("user", base[1].text, images=("capture.png",))]
+        with_result = [*with_image, Message("tool", "Tool readings " * 100)]
+        plain = estimate(base, [], 4096)
+        illustrated = estimate(with_image, [], 4096)
+        result = estimate(with_result, [ECHO], 0)
+        self.assertEqual(plain["used"], illustrated["used"])
+        self.assertEqual(illustrated["image_count"], 1)
+        self.assertGreater(result["used"], illustrated["used"])
+        self.assertIsNone(result["capacity"])
+
+
 class ProviderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.service = FakeModelService()

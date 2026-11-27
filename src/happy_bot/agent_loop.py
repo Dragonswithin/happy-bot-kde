@@ -75,6 +75,7 @@ import threading
 import time
 from typing import Any, Callable
 
+from .context_meter import FALLBACK_WINDOW, estimate
 from .conversation import Message, TextDelta, ThinkingDelta, ToolCallReady, TurnEnd, trim_history
 from .redaction import redact as redact_secrets
 from .routines import prompt_lines
@@ -233,6 +234,7 @@ def run_turn(
     gate: PermissionGate | None = None,
     redact: bool = False,
     prepare: Callable[[list[Message]], list[Message]] | None = None,
+    report_context: bool = False,
 ) -> None:
     """Run the turn whose user message is the last entry of ``history`` (see module docstring)."""
     specs = registry.specs()
@@ -253,7 +255,11 @@ def run_turn(
         thinking_reported = False
         try:
             outgoing = prepare(history) if prepare else history
-            for event in provider.stream(trim_history(outgoing, context_window), specs, cancel):
+            outgoing = trim_history(outgoing, context_window or FALLBACK_WINDOW)
+            meter = estimate(outgoing, specs, context_window) if report_context else None
+            if meter is not None:
+                emit({"type": "context_usage", **meter})
+            for event in provider.stream(outgoing, specs, cancel):
                 if isinstance(event, TextDelta):
                     text_parts.append(event.text)
                     emit({"type": "text_delta", "text": event.text})
@@ -267,6 +273,8 @@ def run_turn(
                     usage["requests"] += 1
                     usage["input_tokens"] += event.input_tokens
                     usage["output_tokens"] += event.output_tokens
+                    if meter is not None and event.input_tokens > 0:
+                        emit({"type": "context_usage", **meter, "used": event.input_tokens, "estimated": False})
                     echo = event.echo
                     if event.stop_reason == "cancelled":
                         cancel.set()

@@ -199,7 +199,8 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
         "model": settings_store.active_model(server.settings) is not None,
     }
     # The popup's per-chat picker: names and whether each is online, in the user's order. No secrets.
-    payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"])}
+    payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"]),
+                          "context_window": server.settings["models"][name]["context_window"]}
                          for name in server.settings.get("model_order", [])]
     payload["ui"] = server.settings.get("ui") or {}
     # The microphone button shows when the user switched it on and a speech service is set.
@@ -738,13 +739,19 @@ def list_conversations(server: "AssistantServer", query: dict[str, list[str]], b
     return 200, {"ok": True, "conversations": server.conversations.list()}
 
 
+def get_context_usage(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    from .ask_stream import preview_context
+
+    return 200, {"ok": True, "context_usage": preview_context(server, _first(query, "id"), _first(query, "model"))}
+
+
 def get_conversation(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     conversation = server.conversations.get(_first(query, "id"))
     if conversation is None:
         return _error(404, "That conversation is no longer saved.", "invalid")
     return 200, {"ok": True, "id": conversation.id, "created": conversation.created,
                  "title": conversation.title, "model": conversation.model,
-                 "events": conversation.events}
+                 "events": conversation.events, "context_usage": conversation.context_usage}
 
 
 def delete_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
@@ -1012,6 +1019,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/cancel"): cancel,
     ("POST", "/approve"): approve,
     ("GET", "/conversations"): list_conversations,
+    ("GET", "/context/usage"): get_context_usage,
     ("GET", "/conversation"): get_conversation,
     ("POST", "/conversations/delete"): delete_conversations,
     ("POST", "/history/clear"): clear_history,

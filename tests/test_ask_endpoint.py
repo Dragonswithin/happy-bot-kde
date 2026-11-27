@@ -92,7 +92,17 @@ class AskEndpointTests(unittest.TestCase):
         self.model.replies.append(chunks_for("Looking. ", [("c1", "fake__find_files", '{"query": "tax"}')]))
         self.model.replies.append(chunks_for("Found /tmp/fake/tax-0.txt"))
         events = self.ask("find my tax file")
-        self.assertEqual([event["type"] for event in events],
+        context = [event for event in events if event["type"] == "context_usage"]
+        self.assertEqual([event["estimated"] for event in context], [True, False, True, False])
+        self.assertGreater(context[2]["used"], context[0]["used"])
+        self.assertIsNone(context[-1]["capacity"])
+        self.assertLess(context[-1]["used"], events[-1]["usage"]["input_tokens"])
+        saved = self.call("GET", "/conversation?id=" + events[0]["conversation_id"])
+        self.assertEqual(saved["context_usage"], context[-1])
+        preview = self.call("GET", "/context/usage?id=" + saved["id"])["context_usage"]
+        self.assertTrue(preview["estimated"])
+        self.assertIsNone(preview["capacity"])
+        self.assertEqual([event["type"] for event in events if event["type"] != "context_usage"],
                          ["start", "text_delta", "text_delta", "tool_call", "tool_result"]
                          + ["text_delta"] * 5 + ["done"])
         start = events[0]
@@ -280,8 +290,8 @@ class AskEndpointTests(unittest.TestCase):
         self.assertEqual(self.ask("   ")[0]["code"], "invalid")
         self.model.replies.append((401, {"error": {"message": "bad key"}}))
         events = self.ask("hi")
-        self.assertEqual([event["type"] for event in events], ["start", "error"])
-        self.assertIn("rejected the API key", events[1]["message"])
+        self.assertEqual([event["type"] for event in events], ["start", "context_usage", "error"])
+        self.assertIn("rejected the API key", events[-1]["message"])
         self.model.replies.append(chunks_for("recovered"))
         self.assertEqual(done_core(self.ask("again", events[0]["conversation_id"])[-1]), {"type": "done", "stop": "answered", "actions": []})
 
@@ -352,7 +362,7 @@ class AskEndpointTests(unittest.TestCase):
         self.assertIsNone(view["settings"]["models"]["m"]["api_key"])
         health = self.call("GET", "/health")
         self.assertTrue(health["setup"]["model"])
-        self.assertEqual(health["models"], [{"name": "m", "online": False}])  # for the popup's picker; no secrets
+        self.assertEqual(health["models"], [{"name": "m", "online": False, "context_window": 0}])  # for the popup's picker; no secrets
         self.call("PUT", "/settings", {"settings": view["settings"]})
         self.assertEqual(self.server.settings["models"]["m"]["api_key"], "sk-secret")
 
@@ -361,7 +371,7 @@ class ModelSettingsTests(unittest.TestCase):
     def test_model_validation_messages(self) -> None:
         good = {"provider": "openai_compatible", "base_url": "http://h/v1/", "model": " m "}
         stored = validate_settings({"models": {"a": good}, "active_model": "a"})["models"]["a"]
-        self.assertEqual((stored["base_url"], stored["model"], stored["context_window"]), ("http://h/v1", "m", 32768))
+        self.assertEqual((stored["base_url"], stored["model"], stored["context_window"]), ("http://h/v1", "m", 0))
         cases = {
             "'provider' must be one of": {**good, "provider": "magic"},
             "'base_url' must start with": {**good, "base_url": "h/v1"},

@@ -22,7 +22,14 @@ Item {
             property int programRequests: 0
             property string lastProgramPath: ""
             function request(method, path, body, success, failure) {
-                if (path === "/tasks") {
+                if (path.startsWith("/context/usage")) {
+                    const model = path.endsWith("model=Wide") ? "Wide" : "Local";
+                    success({context_usage: {model: model, used: 700,
+                        capacity: model === "Wide" ? 8192 : 4096, estimated: true}});
+                } else if (path === "/conversation?id=context-test") {
+                    success({id: "context-test", model: "Local", events: [],
+                        context_usage: {model: "Local", used: 3300, capacity: 4096, estimated: false}});
+                } else if (path === "/tasks") {
                     if (method === "POST") {
                         taskPayload = body;
                         savedTasks = savedTasks.map(task => task.id === body.id ? Object.assign({}, task, body) : task);
@@ -170,6 +177,34 @@ Item {
             keyClick(Qt.Key_Return);
             tryCompare(session, "chatModel", "Local AI");
             compare(picker.displayText, "Local AI");
+        }
+
+        function test_contextMeterTracksProviderFallbackAndModelSelection() {
+            session.models = [{name: "Local", context_window: 4096}, {name: "Unknown", context_window: 0},
+                              {name: "Wide", context_window: 8192}];
+            const meter = findChild(view, "assistantContextMeter");
+            session.applyEvent({type: "context_usage", model: "Local", used: 800, estimated: true});
+            verify(meter.visible && meter.detail.includes("Estimated"));
+            session.applyEvent({type: "context_usage", model: "Local", used: 3700, estimated: false});
+            verify(meter.nearLimit);
+            verify(meter.detail.includes("Provider reported"));
+            meter.forceActiveFocus(Qt.TabFocusReason);
+            keyClick(Qt.Key_Space);
+            verify(meter.checked);
+            meter.checked = false;
+            session.applyEvent({type: "context_usage", model: "Unknown", used: 8000, estimated: false});
+            verify(!meter.nearLimit);
+            verify(meter.detail.includes("capacity unavailable"));
+            session.chatModel = "Wide";
+            compare(meter.capacity, 8192);
+            compare(meter.used, 700);
+            session.openConversation("context-test");
+            compare(meter.capacity, 4096);
+            compare(meter.used, 3300);
+            verify(meter.nearLimit);
+            session.resetTranscript();
+            compare(meter.used, 700);
+            verify(!meter.nearLimit);
         }
 
         function test_tasksScreenEditsSharedTask() {

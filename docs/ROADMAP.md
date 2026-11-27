@@ -494,7 +494,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Text, image, and PDF attachments | File drops, image input, and screenshot previews. | Phase 14 verifies text, vision, and PDF attachments with an explicit preview and removal before sending. Fill gaps in extraction and drag-and-drop. |
 | Web and local code search | Web finder and configurable search tools, indexed file search, and local file-content tools. | Phase 14 verifies DuckDuckGo, Tavily, SearXNG, and Google through compatible integrations, and adds an explicit grep/ripgrep code search workflow. |
 | Approved shell execution | Existing approval cards, streamed command output, and Stop. | Covered. Keep checking approval, cancellation, and output in normal workflows. |
-| Live context tracker | Per-chat model selection and conversation history. | Phase 13 adds live token use and context capacity when available, with estimates labeled and clear near-limit states. |
+| Live context tracker | The chat meter shows per-request usage, configured capacity, a labeled estimate or provider count, and a near-limit warning. | Built in Phase 13. |
 | Pin chat above windows | The floating shortcut stays accessible and the popup normally dismisses on focus loss. | Phase 13 adds explicit Pin/Unpin for the opened assistant. |
 | Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
 | Prayer times and Hijri calendar | Timers and reminders. | Phase 15 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
@@ -1532,6 +1532,16 @@ records do not replay old facts. Normal chat history remains separate.
 The provider-boundary test checked edits and deletion within an open chat
 and blocked hosted recall. An isolated Plasma Wayland session exercised the
 Behaviour editor against the daemon with a legacy fact.
+
+**Phase 13 chat context meter.** The meter beside the model selector
+tracks the most recent model request independently from billing. It estimates
+the outgoing text and tool definitions after history trimming and uses the
+provider's input token count when reported. Image tokens are omitted from
+estimates and identified in the meter details. The warning starts at 80% of
+configured capacity. Unknown capacity is shown as unavailable, with a
+fallback window used internally for history trimming. Changing models
+estimates the selected model's context, and restarting or reopening a chat
+restores the appropriate baseline or saved reading.
 
 ## Decisions
 
