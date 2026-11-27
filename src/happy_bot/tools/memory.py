@@ -17,9 +17,9 @@ def memory_tools(read_settings: Callable[[], dict[str, Any]], update_settings) -
             def mutate(settings):
                 nonlocal added
                 facts = settings["agent"]["remembered_facts"]
-                if any(item.casefold() == fact.casefold() for item in facts):
+                if any(remembered_facts.display(item).casefold() == fact.casefold() for item in facts):
                     return
-                facts.append(fact)
+                facts.append(remembered_facts.record(fact))
                 added = True
 
             update_settings(mutate)
@@ -36,7 +36,7 @@ def memory_tools(read_settings: Callable[[], dict[str, Any]], update_settings) -
         def mutate(settings):
             nonlocal removed
             facts = settings["agent"]["remembered_facts"]
-            kept = [item for item in facts if words not in item.casefold()]
+            kept = [item for item in facts if words not in remembered_facts.display(item).casefold()]
             removed = len(facts) - len(kept)
             settings["agent"]["remembered_facts"] = kept
 
@@ -48,7 +48,7 @@ def memory_tools(read_settings: Callable[[], dict[str, Any]], update_settings) -
 
     def recall(arguments: dict[str, Any]) -> str:
         facts = read_settings()["agent"]["remembered_facts"]
-        return "\n".join(f"- {fact}" for fact in facts) or "Nothing is remembered about the user yet."
+        return "\n".join(f"- {remembered_facts.display(fact)}" for fact in facts) or "Nothing is remembered about the user yet."
 
     return [
         Tool("remember", "Save a fact for future requests only when the user explicitly asks to remember it.",

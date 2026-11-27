@@ -518,14 +518,16 @@ def edit_remembered_fact(server: "AssistantServer", query: dict[str, list[str]],
             remembered_facts.move_instruction(agent, body.get("old"))
             return
         if action == "add":
-            facts.append(remembered_facts.normalize(body.get("fact")))
+            facts.append(remembered_facts.record(body.get("fact"), body.get("local_only", True), body.get("prompt", "")))
         elif action in ("edit", "delete"):
             old = body.get("old")
+            if isinstance(old, str):
+                old = next((item for item in facts if not item["prompt"] and item["text"] == old), None)
             if old not in facts:
                 raise ValueError("That fact changed. Reload and try again.")
             index = facts.index(old)
             if action == "edit":
-                facts[index] = remembered_facts.normalize(body.get("fact"))
+                facts[index] = remembered_facts.record(body.get("fact"), body.get("local_only", old["local_only"]), old["prompt"])
             else:
                 facts.pop(index)
         else:

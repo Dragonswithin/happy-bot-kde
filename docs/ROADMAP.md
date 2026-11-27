@@ -1517,7 +1517,10 @@ units passed systemd verification. A live user systemd smoke test enabled,
 rescheduled, and advanced a recurring task timer, then removed its test units.
 
 **Phase 13 remembered facts.** Behaviour has a searchable fact list with
-direct edits and delete confirmation. Chat uses the same list and asks before
+direct edits and delete confirmation. Optional fields ask for a preferred name,
+reply language, and measurement units. Facts default to Local only and have
+individual sharing controls. Hosted-model sharing also requires Application
+context to allow it. Chat uses the same list and asks before
 saving or deleting a personal fact. Legacy facts after the original suggested
 instructions move automatically. For custom instructions, the editor offers
 an explicit move for individual bullets because the old format gives both

@@ -86,7 +86,7 @@ class MemoryTests(unittest.TestCase):
         tools = {tool.name: tool for tool in memory_tools(store.read, store.update)}
         tools["remember"].handler({"fact": "My notes are in ~/Notes"})
         self.assertEqual(store.settings["agent"]["instructions"], "Answer briefly.")
-        self.assertEqual(store.settings["agent"]["remembered_facts"], ["My notes are in ~/Notes"])
+        self.assertEqual(store.settings["agent"]["remembered_facts"], [{"text": "My notes are in ~/Notes", "local_only": True, "prompt": ""}])
         self.assertEqual(tools["remember"].handler({"fact": "my notes are in ~/notes"}), "That is already remembered.")
         self.assertEqual(tools["forget"].risk, RISK_DANGER)
         self.assertIn("Forgot 1", tools["forget"].handler({"about": "notes"}))
@@ -105,7 +105,7 @@ class MemoryTests(unittest.TestCase):
 
         store = Store({"agent": {"instructions": SUGGESTED_INSTRUCTIONS + "\n- My notes are in ~/Notes"}})
         self.assertEqual(store.settings["agent"]["instructions"], SUGGESTED_INSTRUCTIONS)
-        self.assertEqual(store.settings["agent"]["remembered_facts"], ["My notes are in ~/Notes"])
+        self.assertEqual(store.settings["agent"]["remembered_facts"], [{"text": "My notes are in ~/Notes", "local_only": True, "prompt": ""}])
         store.mutate_settings = store.update
         status, _ = edit_remembered_fact(
             store, {}, {"action": "edit", "old": "My notes are in ~/Notes", "fact": "My notes are in ~/Documents"}
@@ -115,7 +115,7 @@ class MemoryTests(unittest.TestCase):
             path = Path(directory) / "settings.json"
             save_settings(store.settings, path)
             again = load_settings(path)
-            self.assertEqual(again["agent"]["remembered_facts"], ["My notes are in ~/Documents"])
+            self.assertEqual(again["agent"]["remembered_facts"], [{"text": "My notes are in ~/Documents", "local_only": True, "prompt": ""}])
             self.assertEqual(again, validate_settings(again))
 
     def test_custom_bullets_move_only_when_selected(self) -> None:
@@ -127,7 +127,7 @@ class MemoryTests(unittest.TestCase):
         status, _ = edit_remembered_fact(store, {}, {"action": "move", "old": "- Use Kate."})
         self.assertEqual(status, 200)
         self.assertEqual(store.settings["agent"]["instructions"], "- Answer briefly.")
-        self.assertEqual(store.settings["agent"]["remembered_facts"], ["Use Kate."])
+        self.assertEqual(store.settings["agent"]["remembered_facts"], [{"text": "Use Kate.", "local_only": True, "prompt": ""}])
 
     def test_open_chat_updates_and_privacy_apply_at_provider_boundary(self) -> None:
         from unittest.mock import patch
@@ -170,6 +170,15 @@ class MemoryTests(unittest.TestCase):
                     stream_ask(server, {"message": "Hosted", "conversation_id": conversation, "model": "hosted"}, events.append)
                     self.assertNotIn("memory-replacement-value", calls[-1][0])
                     self.assertNotIn("recall", calls[-1][1])
+                    server.mutate_settings(lambda settings: settings["agent"].update(app_context="any"))
+                    status, _ = edit_remembered_fact(server, {}, {
+                        "action": "add", "fact": "Spanish", "prompt": "language", "local_only": False,
+                    })
+                    self.assertEqual(status, 200)
+                    stream_ask(server, {"message": "Hosted with consent", "conversation_id": conversation,
+                                        "model": "hosted"}, events.append)
+                    self.assertIn("Preferred language: Spanish", calls[-1][0])
+                    self.assertNotIn("memory-replacement-value", calls[-1][0])
                     status, _ = edit_remembered_fact(server, {}, {"action": "delete", "old": "memory-replacement-value"})
                     self.assertEqual(status, 200)
                     stream_ask(server, {"message": "After delete", "conversation_id": conversation, "model": "local"}, events.append)

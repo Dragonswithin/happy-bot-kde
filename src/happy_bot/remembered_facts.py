@@ -16,16 +16,39 @@ def normalize(value: object) -> str:
     return fact
 
 
-def validate(values: object) -> list[str]:
+PROMPTS = {
+    "name": "Preferred name: {}",
+    "language": "Preferred language: {}",
+    "units": "Preferred measurement units: {}",
+}
+
+
+def record(text: object, local_only: object = True, prompt: object = "") -> dict:
+    if not isinstance(local_only, bool):
+        raise ValueError("Choose whether the fact is local only.")
+    if not isinstance(prompt, str) or (prompt and prompt not in PROMPTS):
+        raise ValueError("Unknown remembered fact prompt.")
+    return {"text": normalize(text), "local_only": local_only, "prompt": prompt}
+
+
+def display(fact: dict) -> str:
+    return PROMPTS.get(fact["prompt"], "{}").format(fact["text"])
+
+
+def validate(values: object) -> list[dict]:
     if not isinstance(values, list) or len(values) > MAX_FACTS:
         raise ValueError(f"Remembered facts must be a list of at most {MAX_FACTS} entries.")
-    facts = [normalize(value) for value in values]
-    if len({value.casefold() for value in facts}) != len(facts):
+    facts = [record(value.get("text"), value.get("local_only", True), value.get("prompt", ""))
+             if isinstance(value, dict) else record(value) for value in values]
+    if len({display(value).casefold() for value in facts}) != len(facts):
         raise ValueError("That fact is already remembered.")
+    prompts = [fact["prompt"] for fact in facts if fact["prompt"]]
+    if len(set(prompts)) != len(prompts):
+        raise ValueError("This prompt already has a saved answer.")
     return facts
 
 
-def split_legacy(instructions: str, suggested: str) -> tuple[str, list[str]]:
+def split_legacy(instructions: str, suggested: str) -> tuple[str, list[dict]]:
     """Recognize the old append format only after the exact suggested instructions."""
     if not instructions.startswith(suggested + "\n"):
         return instructions, []

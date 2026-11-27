@@ -394,7 +394,9 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
         registry = registry.without(frozenset({"recall"}))
 
     def prepare(history):
-        memories = _model_memory(history, agent.get("remembered_facts", []), allow_facts)
+        facts = [remembered_facts.display(fact) for fact in agent.get("remembered_facts", [])
+                 if local or not fact["local_only"]]
+        memories = _model_memory(history, facts, allow_facts)
         prepared = app_context.for_model(memories, policy, local, bool(model.get("vision")), turn_image)
         if walkthrough:
             prepared[0] = Message("system", prepared[0].text + "\nThe user chose a walkthrough. Give one action "

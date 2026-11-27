@@ -12,18 +12,28 @@ SettingsSection {
     required property var page
     required property bool instructionsSaved
     property var facts: page.settings?.agent?.remembered_facts || []
-    property string editing: ""
-    property string deleting: ""
+    property var editing: null
+    property var deleting: null
     property bool busy: false
     property int revision: 0
     readonly property var legacy: (page.settings?.agent?.instructions || "").split("\n")
         .filter((line, index, lines) => line.startsWith("- ") && lines.indexOf(line) === index
             && lines.lastIndexOf(line) === index)
-    readonly property var shown: facts.filter(fact => fact.toLowerCase().includes(search.text.trim().toLowerCase()))
+    readonly property var suggestions: [
+        { key: "name", label: i18n("What should Happy Bot call you?"), shortLabel: i18n("Preferred name") },
+        { key: "language", label: i18n("What language should Happy Bot reply in?"), shortLabel: i18n("Preferred language") },
+        { key: "units", label: i18n("Which measurement units do you prefer?"), shortLabel: i18n("Measurement units") }
+    ]
+    readonly property var shown: facts.filter(fact => labelFor(fact).toLowerCase().includes(search.text.trim().toLowerCase()))
+
+    function labelFor(fact) {
+        const suggestion = suggestions.find(item => item.key === fact.prompt);
+        return suggestion ? i18n("%1: %2", suggestion.shortLabel, fact.text) : fact.text;
+    }
     appearance: page.settings?.ui
     title: i18n("Remembered facts")
     iconName: "document-properties"
-    description: i18n("Facts you save here can be shared with the models allowed under Application context.")
+    description: i18n("Every field is optional. Local-only facts stay with models on this computer. Other facts can be sent to hosted models when Application context allows it.")
 
     function refresh() {
         if (!visible || busy || !page.settings)
@@ -35,18 +45,19 @@ SettingsSection {
         }, () => {});
     }
 
-    function change(action, old, fact) {
+    function change(action, old, fact, localOnly = true, prompt = "") {
         if (busy)
             return;
         revision++;
         busy = true;
-        page.client.request("POST", "/memory", { action, old, fact }, data => {
+        page.client.request("POST", "/memory", { action, old, fact, local_only: localOnly, prompt }, data => {
             facts = data.settings.agent.remembered_facts;
             if (action === "move")
                 page.settings = data.settings;
-            editing = "";
-            deleting = "";
+            editing = null;
+            deleting = null;
             entry.clear();
+            localCheck.checked = true;
             busy = false;
             page.report(i18n("Saved."), false);
         }, data => {
@@ -62,6 +73,48 @@ SettingsSection {
         interval: 3000
         repeat: true
         onTriggered: section.refresh()
+    }
+
+    Repeater {
+        model: section.suggestions
+        delegate: ColumnLayout {
+            id: guided
+            required property var modelData
+            readonly property bool saved: section.facts.some(fact => fact.prompt === modelData.key)
+            visible: !saved
+            Layout.fillWidth: true
+
+            QQC2.Label {
+                text: guided.modelData.label
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                QQC2.TextField {
+                    id: answer
+                    objectName: "rememberedFact-" + guided.modelData.key
+                    Layout.fillWidth: true
+                    Accessible.name: guided.modelData.label
+                    placeholderText: i18n("Optional")
+                    maximumLength: 500
+                    onAccepted: if (addAnswer.enabled) addAnswer.clicked()
+                }
+                QQC2.Button {
+                    id: addAnswer
+                    text: i18n("Save")
+                    Accessible.name: i18n("Save %1", guided.modelData.shortLabel)
+                    enabled: answer.text.trim().length > 0 && !section.busy
+                    onClicked: section.change("add", "", answer.text, guidedPrivacy.checked, guided.modelData.key)
+                }
+            }
+            QQC2.CheckBox {
+                id: guidedPrivacy
+                text: i18n("Local only")
+                checked: true
+            }
+            onSavedChanged: if (saved) { answer.clear(); guidedPrivacy.checked = true; }
+        }
     }
 
     QQC2.TextField {
@@ -89,14 +142,20 @@ SettingsSection {
             text: section.editing ? i18n("Save fact") : i18n("Add fact")
             icon.name: section.editing ? "document-save" : "list-add"
             enabled: entry.text.trim().length > 0 && !section.busy && !!section.page.settings
-            onClicked: section.change(section.editing ? "edit" : "add", section.editing, entry.text)
+            onClicked: section.change(section.editing ? "edit" : "add", section.editing, entry.text, localCheck.checked)
         }
         QQC2.Button {
-            visible: section.editing.length > 0
+            visible: section.editing !== null
             enabled: !section.busy
             text: i18n("Cancel")
-            onClicked: { section.editing = ""; entry.clear(); entry.forceActiveFocus(); }
+            onClicked: { section.editing = null; localCheck.checked = true; entry.clear(); entry.forceActiveFocus(); }
         }
+    }
+
+    QQC2.CheckBox {
+        id: localCheck
+        text: i18n("Local only for this fact")
+        checked: true
     }
 
     QQC2.Label {
@@ -109,7 +168,7 @@ SettingsSection {
         model: section.shown
         delegate: ColumnLayout {
             id: row
-            required property string modelData
+            required property var modelData
             Layout.fillWidth: true
             RowLayout {
                 Layout.fillWidth: true
@@ -117,16 +176,17 @@ SettingsSection {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
-                    text: row.modelData
+                    text: section.labelFor(row.modelData)
                 }
                 QQC2.ToolButton {
                     icon.name: "document-edit"
-                    Accessible.name: i18n("Edit %1", row.modelData)
+                    Accessible.name: i18n("Edit %1", section.labelFor(row.modelData))
                     enabled: !section.busy
                     onClicked: {
                         section.editing = row.modelData;
-                        section.deleting = "";
-                        entry.text = row.modelData;
+                        localCheck.checked = row.modelData.local_only;
+                        section.deleting = null;
+                        entry.text = row.modelData.text;
                         entry.forceActiveFocus();
                         entry.selectAll();
                     }
@@ -134,20 +194,31 @@ SettingsSection {
                 QQC2.ToolButton {
                     icon.name: "edit-delete"
                     objectName: "deleteRememberedFact"
-                    Accessible.name: i18n("Delete %1", row.modelData)
+                    Accessible.name: i18n("Delete %1", section.labelFor(row.modelData))
                     enabled: !section.busy
                     onClicked: section.deleting = row.modelData
                 }
             }
+            QQC2.CheckBox {
+                text: i18n("Local only")
+                Accessible.name: i18n("Local only for %1", section.labelFor(row.modelData))
+                checked: row.modelData.local_only
+                enabled: !section.busy
+                onClicked: {
+                    const next = checked;
+                    checked = Qt.binding(() => row.modelData.local_only);
+                    section.change("edit", row.modelData, row.modelData.text, next);
+                }
+            }
             RowLayout {
                 Layout.fillWidth: true
-                visible: section.deleting === row.modelData
+                visible: section.deleting?.text === row.modelData.text && section.deleting?.prompt === row.modelData.prompt
                 QQC2.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     text: i18n("Delete this remembered fact?")
                 }
-                QQC2.Button { text: i18n("Cancel"); onClicked: section.deleting = "" }
+                QQC2.Button { text: i18n("Cancel"); onClicked: section.deleting = null }
                 QQC2.Button {
                     text: i18n("Delete")
                     objectName: "confirmRememberedFactDelete"

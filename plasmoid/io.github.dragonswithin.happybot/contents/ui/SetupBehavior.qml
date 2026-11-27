@@ -192,7 +192,7 @@ ColumnLayout {
 
         QQC2.Label {
             Layout.fillWidth: true
-            text: i18n("Who can see details from the app you’re in?")
+            text: i18n("Which models may receive app details and remembered facts?")
             font.weight: Font.DemiBold
             wrapMode: Text.Wrap
         }
@@ -221,6 +221,12 @@ ColumnLayout {
         Hint {
             text: i18n("App details include the name, version and window title. “Help with…” can also include selected text, visible controls and the open file. Models with image access can see the screenshot you preview before sending. Choose “No models” to turn off Help screenshots.")
         }
+    }
+
+    RememberedFacts {
+        Layout.fillWidth: true
+        page: section.page
+        instructionsSaved: instructions.text.trim() === section.agent?.instructions
     }
 
     SettingsSection {
@@ -280,12 +286,6 @@ ColumnLayout {
             visible: !section.typingAllowed
             text: i18n("Choose Allow to open Plasma’s keyboard permission dialog.")
         }
-    }
-
-    RememberedFacts {
-        Layout.fillWidth: true
-        page: section.page
-        instructionsSaved: instructions.text.trim() === section.agent?.instructions
     }
 
     SettingsSection {
