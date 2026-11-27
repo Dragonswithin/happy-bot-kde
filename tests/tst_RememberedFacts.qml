@@ -40,6 +40,9 @@ Item {
         when: windowShown
         function test_searchKeyboardSaveAndDeleteConfirmation() {
             const preferredName = findChild(facts, "rememberedFact-name");
+            const privacy = findChild(facts, "rememberedFactPrivacy-name");
+            const save = findChild(facts, "saveRememberedFact-name");
+            tryVerify(() => privacy.x > preferredName.x && save.parent.x > privacy.x);
             preferredName.forceActiveFocus();
             keyClick(Qt.Key_K);
             keyClick(Qt.Key_Return);

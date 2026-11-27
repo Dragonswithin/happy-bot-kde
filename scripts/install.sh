@@ -129,6 +129,41 @@ add_bar_to_panel() {
     else { (target || all[0]).addWidget('${PLASMOID_ID}'); print('added'); }" || true
 }
 
+# Plasma Windowed advertises its generic application ID. Match only the
+# Happy Bot settings window so other Plasma Windowed applets keep their icons.
+settings_window_icon() {
+  local action="$1" group="io.github.dragonswithin.happybot-settings-icon" rules count key order_key=Order
+  local -a keys=(Description wmclass wmclassmatch title titlematch desktopfile desktopfilerule)
+  local -a values=("Happy Bot settings icon" org.kde.plasmawindowed 1 "Happy Bot" 2 "$PLASMOID_ID" 2)
+  command -v kreadconfig6 >/dev/null && command -v kwriteconfig6 >/dev/null || return 0
+  rules="$(kreadconfig6 --file kwinrulesrc --group General --key "$order_key" --default __missing__)" || return
+  if [[ "$rules" == __missing__ ]]; then
+    order_key=rules
+    rules="$(kreadconfig6 --file kwinrulesrc --group General --key "$order_key")" || return
+  fi
+  count="$(kreadconfig6 --file kwinrulesrc --group General --key count --default 0)" || return
+  if [[ -z "$rules" && "$count" != 0 ]]; then return 0; fi  # Leave old-format rules to KWin's migration.
+  if [[ "$action" == install ]]; then
+    for key in "${!keys[@]}"; do
+      kwriteconfig6 --file kwinrulesrc --group "$group" --key "${keys[key]}" "${values[key]}" || return
+    done
+    if [[ ",$rules," != *",$group,"* ]]; then rules="${rules:+$rules,}$group"; fi
+  else
+    if [[ ",$rules," != *",$group,"* ]]; then return 0; fi
+    rules=",$rules,"
+    rules="${rules/,$group,/,}"
+    rules="${rules#,}"
+    rules="${rules%,}"
+    for key in "${keys[@]}"; do
+      kwriteconfig6 --file kwinrulesrc --group "$group" --key "$key" --delete || return
+    done
+  fi
+  kwriteconfig6 --file kwinrulesrc --group General --key "$order_key" "$rules" || return
+  if command -v qdbus6 >/dev/null; then
+    qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure >/dev/null 2>&1 || true
+  fi
+}
+
 require_command kpackagetool6
 require_command systemctl
 
@@ -142,6 +177,7 @@ if (( uninstall )); then
     if (( purge )); then printf 'Would remove settings in %s\n' "$CONFIG_DIR"; else printf 'Would keep settings in %s\n' "$CONFIG_DIR"; fi
     exit 0
   fi
+  settings_window_icon uninstall || printf 'Could not remove the Happy Bot settings icon rule.\n' >&2
   [[ -x "${BIN_DIR}/happy-bot-app" ]] && "${BIN_DIR}/happy-bot-app" --quit || true
   systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
   rm -f -- "${SERVICE_DIR}/${SERVICE_NAME}"
@@ -223,6 +259,7 @@ install -D -m 0644 "$SHORTCUTS_SRC" "${APPLICATIONS_DIR}/happy-bot-shortcuts.des
 install -D -m 0644 "${PLASMOID_DIR}/contents/images/happy-bot.svg" "$APP_ICON"
 python3 "${SCRIPT_DIR}/mascot_tray_icons.py" "$(dirname -- "$APP_ICON")"
 install -D -m 0644 "$APP_ENTRY_SRC" "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop"
+settings_window_icon install || printf 'Could not set the Happy Bot settings window icon.\n' >&2
 if [[ -f "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop" ]]; then
   install -m 0644 "${APPLICATIONS_DIR}/${PLASMOID_ID}.desktop" "${AUTOSTART_DIR}/${PLASMOID_ID}.desktop"
 fi

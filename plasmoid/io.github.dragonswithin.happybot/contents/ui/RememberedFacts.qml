@@ -109,7 +109,8 @@ SettingsSection {
 
             GridLayout {
                 Layout.fillWidth: true
-                columns: width >= Kirigami.Units.gridUnit * 27 ? 5 : 2
+                // Use the card's available width. The grid measures itself using its current columns.
+                columns: section.availableWidth >= Kirigami.Units.gridUnit * 29 ? 4 : 2
 
                 QQC2.Label {
                     text: guided.modelData.label
@@ -142,32 +143,37 @@ SettingsSection {
 
                 QQC2.CheckBox {
                     id: guidedPrivacy
+                    objectName: "rememberedFactPrivacy-" + guided.modelData.key
                     text: i18n("Local only")
                     Accessible.name: i18n("Local only for %1", guided.modelData.label)
                 }
 
-                QQC2.Button {
-                    id: saveAnswer
-                    objectName: "saveRememberedFact-" + guided.modelData.key
-                    text: i18n("Save")
-                    Accessible.name: i18n("Save %1", guided.modelData.label)
-                    enabled: !section.busy && (guided.value !== (guided.saved?.text ?? "")
-                        || (!!guided.value && guidedPrivacy.checked !== guided.saved?.local_only))
-                    onClicked: {
-                        if (!guided.value)
-                            section.deleting = guided.saved;
-                        else
-                            section.change(guided.saved ? "edit" : "add", guided.saved, guided.value,
-                                guidedPrivacy.checked, guided.modelData.key);
-                    }
-                }
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
 
-                QQC2.ToolButton {
-                    icon.name: "edit-delete"
-                    Accessible.name: i18n("Clear %1", guided.modelData.label)
-                    visible: guided.saved !== null
-                    enabled: !section.busy
-                    onClicked: section.deleting = guided.saved
+                    QQC2.Button {
+                        id: saveAnswer
+                        objectName: "saveRememberedFact-" + guided.modelData.key
+                        text: i18n("Save")
+                        Accessible.name: i18n("Save %1", guided.modelData.label)
+                        enabled: !section.busy && (guided.value !== (guided.saved?.text ?? "")
+                            || (!!guided.value && guidedPrivacy.checked !== guided.saved?.local_only))
+                        onClicked: {
+                            if (!guided.value)
+                                section.deleting = guided.saved;
+                            else
+                                section.change(guided.saved ? "edit" : "add", guided.saved, guided.value,
+                                    guidedPrivacy.checked, guided.modelData.key);
+                        }
+                    }
+
+                    QQC2.ToolButton {
+                        icon.name: "edit-delete"
+                        Accessible.name: i18n("Clear %1", guided.modelData.label)
+                        visible: guided.saved !== null
+                        enabled: !section.busy
+                        onClicked: section.deleting = guided.saved
+                    }
                 }
             }
 
