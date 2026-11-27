@@ -94,10 +94,11 @@ AssistantSurface {
     readonly property bool hasSearchError: session.searchError.length > 0
     readonly property bool fixVisible: session.fixing !== null
     readonly property bool articleVisible: !fixVisible && session.article !== null
+    readonly property bool tasksVisible: !fixVisible && !articleVisible && session.showingTasks
     readonly property bool systemVisible: !fixVisible && !articleVisible && session.showingSystem
-    readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && (hasHits || hasSearchError || session.finding
+    readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && !tasksVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
-    readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible
+    readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible && !tasksVisible
     readonly property bool welcomeVisible: conversationVisible && !helpVisible && session.entries.count === 0
     readonly property bool sidebarVisible: session.history.length > 0 && !helpVisible
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
@@ -106,7 +107,7 @@ AssistantSurface {
     property int webStartIndex: -1
     onWebStartVisibleChanged: webStartIndex = -1
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
-    readonly property bool fullSizeTool: session.finding || articleVisible || systemVisible
+    readonly property bool fullSizeTool: session.finding || articleVisible || systemVisible || tasksVisible
         || helpVisible || (conversationVisible && session.helpChat)
     readonly property real contentHeight: fixVisible
         ? fixCard.naturalHeight + inset * 2
@@ -235,6 +236,8 @@ AssistantSurface {
                 return { text: i18n("Fix selected text"), icon: "document-edit" };
             if (view.articleVisible)
                 return { text: i18n("Wikipedia"), icon: "documentation" };
+            if (view.tasksVisible)
+                return { text: i18n("Tasks"), icon: "view-task" };
             if (view.systemVisible)
                 return { text: i18n("System info"), icon: "speedometer" };
             if (view.filesVisible) {
@@ -349,7 +352,7 @@ AssistantSurface {
         parent: view.backAtTop ? topBackSlot : view.fieldAtBottom ? composer : bottomRow
         Layout.row: 0
         Layout.column: 0
-        visible: view.session.finding || view.fixVisible || view.systemVisible
+        visible: view.session.finding || view.fixVisible || view.systemVisible || view.tasksVisible
             || view.helpVisible || view.articleVisible || view.session.hasTranscript
         icon.name: "go-previous"
         text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
@@ -366,6 +369,8 @@ AssistantSurface {
                 view.focusInput();
             } else if (view.fixVisible) {
                 view.session.stopFixing();
+            } else if (view.tasksVisible) {
+                if (!tasksPage.back()) view.session.stopFinding();
             } else if (view.systemVisible) {
                 if (!systemInfo.back()) view.session.closeSystemInfo();
             } else if (view.articleVisible) {
@@ -515,6 +520,8 @@ AssistantSurface {
                         view.closeRequested();
                     } else if (view.articleVisible) {
                         view.session.closeArticle();
+                    } else if (view.tasksVisible) {
+                        if (!tasksPage.back()) view.session.stopFinding();
                     } else if (view.systemVisible) {
                         if (!systemInfo.back()) view.session.closeSystemInfo();
                     } else if (view.session.finding) {
@@ -781,6 +788,53 @@ AssistantSurface {
             PopupScrollView {
                 popup: view
                 anchors.fill: parent
+                visible: view.tasksVisible
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                Flickable {
+                    id: tasksFlick
+                    acceptedButtons: Qt.NoButton
+                    contentWidth: width
+                    contentHeight: tasksPage.implicitHeight + view.inset * 2
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    Connections {
+                        target: view.Window.window
+                        enabled: view.tasksVisible
+                        function onActiveFocusItemChanged() {
+                            const item = view.Window.window?.activeFocusItem;
+                            let ancestor = item;
+                            while (ancestor && ancestor !== tasksPage) ancestor = ancestor.parent;
+                            if (!ancestor)
+                                return;
+                            const top = item.mapToItem(tasksFlick.contentItem, 0, 0).y;
+                            if (top < tasksFlick.contentY)
+                                tasksFlick.contentY = Math.max(0, top - view.inset);
+                            else if (top + item.height > tasksFlick.contentY + tasksFlick.height)
+                                tasksFlick.contentY = Math.min(tasksFlick.contentHeight - tasksFlick.height,
+                                    top + item.height + view.inset - tasksFlick.height);
+                        }
+                    }
+
+                    TasksView {
+                        id: tasksPage
+                        objectName: "assistantTasks"
+                        visible: view.tasksVisible
+                        session: view.session
+                        accent: view.accent
+                        x: view.inset
+                        y: view.inset
+                        width: tasksFlick.width - view.inset * 2
+                        onDraftChanged: tasksFlick.contentY = 0
+                    }
+                }
+            }
+
+            PopupScrollView {
+                popup: view
+                anchors.fill: parent
                 visible: view.systemVisible
                 QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
@@ -1029,6 +1083,7 @@ AssistantSurface {
                             view.focusInput();
                         }
                         buttons: view.session.ui.start_screen || ["files", "web", "help"]
+                        onTasksChosen: view.session.showTasks()
                         onSystemInfoChosen: view.session.showSystemInfo()
                         onWebSearchChosen: {
                             view.session.startFinding("web");

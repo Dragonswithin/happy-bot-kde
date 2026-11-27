@@ -273,6 +273,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     due = sub.add_parser("reminder-due", help="Deliver a scheduled alarm or reminder, including its selected sound.")
     due.add_argument("kind", choices=("alarm", "reminder"))
     due.add_argument("text")
+    task_due = sub.add_parser("task-reminder-due", help="Deliver a reminder for a pending task.")
+    task_due.add_argument("id")
+    task_due.add_argument("stamp")
     routine_check = sub.add_parser("routine-check", help="Run a routine if its network or battery condition has just "
                                    "become true (started by the routine's timer).")
     routine_check.add_argument("--kind", required=True, choices=("network", "battery"))
@@ -486,6 +489,13 @@ def main(argv: list[str] | None = None) -> int:
         from .file_index_server import serve as serve_index
 
         return serve_index(args.index)
+    if args.command == "task-reminder-due":
+        from .settings import load_settings
+        from .task_reminders import due_text
+        from .tools.notes import task_store
+
+        text = due_text(task_store(load_settings).list(migrate=False), args.id, args.stamp)
+        return main(["reminder-due", "reminder", "--", text]) if text else 0
     if args.command == "reminder-due":
         try:
             shown = subprocess.run(["notify-send", "--app-name=Happy Bot", "--urgency=critical",

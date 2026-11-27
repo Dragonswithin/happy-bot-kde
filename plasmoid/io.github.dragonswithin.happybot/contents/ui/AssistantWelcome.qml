@@ -41,6 +41,7 @@ ColumnLayout {
     signal findFilesChosen()
     signal webSearchChosen()
     signal systemInfoChosen()
+    signal tasksChosen()
 
     // The start screen's buttons, in the user's order (`ui.start_screen`, src/happy_bot/ui_settings.py).
     property var buttons: ["files", "web", "help"]
@@ -48,6 +49,7 @@ ColumnLayout {
         switch (id) {
         case "files": return { label: i18n("Find a file"), icon: "folder-open-symbolic" };
         case "web": return { label: i18n("Search the web"), icon: "globe", web: true };
+        case "tasks": return { label: i18n("Tasks"), icon: "view-task", tasks: true };
         case "system": return { label: i18n("System info"), icon: "speedometer", system: true };
         case "help": return welcome.appName
             ? { label: i18n("Help with %1", welcome.appName), icon: welcome.helpWithIcon || welcome.helpWith["class"],
@@ -139,6 +141,7 @@ ColumnLayout {
                 }
                 onClicked: modelData.help ? welcome.helpChosen()
                     : modelData.web ? welcome.webSearchChosen()
+                    : modelData.tasks ? welcome.tasksChosen()
                     : modelData.system ? welcome.systemInfoChosen()
                     : welcome.findFilesChosen()
 

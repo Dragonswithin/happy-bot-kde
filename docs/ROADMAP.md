@@ -488,7 +488,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | --- | --- | --- |
 | Multiple providers and model discovery | Configurable local and hosted models, OpenAI-compatible endpoints, per-chat model choice, and model discovery. | Verify OpenRouter, OpenAI, Gemini, LM Studio, Ollama, llama.cpp, and custom endpoints. Fill compatibility gaps in Phase 14. |
 | Persistent memory | Remember, forget, and recall tools store facts in editable Behaviour instructions and apply them to new conversations. | Phase 13 gives facts their own editable list and brings them into subsequent requests according to the user's privacy settings. |
-| Task manager | Notes, task checklists, reminders, and scheduled routines. | Phase 13 adds task groups, priorities, due dates, recurrence, subtasks, and manual and conversational editing. |
+| Task manager | Tasks screen and chat share the existing Markdown checklist. Both support groups, priorities, dates, recurrence, subtasks, and task reminders. | Built in Phase 13. |
 | Voice typing | Voice input with configurable Whisper endpoints. | Phase 14 verifies local CLI, local live D-Bus transcription, hosted Whisper, and LM Studio voice input. Add missing routes. |
 | Spoken replies | Event sounds and voice input. | Phase 14 adds Read aloud with Speech Dispatcher and Piper, voice download and selection, and playback controls. |
 | Text, image, and PDF attachments | File drops, image input, and screenshot previews. | Phase 14 verifies text, vision, and PDF attachments with an explicit preview and removal before sending. Fill gaps in extraction and drag-and-drop. |
@@ -1495,6 +1495,26 @@ Fixture tests covered all four conditions, dismissal through the daemon,
 and choosing a suggested action in the shared assistant view. Offscreen
 checks at 50%, 100% and 200% verified the shortcut’s click target and
 position at the screen edge.
+
+**Phase 13 task manager.** Open Tasks from the Happy Bot shortcut menu,
+or add it under Appearance → Start screen. The task screen and chat use the
+same Markdown checklist. Existing checklist entries receive stable IDs in
+Markdown comments while their titles, due dates, and completion remain
+visible in the document.
+
+The list filters by status and group and sorts by due date or priority.
+A task can repeat daily, weekly, or monthly. Completing a recurring task
+keeps the completed occurrence and creates the next one with fresh subtasks.
+Reminders with a due date and time use the existing systemd user timer and
+reminder sound path. A pending timer checks the task's current state before
+notifying.
+
+The focused tests exercise migration, shared chat and screen edits,
+recurrence across a reopened store, and timer replacement and cleanup.
+An isolated Plasma Wayland session also opened Tasks from the panel and
+edited both an existing checklist entry and a chat-created task. Generated
+units passed systemd verification. A live user systemd smoke test enabled,
+rescheduled, and advanced a recurring task timer, then removed its test units.
 
 ## Decisions
 

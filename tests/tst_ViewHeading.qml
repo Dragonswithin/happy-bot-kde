@@ -16,10 +16,19 @@ Item {
         id: view
         session: HappyBot.AssistantSession {
             id: session
+            property var savedTasks: [{id: "1", text: "Existing task", group: "Home", due: "", done: false,
+                                      priority: "none", repeat: "none", parent: "", reminder: ""}]
+            property var taskPayload: null
             property int programRequests: 0
             property string lastProgramPath: ""
             function request(method, path, body, success, failure) {
-                if (path === "/system/overview") {
+                if (path === "/tasks") {
+                    if (method === "POST") {
+                        taskPayload = body;
+                        savedTasks = savedTasks.map(task => task.id === body.id ? Object.assign({}, task, body) : task);
+                    }
+                    success({tasks: savedTasks});
+                } else if (path === "/system/overview") {
                     success({cpu: {model: "Test CPU", cores: 8, percent: 25, load: []},
                         memory: {used: 100, total: 200}, history: {cpu: [20, 25], memory: [50, 50], receive: [50, 80], send: [20, 40], gpu: {test: [3, 7]}, disk: [42, 61]},
                         gpus: [{id: "test", name: "Test GPU", busy_percent: 7, memory_used: 25, memory_total: 50, shared_used: 0, shared_total: 75}], network: {interface: "eth0"}, disks: [{mount: "/", total: 200, used: 100}],
@@ -161,6 +170,26 @@ Item {
             keyClick(Qt.Key_Return);
             tryCompare(session, "chatModel", "Local AI");
             compare(picker.displayText, "Local AI");
+        }
+
+        function test_tasksScreenEditsSharedTask() {
+            session.showTasks();
+            compare(heading.text, "Tasks");
+            const tasks = findChild(view, "assistantTasks");
+            tryCompare(tasks, "visible", true);
+            tryCompare(tasks, "tasks", session.savedTasks);
+            tasks.edit(tasks.tasks[0]);
+            const title = findChild(tasks, "taskTitle");
+            tryCompare(title, "activeFocus", true);
+            keyClick(Qt.Key_A, Qt.ControlModifier);
+            keyClick(Qt.Key_E);
+            keyClick(Qt.Key_Return);
+            tryCompare(tasks, "draft", null);
+            compare(session.taskPayload.action, "edit");
+            compare(session.taskPayload.text.toLowerCase(), "e");
+            tryVerify(() => button(view, "Back").visible);
+            mouseClick(button(view, "Back"));
+            tryCompare(heading, "text", "Start screen");
         }
 
         function test_systemInfoOpensCardsThenDetails() {

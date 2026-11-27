@@ -158,6 +158,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
+from . import task_routes
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import help_screenshot, settings as settings_store, sounds, ui_settings, web_preferences
@@ -924,6 +925,8 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 
 
 ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/tasks"): task_routes.list_tasks,
+    ("POST", "/tasks"): task_routes.change_task,
     ("GET", "/icon/activity"): icon_activity,
     ("POST", "/sound/play"): play_sound,
     ("POST", "/sound/preview"): preview_sound,

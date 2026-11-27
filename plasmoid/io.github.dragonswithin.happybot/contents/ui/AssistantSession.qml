@@ -195,6 +195,7 @@ Item {
         imported: [], start_screen: ["files", "web", "help"]
     })
     property var nudges: []  // Active conditions from the shared icon activity stream.
+    property bool showingTasks: false
     property bool showingSystem: false  // the start screen's System info view is shown (SystemInfoView.qml)
     property bool uiLoaded: false
     // Talking: the microphone button shows when the user switched voice on and set a speech service
@@ -583,11 +584,17 @@ Item {
         session.showingSystem = true;
     }
 
+    function showTasks() {
+        stopFinding();
+        session.showingTasks = true;
+    }
+
     function closeSystemInfo() {
         session.showingSystem = false;
     }
 
     function stopFinding() {
+        session.showingTasks = false;
         session.showingSystem = false;
         session.finder = "";
         session.article = null;
@@ -934,6 +941,7 @@ Item {
     function newChat() {
         stopFixing();
         session.showingSystem = false;
+        session.showingTasks = false;
         if (session.busy) {
             cancel();
         }
@@ -962,6 +970,7 @@ Item {
         // With capture off, the user can still type an error message themselves.
         if (session.reviewingError && !session.helpDraft?.id && session.helpErrorText.trim())
             text += "\n\n" + session.helpErrorText.trim();
+        session.showingTasks = false;
         session.showingSystem = false;  // the answer must show, not System info
         session.busy = true;
         if (!session.conversationId) session.conversationCreatedAt = Date.now() / 1000;

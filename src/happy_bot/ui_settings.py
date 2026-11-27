@@ -71,7 +71,7 @@ UI_DEFAULTS: dict[str, Any] = {
     "floating_docked": False, "floating_size": 100, "floating_opacity": 40, "floating_x": -1, "floating_y": -1,
     "imported": [], "start_screen": ["files", "web", "help"],
 }
-START_BUTTONS = ("files", "web", "help", "system")
+START_BUTTONS = ("files", "web", "help", "system", "tasks")
 ROBOT_STYLES = ("pip", "rivet", "orbit", "watt", "pixel", "sprig", "nixie", "sprocket", "sonar", "dotty")
 UI_RANGES: dict[str, tuple[int, int]] = {
     "popup_width": (20, 70), "popup_height": (12, 50), "floating_opacity": (15, 100), "floating_size": (50, 200),

@@ -522,6 +522,17 @@ PlasmoidItem {
         }
 
         PlasmaExtras.MenuItem {
+            text: i18n("Tasks")
+            icon: "view-task"
+            onClicked: {
+                if (root.standalone) root.openForApplication();
+                else root.openPopup();
+                session.showTasks();
+                root.clearInput();
+            }
+        }
+
+        PlasmaExtras.MenuItem {
             text: newConversation.text
             icon: newConversation.icon.name
             onClicked: newConversation.trigger()
@@ -554,6 +565,17 @@ PlasmoidItem {
             text: configureHappyBot.text
             icon: configureHappyBot.icon.name
             onClicked: configureHappyBot.trigger()
+        }
+
+        PlasmaExtras.MenuItem {
+            text: i18n("Tasks")
+            icon: "view-task"
+            onClicked: {
+                if (root.standalone) root.openForApplication();
+                else root.openPopup();
+                session.showTasks();
+                root.clearInput();
+            }
         }
 
         PlasmaExtras.MenuItem {

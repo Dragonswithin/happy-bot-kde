@@ -30,6 +30,7 @@ ColumnLayout {
         { id: "files", label: i18n("Find a file"), icon: "folder-open-symbolic" },
         { id: "web", label: i18n("Search the web"), icon: "globe" },
         { id: "help", label: i18n("Help with the current app"), icon: "help-contents" },
+        { id: "tasks", label: i18n("Tasks"), icon: "view-task" },
         { id: "system", label: i18n("System info"), icon: "speedometer" }
     ]
     // Shown buttons in their order, then the rest.
