@@ -226,6 +226,17 @@ Item {
 
     readonly property ListModel entries: ListModel {}
     property var history: []
+    property bool chatParked: false
+    property var chatDrafts: ({})
+    property int conversationLoad: 0
+    property string loadingChatId: ""
+    onConversationLoadChanged: loadingChatId = ""
+    function saveChatDraft(id, text) {
+        const drafts = Object.assign({}, chatDrafts);
+        if (text) drafts[id] = text;
+        else delete drafts[id];
+        chatDrafts = drafts;
+    }
     readonly property bool hasTranscript: entries.count > 0
     property int pendingApprovals: 0
 
@@ -394,7 +405,10 @@ Item {
             session.webStartData = {};
             session.webStartLoading = false;
         }
-        if (chatsCleared) session.conversationClearRevision = chats;
+        if (chatsCleared) {
+            session.chatDrafts = {};
+            session.conversationClearRevision = chats;
+        }
         session.clearSearch();  // the quick results and recent chips can both include chats
         if (chatsCleared && session.conversationCreatedAt <= chats) {
             // The daemon has already cancelled the forgotten turn. Detach its reply
@@ -827,16 +841,23 @@ Item {
 
     /** Shows the chat `conversationId` (its saved events, replayed), leaving a finder, an article or fixing text
      *  first, so a chat picked in the sidebar during a search comes to the front; the open chat just shows again. */
-    function openConversation(conversationId) {
+    function openConversation(conversationId, loaded) {
+        if (session.busy && conversationId !== session.conversationId) return;
+        const load = ++session.conversationLoad;
+        session.chatParked = false;
         dismissHelpDraft();
         stopFixing();
         stopFinding();
         if (session.busy || conversationId === session.conversationId) {
+            if (loaded) loaded();
             return;
         }
         const revision = session.conversationClearRevision;
+        session.loadingChatId = conversationId;
         request("GET", "/conversation?id=" + encodeURIComponent(conversationId), null, function(data) {
+            if (session.conversationLoad !== load) return;
             if (session.conversationClearRevision !== revision && !(data.created > session.conversationClearRevision)) return;
+            session.loadingChatId = "";
             session.conversationId = data.id;
             session.conversationCreatedAt = Number(data.created || 0);
             session.helpChat = false;
@@ -850,8 +871,10 @@ Item {
                 && (!session.chatModel || session.chatModel === model.name) ? sample : null;
             if (!session.contextUsage) session.refreshContextUsage();
             session.replay(data.events || []);
+            if (loaded) loaded();
         }, function(data) {
-            if (session.conversationClearRevision !== revision) return;
+            if (session.conversationLoad !== load || session.conversationClearRevision !== revision) return;
+            session.loadingChatId = "";
             session.appendEntry("error", data.error || i18n("That conversation could not be opened"));
             session.refreshHistory();
         });
@@ -859,6 +882,7 @@ Item {
 
     function deleteConversation(conversationId) {
         request("POST", "/conversations/delete", { id: conversationId }, function(data) {
+            session.saveChatDraft(conversationId, "");
             if (conversationId === session.conversationId) {
                 session.newChat();
             }
@@ -899,6 +923,7 @@ Item {
     /** Open Help immediately. Ignore a late reply if the user already left this draft. */
     function captureForHelp() {
         if (session.capturing || session.busy) return;
+        if (session.chatParked) resetTranscript();
         if (!session.helpChat || (session.helpWindow?.["class"]
                 && session.helpWindow["class"] === session.helpWith?.["class"])) {
             session.helpWindow = session.helpWith;
@@ -977,6 +1002,8 @@ Item {
     }
 
     function resetTranscript() {
+        ++session.conversationLoad;
+        session.chatParked = false;
         session.contextUsage = null;
         session.conversationId = "";
         session.conversationCreatedAt = 0;
@@ -993,9 +1020,16 @@ Item {
     /** Sends one request to the assistant. Returns false if it was not sent. */
     function ask(message) {
         let text = (message || "").trim();
-        if (!text || session.busy || session.helpPending) {
+        if (!text || session.busy || session.helpPending || session.loadingChatId) {
             return false;
         }
+        if (session.chatParked) {
+            const model = session.chatModel;
+            resetTranscript();
+            session.chatModel = model;
+        }
+        session.saveChatDraft(session.conversationId, "");
+        ++session.conversationLoad;
         // With capture off, the user can still type an error message themselves.
         if (session.reviewingError && !session.helpDraft?.id && session.helpErrorText.trim())
             text += "\n\n" + session.helpErrorText.trim();

@@ -39,10 +39,8 @@ import org.kde.plasma.extras as PlasmaExtras
  *   whose rows are TranscriptEntry.qml. It sizes to its content up to
  *   `heightInGridUnits` and then scrolls, keeping the newest part in view.
  *
- * Saved conversations are listed in a sidebar on the left whenever the body
- * is showing and there are any: title and when it was last used, the open
- * one highlighted, a delete button on hover. Clicking one reopens it
- * (`session.openConversation`); the box widens by the sidebar's width.
+ * The arrow beside the composer opens the saved conversations drawer.
+ * Selecting a row resumes that chat, including its in-session draft.
  *
  * ResultsPopup.qml wraps this in the popup window; keeping the content in
  * its own item lets it be rendered and checked outside Plasma. `session` is
@@ -99,8 +97,69 @@ AssistantSurface {
     readonly property bool filesVisible: !fixVisible && !articleVisible && !systemVisible && !tasksVisible && (hasHits || hasSearchError || session.finding
         || session.searchedText.length > 0)
     readonly property bool conversationVisible: !filesVisible && !fixVisible && !articleVisible && !systemVisible && !tasksVisible
-    readonly property bool welcomeVisible: conversationVisible && !helpVisible && session.entries.count === 0
-    readonly property bool sidebarVisible: session.history.length > 0 && !helpVisible
+    readonly property bool welcomeVisible: conversationVisible && !helpVisible && (session.chatParked || session.entries.count === 0)
+    property bool historyOpen: false
+    Shortcut {
+        sequence: "Escape"
+        enabled: view.sidebarVisible && !!view.Window.window?.active
+        onActivated: {
+            view.historyOpen = false;
+            view.focusInput();
+        }
+    }
+    readonly property bool sidebarVisible: historyOpen && !helpVisible
+    readonly property var drawerChats: {
+        const rows = session.history.slice();
+        const id = session.conversationId;
+        if ((session.hasTranscript || (id && session.chatDrafts[id])) && !rows.some(row => row.id === id)) {
+            rows.unshift({id, title: (session.entries.count ? session.entries.get(0).text : "") || i18n("Chat with Happy Bot")});
+        }
+        if (session.chatDrafts[""] && !rows.some(row => row.id === ""))
+            rows.unshift({id: "", title: i18n("Unsent message")});
+        return rows;
+    }
+    property double hiddenAt: 0
+    function popupHidden() {
+        hiddenAt = Date.now();
+        historyOpen = false;
+    }
+    function prepareOpen(now) {
+        if (hiddenAt && now - hiddenAt > 30000) parkChat();
+        hiddenAt = 0;
+        if (session.pendingApprovals && session.chatParked) resumeChat(session.conversationId);
+    }
+    function closingPopup() {
+        if (!conversationVisible || helpVisible) parkChat();
+    }
+    function rememberInput() {
+        if (!conversationVisible || helpVisible) return;
+        if (!session.chatParked || inputText)
+            session.saveChatDraft(session.chatParked ? "" : session.conversationId, inputText);
+    }
+    function parkChat() {
+        historyOpen = false;
+        ++session.conversationLoad;
+        rememberInput();
+        session.chatParked = true;
+        session.dismissHelpDraft();
+        session.stopFinding();
+        if (!session.replacing) session.stopFixing();
+        clearInput();
+    }
+    function resumeChat(id) {
+        rememberInput();
+        historyOpen = false;
+        if (!id && !session.busy && session.conversationId) {
+            session.chatParked = true;
+            session.stopFinding();
+            session.stopFixing();
+            setInput(session.chatDrafts[""] || "");
+            session.saveChatDraft("", "");
+        } else {
+            session.openConversation(id, () => setInput(session.chatDrafts[id] || ""));
+        }
+        focusInput();
+    }
     readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
     readonly property string query: inputText.trim()
     readonly property bool webStartVisible: filesVisible && session.finder === "web" && !query.length
@@ -108,12 +167,12 @@ AssistantSurface {
     onWebStartVisibleChanged: webStartIndex = -1
     readonly property int maximumHeight: Kirigami.Units.gridUnit * heightInGridUnits
     readonly property bool fullSizeTool: session.finding || articleVisible || systemVisible || tasksVisible
-        || helpVisible || (conversationVisible && session.helpChat)
+        || helpVisible || (conversationVisible && !welcomeVisible && session.helpChat)
     readonly property real contentHeight: fixVisible
         ? fixCard.naturalHeight + inset * 2
         : filesVisible
         ? fileResults.naturalHeight
-        : view.session.entries.count === 0
+        : welcomeVisible
             ? welcomeArea.contentHeight
             : transcriptColumn.implicitHeight + view.inset * 2
     readonly property real bodyHeight: sidebarVisible
@@ -184,7 +243,7 @@ AssistantSurface {
 
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits + (session.history.length > 0 ? sidebarWidth : 0)
+    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits
     // Rounded, and computed only from exact sizes (plain columns, never a
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
@@ -245,11 +304,11 @@ AssistantSurface {
                     ? { text: i18n("Search the web"), icon: "globe" }
                     : { text: i18n("Find a file"), icon: "folder-open-symbolic" };
             }
-            if (view.helpVisible || view.session.helpChat) {
+            if (view.helpVisible || (!view.welcomeVisible && view.session.helpChat)) {
                 const app = view.session.helpWindow?.app;
                 return { text: app ? i18n("Help with %1", app) : i18n("Desktop help"), icon: "help-contents" };
             }
-            if (view.session.hasTranscript) {
+            if (!view.welcomeVisible && view.session.hasTranscript) {
                 const chat = view.session.history.find(item => item.id === view.session.conversationId);
                 return { text: chat?.title || i18n("Chat with Happy Bot"), icon: view.assistantIcon };
             }
@@ -353,7 +412,7 @@ AssistantSurface {
         Layout.row: 0
         Layout.column: 0
         visible: view.session.finding || view.fixVisible || view.systemVisible || view.tasksVisible
-            || view.helpVisible || view.articleVisible || view.session.hasTranscript
+            || view.helpVisible || view.articleVisible || (!view.welcomeVisible && view.session.hasTranscript)
         icon.name: "go-previous"
         text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
         AssistantToolTip {
@@ -380,7 +439,7 @@ AssistantSurface {
             } else if (view.session.finding) {
                 view.session.stopFinding();
             } else {
-                view.session.newChat();
+                view.parkChat();
             }
         }
     }
@@ -415,10 +474,31 @@ AssistantSurface {
             anchors.rightMargin: anchors.leftMargin
             columnSpacing: Kirigami.Units.largeSpacing
 
-            PlasmaExtras.SearchField {
-                id: field
+            PlasmaComponents3.ToolButton {
                 Layout.row: 0
                 Layout.column: 1
+                visible: !view.helpVisible
+                icon.name: view.historyOpen ? "go-next" : "go-previous"
+                text: i18n("Previous chats")
+                display: QQC2.AbstractButton.IconOnly
+                checked: view.historyOpen
+                Accessible.name: text
+                onClicked: {
+                    view.historyOpen = !view.historyOpen;
+                    if (view.historyOpen) view.session.refreshHistory();
+                }
+                AssistantToolTip {
+                    accent: view.accent
+                    text: parent.text
+                    visible: parent.hovered || parent.visualFocus
+                }
+            }
+
+            PlasmaExtras.SearchField {
+                id: field
+                readOnly: !!view.session.loadingChatId
+                Layout.row: 0
+                Layout.column: 2
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 Layout.preferredHeight: Math.max(implicitHeight, Kirigami.Units.gridUnit * 2)
@@ -511,7 +591,9 @@ AssistantSurface {
                     }
                 }
                 Keys.onEscapePressed: {
-                    if (text.length > 0) {
+                    if (view.historyOpen) {
+                        view.historyOpen = false;
+                    } else if (text.length > 0) {
                         text = "";
                     } else if (view.helpVisible) {
                         view.session.dismissHelpDraft();
@@ -534,7 +616,7 @@ AssistantSurface {
 
             RowLayout {
                 Layout.row: 0
-                Layout.column: 2
+                Layout.column: 3
                 spacing: Kirigami.Units.smallSpacing
 
                 ModelPicker {
@@ -545,7 +627,7 @@ AssistantSurface {
 
                 ContextMeter {
                     objectName: "assistantContextMeter"
-                    visible: view.conversationVisible && !!view.session.contextModel
+                    visible: view.conversationVisible && !view.session.chatParked && !!view.session.contextModel
                     nativeLook: view.nativeLook
                     accent: view.accent
                     session: view.session
@@ -587,12 +669,23 @@ AssistantSurface {
         // --- sidebar: saved conversations ---------------------------------
         Rectangle {
             id: sidebar
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.032)
+            objectName: "conversationDrawer"
+            z: 2
+            clip: true
+            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(view.accent, 0.065))
+            property real reveal: 0
+            x: (reveal - 1) * width
+            NumberAnimation on reveal {
+                running: sidebar.visible
+                from: 0; to: 1
+                duration: Kirigami.Units.shortDuration
+                easing.type: Easing.OutCubic
+            }
+            enabled: view.sidebarVisible
 
-            anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: view.sidebarVisible ? view.sidebarWidth : 0
+            width: Math.min(parent.width * 0.8, view.sidebarWidth * 1.5)
             visible: view.sidebarVisible
 
             PlasmaComponents3.Label {
@@ -602,7 +695,7 @@ AssistantSurface {
                 leftPadding: view.inset
                 topPadding: view.inset
                 bottomPadding: Kirigami.Units.smallSpacing
-                text: i18n("Conversations")
+                text: view.drawerChats.length ? i18n("Conversations") : i18n("No previous chats")
                 font: Kirigami.Theme.smallFont
                 opacity: 0.78
                 elide: Text.ElideRight
@@ -631,10 +724,11 @@ AssistantSurface {
                         bottomPadding: Kirigami.Units.smallSpacing
 
                         Repeater {
-                            model: view.session.history
+                            model: view.drawerChats
 
                             PlasmaComponents3.ItemDelegate {
                                 id: saved
+                                objectName: "conversation-" + modelData.id
 
                                 required property var modelData
 
@@ -649,10 +743,8 @@ AssistantSurface {
                                 }
                                 Accessible.name: i18n("Conversation: %1", modelData.title)
                                 highlighted: modelData.id === view.session.conversationId
-                                onClicked: {
-                                    view.session.openConversation(modelData.id);  // leaves a search or article first
-                                    view.setInput("");
-                                }
+                                enabled: !view.session.busy || modelData.id === view.session.conversationId
+                                onClicked: view.resumeChat(modelData.id)
                                 AssistantToolTip {
                                     nativeLook: view.nativeLook
                                     accent: view.accent
@@ -687,7 +779,9 @@ AssistantSurface {
 
                                         PlasmaComponents3.Label {
                                             Layout.fillWidth: true
-                                            text: Look.when(saved.modelData.updated)
+                                            text: view.session.busy && saved.highlighted ? i18n("Reply in progress")
+                                                : view.session.chatDrafts[saved.modelData.id] ? i18n("Draft")
+                                                : saved.modelData.updated ? Look.when(saved.modelData.updated) : ""
                                             elide: Text.ElideRight
                                             font: Kirigami.Theme.smallFont
                                             opacity: 0.6
@@ -700,7 +794,7 @@ AssistantSurface {
                                         display: QQC2.AbstractButton.IconOnly
                                         checkable: true
                                         checked: saved.modelData.pinned === true
-                                        visible: saved.hovered || saved.highlighted || checked
+                                        visible: !!saved.modelData.updated && (saved.hovered || saved.highlighted || checked)
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                         AssistantToolTip {
@@ -716,7 +810,7 @@ AssistantSurface {
                                         icon.name: "edit-delete"
                                         text: i18n("Delete this conversation")
                                         display: QQC2.AbstractButton.IconOnly
-                                        visible: saved.hovered || saved.highlighted
+                                        visible: !!saved.modelData.updated && (saved.hovered || saved.highlighted)
                                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                         AssistantToolTip {
@@ -742,11 +836,18 @@ AssistantSurface {
             }
         }
 
+        MouseArea {
+            anchors.fill: parent
+            visible: view.sidebarVisible
+            z: 1
+            onClicked: view.historyOpen = false
+        }
+
         // --- files or conversation -----------------------------------------
         Item {
             id: content
 
-            anchors.left: sidebar.right
+            anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -954,7 +1055,7 @@ AssistantSurface {
                 popup: view
                 id: transcriptView
                 anchors.fill: parent
-                visible: view.conversationVisible && !view.helpVisible && view.session.entries.count > 0
+                visible: view.conversationVisible && !view.helpVisible && !view.welcomeVisible && view.session.entries.count > 0
                 // Keep the line width stable when the first overflowing line reveals the scrollbar.
                 leftPadding: mirrored ? QQC2.ScrollBar.vertical.implicitWidth : 0
                 rightPadding: mirrored ? 0 : QQC2.ScrollBar.vertical.implicitWidth

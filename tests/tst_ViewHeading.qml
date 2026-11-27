@@ -77,6 +77,9 @@ Item {
             session.stopFinding();
             session.stopFixing();
             session.resetTranscript();
+            view.historyOpen = false;
+            view.clearInput();
+            session.chatDrafts = {};
             session.history = [];
             session.models = [];
             session.chatModel = "";
@@ -171,6 +174,7 @@ Item {
             const picker = findChild(view, "chatModelPicker");
             tryVerify(() => picker.visible);
             tryVerify(() => picker.width > 0);
+            waitForRendering(view);
             mouseClick(picker);
             tryVerify(() => picker.popup.visible);
             keyClick(Qt.Key_Down);
@@ -322,6 +326,58 @@ Item {
             session.stopFinding();
             session.fixing = { text: "hello", app: "Kate" };
             compare(heading.text, "Fix selected text");
+        }
+
+        function test_reopenAndResumeDraft() {
+            session.conversationId = "a";
+            session.history = [{id: "a", title: "Storage", updated: 1}];
+            session.appendEntry("user", "Check storage");
+            view.setInput("And the second disk?");
+            view.closingPopup();
+            view.popupHidden();
+            view.hiddenAt = 1000;
+            view.prepareOpen(5000);
+            compare(heading.text, "Storage");
+            compare(view.inputText, "And the second disk?");
+            view.hiddenAt = 5000;
+            view.prepareOpen(36000);
+            compare(heading.text, "Start screen");
+            compare(view.inputText, "");
+            waitForRendering(view);
+            mouseClick(button(view, "Previous chats"));
+            wait(250);
+            mouseClick(findChild(view, "conversation-a"));
+            compare(heading.text, "Storage");
+            compare(view.inputText, "And the second disk?");
+            view.parkChat();
+            compare(heading.text, "Start screen");
+            compare(session.entries.count, 1);
+            session.busy = true;
+            view.resumeChat("a");
+            verify(session.busy);
+            session.busy = false;
+        }
+
+        function test_drawerSelectSavedChatWithoutSending() {
+            session.history = [{id: "pinned", title: "Older", updated: 1},
+                               {id: "context-test", title: "Most recent", updated: 2}];
+            compare(view.drawerChats.length, 2);
+            verify(!view.sidebarVisible);
+            verify(!findChild(view, "conversationDrawer").visible);
+            const width = view.width;
+            mouseClick(button(view, "Previous chats"));
+            verify(view.sidebarVisible);
+            wait(250);
+            compare(view.width, width);
+            view.popupHidden();
+            view.prepareOpen(Date.now());
+            verify(!findChild(view, "conversationDrawer").visible);
+            mouseClick(button(view, "Previous chats"));
+            wait(250);
+            mouseClick(findChild(view, "conversation-context-test"));
+            compare(session.conversationId, "context-test");
+            verify(!view.sidebarVisible);
+            verify(!session.busy);
         }
 
         function test_chatTitles() {

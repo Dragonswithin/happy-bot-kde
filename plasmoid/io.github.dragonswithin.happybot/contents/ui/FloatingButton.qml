@@ -166,12 +166,29 @@ PositionedWindow {
         if (floating.expanded) {
             floating.expanded = false;
             layout();
+            view.popupHidden();
             floating.dismissed();
         }
     }
 
     function setInput(text) {
         view.setInput(text);
+    }
+
+    function resumeChat(id) {
+        view.resumeChat(id);
+    }
+
+    function prepareOpen() {
+        view.prepareOpen(Date.now());
+    }
+
+    function closingPopup() {
+        view.closingPopup();
+    }
+
+    function parkChat() {
+        view.parkChat();
     }
 
     function clearInput() {
@@ -196,7 +213,7 @@ PositionedWindow {
             return;
         if (view.fullSizeTool)
             toolOpened = true;
-        else if (!toolOpened && !session.hasTranscript)
+        else if (!toolOpened && (!session.hasTranscript || session.chatParked))
             anchorOnOpen();
         layout();
     }

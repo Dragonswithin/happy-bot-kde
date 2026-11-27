@@ -319,12 +319,7 @@ PlasmoidItem {
         onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
         onCloseRequested: root.closePopup()
         onSettingsRequested: root.openSettings()
-        onDismissed: {
-            searchDelay.stop();
-            session.stopFinding();
-            root.cancelTalking();
-            if (!session.helpDraft) popup.clearInput();
-        }
+        onDismissed: root.popupHidden()
     }
 
     compactRepresentation: CompactRepresentation {
@@ -379,12 +374,7 @@ PlasmoidItem {
             onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
             onCloseRequested: root.closePopup()
             onSettingsRequested: root.openSettings()
-            onDismissed: {
-                searchDelay.stop();
-                session.stopFinding();
-                root.cancelTalking();
-                if (!session.helpDraft) clearInput();
-            }
+            onDismissed: root.popupHidden()
         }
     }
 
@@ -746,11 +736,18 @@ PlasmoidItem {
         Plasmoid.internalAction("configure").trigger();
     }
 
+    function popupHidden() {
+        root.acceptAfterSearch = "";
+        if (!session.finding) searchDelay.stop();
+        root.cancelTalking();
+    }
+
     function openPopup() {
         browserHandoff.stop();
         if (popup.visible) {
             return;
         }
+        popup.prepareOpen();
         const bar = root.barMode ? root.fullRepresentationItem : null;
         if (bar) {
             const draft = bar.text;
@@ -760,7 +757,10 @@ PlasmoidItem {
             barBlur.stop();
             searchDelay.stop();
             root.acceptAfterSearch = "";
-            if (!session.helpDraft) {
+            if (!draft.trim() && !session.finding && session.showingRecent) session.clearSearch();
+            if (draft.trim()) {
+                popup.parkChat();
+                session.startFinding("files");
                 bar.setText("");
                 popup.setInput(draft);
             }
@@ -772,15 +772,14 @@ PlasmoidItem {
 
     function closePopup() {
         browserHandoff.stop();
-        session.dismissHelpDraft();
-        session.stopFinding();
-        if (!session.replacing) {
-            session.stopFixing();  // kept while pasting, so a failure can be shown again
-        }
-        if (root.floating) {
+        if (root.floatingOpen) {
+            root.floating.closingPopup();
             root.floating.close();
+        } else if (popup.visible || Date.now() - popup.hiddenAt < 300) {
+            popup.closingPopup();
+        } else if (root.barMode && root.fullRepresentationItem) {
+            root.fullRepresentationItem.setText("");
         }
-        root.clearInput();
         popup.visible = false;
     }
 
@@ -821,6 +820,7 @@ PlasmoidItem {
             popup.visible = false;
             session.refreshHistory();
             session.refreshStatus();
+            if (!root.floatingOpen) root.floating.prepareOpen();
             root.floating.open();
         } else if (!popup.visible) {
             root.openPopup();
@@ -854,6 +854,7 @@ PlasmoidItem {
 
     /** The panel bar's text changed: search it after a pause, or clear the results. */
     function barEdited(text) {
+        if (text && !root.assistantOpen && session.finding) session.stopFinding();
         root.pendingQuery = String(text || "").trim();
         root.acceptAfterSearch = "";
         if (root.pendingQuery.length > 0) {
@@ -916,10 +917,9 @@ PlasmoidItem {
     /** A result chosen from the panel bar's list. A saved chat opens in the popup; anything else just opens. */
     function openBarHit(hit) {
         if (hit.kind === "quick" && hit.action.type === "conversation") {
-            session.activateQuick(hit);
-            session.clearSearch();
             root.fullRepresentationItem.setText("");
             root.openPopup();
+            popup.resumeChat(hit.action.target);
             return;
         }
         root.openHit(hit);
@@ -960,7 +960,9 @@ PlasmoidItem {
             root.fullRepresentationItem.setText("");
         }
         root.openPopup();
-        root.askAssistant(text);
+        popup.parkChat();
+        if (session.busy) popup.setInput(text);
+        else root.askAssistant(text);
     }
 
     function handleEdited(text) {
@@ -1042,12 +1044,12 @@ PlasmoidItem {
                 return;
             }
             // An instant command that fails is shown in the popup, since nothing else would show it.
-            session.activateQuick(hit, hit.action.type === "command" ? () => root.openPopup() : null);
             if (hit.action.type === "conversation") {
                 searchDelay.stop();
-                root.clearInput();
+                root.surface.resumeChat(hit.action.target);
                 return;
             }
+            session.activateQuick(hit, hit.action.type === "command" ? () => root.openPopup() : null);
             root.closePopup();
             return;
         }
@@ -1165,6 +1167,7 @@ PlasmoidItem {
             if (session.pendingApprovals > 0 && (popup.visible || root.floatingOpen)) {
                 searchDelay.stop();
                 session.stopFinding();
+                if (session.chatParked) root.surface.resumeChat(session.conversationId);
             }
         }
     }

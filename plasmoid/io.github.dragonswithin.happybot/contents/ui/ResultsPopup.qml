@@ -44,7 +44,7 @@ PositionedWindow {
             return;
         if (resultsView.fullSizeTool)
             toolOpened = true;
-        else if (!toolOpened && !session.hasTranscript)
+        else if (!toolOpened && (!session.hasTranscript || session.chatParked))
             anchorOnOpen();
         if (resizeOriginHeight > 0)
             placeResizedPopup(height);
@@ -127,8 +127,25 @@ PositionedWindow {
             Qt.callLater(refocus);
         } else {
             popup.hiddenAt = Date.now();
+            resultsView.popupHidden();
             popup.dismissed();
         }
+    }
+
+    function resumeChat(id) {
+        resultsView.resumeChat(id);
+    }
+
+    function prepareOpen() {
+        resultsView.prepareOpen(Date.now());
+    }
+
+    function closingPopup() {
+        resultsView.closingPopup();
+    }
+
+    function parkChat() {
+        resultsView.parkChat();
     }
 
     function clearInput() {
