@@ -77,6 +77,7 @@ Item {
             session.stopFinding();
             session.stopFixing();
             session.resetTranscript();
+            view.startOnNextOpen = false;
             view.historyOpen = false;
             view.clearInput();
             session.chatDrafts = {};
@@ -328,12 +329,28 @@ Item {
             compare(heading.text, "Fix selected text");
         }
 
+        function test_closeButtonThenImmediateReopenStartsFresh() {
+            session.conversationId = "last";
+            session.appendEntry("user", "Disk usage");
+            view.setInput("What about Downloads?");
+            waitForRendering(view);
+            mouseClick(findChild(view, "assistantClose"));
+            view.closingPopup();
+            view.popupHidden();
+            view.prepareOpen(view.hiddenAt + 1);
+            compare(heading.text, "Start screen");
+            verify(!view.sidebarVisible);
+            compare(view.inputText, "");
+            view.resumeChat("last");
+            compare(view.inputText, "What about Downloads?");
+            compare(session.entries.count, 1);
+        }
+
         function test_reopenAndResumeDraft() {
             session.conversationId = "a";
             session.history = [{id: "a", title: "Storage", updated: 1}];
             session.appendEntry("user", "Check storage");
             view.setInput("And the second disk?");
-            view.closingPopup();
             view.popupHidden();
             view.hiddenAt = 1000;
             view.prepareOpen(5000);

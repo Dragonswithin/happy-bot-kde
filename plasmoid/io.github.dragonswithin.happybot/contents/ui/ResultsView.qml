@@ -118,15 +118,18 @@ AssistantSurface {
             rows.unshift({id: "", title: i18n("Unsent message")});
         return rows;
     }
+    property bool startOnNextOpen: false
     property double hiddenAt: 0
     function popupHidden() {
         hiddenAt = Date.now();
         historyOpen = false;
     }
     function prepareOpen(now) {
-        if (hiddenAt && now - hiddenAt > 30000) parkChat();
+        const closedWithX = startOnNextOpen;
+        startOnNextOpen = false;
+        if (closedWithX || (hiddenAt && now - hiddenAt > 30000)) parkChat();
         hiddenAt = 0;
-        if (session.pendingApprovals && session.chatParked) resumeChat(session.conversationId);
+        if (!closedWithX && session.pendingApprovals && session.chatParked) resumeChat(session.conversationId);
     }
     function closingPopup() {
         if (!conversationVisible || helpVisible) parkChat();
@@ -384,7 +387,10 @@ AssistantSurface {
                     text: parent.text
                     visible: parent.hovered
                 }
-                onClicked: view.closeRequested()
+                onClicked: {
+                    view.startOnNextOpen = true;
+                    view.closeRequested();
+                }
             }
         }
     }
