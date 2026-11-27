@@ -88,7 +88,6 @@ PositionedWindow {
     signal hitActivated(string location)
     signal resultActivated(var hit)
     signal fileActionRequested(var hit, string action)
-    signal filesDropped(var paths)
     signal closeRequested()
     signal settingsRequested()
     signal dismissed()
@@ -100,7 +99,7 @@ PositionedWindow {
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityOnDemand
 
     // Pinned windows and ongoing Help captures stay open when another app takes focus.
-    readonly property bool holdOpen: session.capturing || resultsView.windowPinned
+    readonly property bool holdOpen: session.capturing || resultsView.windowPinned || resultsView.choosingFiles
     onActiveChanged: {
         if (!active && visible && !holdOpen)
             Qt.callLater(dismissIfInactive);
@@ -179,7 +178,6 @@ PositionedWindow {
         onHitActivated: location => popup.hitActivated(location)
         onResultActivated: hit => popup.resultActivated(hit)
         onFileActionRequested: (hit, action) => popup.fileActionRequested(hit, action)
-        onFilesDropped: paths => popup.filesDropped(paths)
         onCloseRequested: popup.closeRequested()
         onSettingsRequested: popup.settingsRequested()
     }

@@ -26,6 +26,8 @@ The panel starts with an icon. To type searches directly into a horizontal panel
 
 Some features use extra software. Screenshot capture uses Spectacle, marking or cropping a help screenshot uses Python Pillow, and reading its text uses Tesseract with English language data. Event sounds play through `pw-play`, `paplay` or `aplay`. The [Arch package recipe](../packaging/arch/PKGBUILD) lists more feature-specific dependencies.
 
+Read Aloud can use Speech Dispatcher with its Python bindings and a configured synthesizer, or the optional Piper speech engine (`piper-tts` on PyPI, installable for your account with `uv tool install piper-tts`). Piper voices can be downloaded in **AI Model → Read aloud**. Local CLI transcription uses `whisper-cli` from whisper.cpp and a local model file. PDF attachment extraction uses Poppler's `pdftotext`. Project search uses `rg` from ripgrep and opens matches in Kate or KWrite.
+
 ## Command-line setup
 
 You can also set up models and search tools through `happy-bot`. In the examples below, replace `NAME` with a name for your model, `URL` with your service address, and `ID` with the model ID your service offers.

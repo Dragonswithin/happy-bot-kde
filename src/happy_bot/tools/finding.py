@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import browsers
+from .project_search import project_tool
 from .registry import RISK_READ, Tool, ToolFailure, object_schema
 
 MAX_LISTED = 40
@@ -183,7 +184,7 @@ def read_web_page(arguments: dict[str, Any]) -> str:
 
 def finding_tools(local_only: bool = False) -> list[Tool]:
     text = {"type": "string"}
-    tools = [
+    tools = [project_tool(),
         Tool("recent_files", "Files the user opened or saved recently, newest first ('where did I save…').",
              object_schema({"contains": text}), RISK_READ, recent_files, summarize=lambda a: "Check recently used files"),
         Tool("browser_bookmarks", "The user's browser bookmarks (Chromium-family and Firefox) matching some words.",

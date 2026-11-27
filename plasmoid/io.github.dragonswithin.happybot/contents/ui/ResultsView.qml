@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Dialogs as Dialogs
 
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
@@ -60,7 +61,7 @@ import org.kde.plasma.extras as PlasmaExtras
  *   or the Menu key or Shift+F10 on the selected match):
  *   "reveal" (show in folder), "copy" (its path) or "ask" (about it). A
  *   file match can also be dragged into another application, and files
- *   dropped onto the popup emit `filesDropped(paths)`.
+ *   dropped into chat are staged in its composer.
  * - `hitActivated(location)`: a link clicked in an answer.
  * - `closeRequested`, `settingsRequested`: the Close button, and the Settings
  *   (gear) button in the header or an "Open settings" button on a setup card.
@@ -231,15 +232,23 @@ AssistantSurface {
     signal hitActivated(string location)
     signal resultActivated(var hit)
     signal fileActionRequested(var hit, string action)
-    signal filesDropped(var paths)
 
+    readonly property bool choosingFiles: attachmentPicker.visible
+    Dialogs.FileDialog {
+        id: attachmentPicker
+        objectName: "attachmentPicker"
+        title: i18n("Attach files")
+        fileMode: Dialogs.FileDialog.OpenFiles
+        onAccepted: view.session.stageFiles(selectedFiles.map(url => decodeURIComponent(String(url).replace(/^file:\/\//, ""))))
+    }
     DropArea {
         anchors.fill: parent
+        enabled: view.conversationVisible && !view.session.busy
         keys: ["text/uri-list"]
         onDropped: drop => {
-            const paths = (drop.urls || []).map(url => decodeURIComponent(String(url).replace(/^file:\/\//, "")));
+            const paths = (drop.urls || []).filter(url => String(url).startsWith("file:///")).map(url => decodeURIComponent(String(url).replace(/^file:\/\//, "")));
             if (paths.length > 0) {
-                view.filesDropped(paths);
+                view.session.stageFiles(paths);
                 drop.accept(Qt.CopyAction);
             }
         }
@@ -523,6 +532,15 @@ AssistantSurface {
                 }
             }
 
+            AttachmentTray {
+                Layout.row: 1
+                Layout.column: 1
+                Layout.columnSpan: 3
+                Layout.fillWidth: true
+                visible: view.conversationVisible && hasContent
+                session: view.session
+            }
+
             PlasmaExtras.SearchField {
                 id: field
                 readOnly: !!view.session.loadingChatId
@@ -564,6 +582,15 @@ AssistantSurface {
                             text: parent.text
                             visible: parent.hovered || parent.activeFocus
                         }
+                    }
+                    FieldButton {
+                        visible: view.conversationVisible
+                        enabled: !view.session.busy && !view.session.checkingFiles
+                        icon.name: "mail-attachment"
+                        objectName: "attachFiles"
+                        text: i18n("Attach files")
+                        display: QQC2.AbstractButton.IconOnly
+                        onClicked: attachmentPicker.open()
                     }
                     FieldButton {
                         display: QQC2.AbstractButton.IconOnly
@@ -1134,6 +1161,7 @@ AssistantSurface {
                             model: view.session.entries
 
                             TranscriptEntry {
+                                client: view.session
                                 useRobotMascot: view.useRobotMascot
                                 robotStyle: view.robotStyle
                                 width: transcriptColumn.width

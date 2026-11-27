@@ -33,6 +33,8 @@ class ProviderError(RuntimeError):
 
 def image_data_url(path: str) -> str:
     """``data:image/png;base64,...`` for a PNG file, or "" when it cannot be sent."""
+    if isinstance(path, str) and path.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
+        return path
     try:
         with open(path, "rb") as handle:
             data = handle.read(MAX_IMAGE_BYTES + 1)

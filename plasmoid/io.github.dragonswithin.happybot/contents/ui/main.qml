@@ -315,7 +315,6 @@ PlasmoidItem {
         onHitActivated: location => root.openLocation(location)
         onResultActivated: hit => root.openHit(hit)
         onFileActionRequested: (hit, action) => root.fileAction(hit, action)
-        onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
         onCloseRequested: root.closePopup()
         onSettingsRequested: root.openSettings()
         onDismissed: root.popupHidden()
@@ -369,7 +368,6 @@ PlasmoidItem {
             onHitActivated: location => root.openLocation(location)
             onResultActivated: hit => root.openHit(hit)
             onFileActionRequested: (hit, action) => root.fileAction(hit, action)
-            onFilesDropped: paths => root.setInput(i18n("About %1: ", paths.join(", ")))
             onCloseRequested: root.closePopup()
             onSettingsRequested: root.openSettings()
             onDismissed: root.popupHidden()
@@ -1083,6 +1081,10 @@ PlasmoidItem {
     }
 
     function handleAccepted(text) {
+        if (session.staged.length || session.checkingFiles) {
+            root.askAssistant(text);
+            return;
+        }
         // Fixing selected text: what is typed is an instruction for that text, not a request.
         if (session.fixing !== null) {
             if (text.length > 0) {
@@ -1151,6 +1153,9 @@ PlasmoidItem {
     // paste, and comes back to show why if the paste failed.
     Connections {
         target: session
+        function onRecoverDraft(message) {
+            if (!root.surface.inputText) root.setInput(message);
+        }
         function onSelectionReplacing() {
             root.closePopup();
         }

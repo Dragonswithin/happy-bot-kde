@@ -55,8 +55,7 @@ read with OCR (``text_from_image``) for text-only models.
   set on the AI Model page (Voice), and the text goes to the AI at once, as
   the maintainer chose. The recording is deleted as soon as it is sent.
   (tested with a fake microphone and service; not yet tried by voice)
-- ⏸ Voice output: optional spoken answers through a text-to-speech endpoint
-  the user chooses.
+- ● Read aloud and Stop on assistant replies. The user chooses Speech Dispatcher or Piper and previews voices in AI Model settings.
 
 ## Ideas Chosen 2026-11-25
 
@@ -263,7 +262,7 @@ Automation and help:
 - ● A KRunner plugin so the same assistant answers from KRunner. (checked live
   over DBus)
 - ● Talk instead of typing: the microphone and the Talk shortcut, through a
-  speech-to-text service the user sets. Spoken replies are not done. (see
+  speech-to-text service the user sets. Read aloud is available on replies. (see
   Image And Voice Input)
 
 ## 2. Finding Things

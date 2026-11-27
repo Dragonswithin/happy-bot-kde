@@ -26,9 +26,17 @@ In the assistant window, type a request and press Enter. Try “Put Firefox on t
 - **Help with…** names the app you were using and previews its window. Scroll to zoom or choose **Fit** to see the whole picture. Use **Point** to mark a detail, **Crop** to keep an area, or **Retake** to capture the window again. Clear **Include screenshot with this request** to send just the question and any reviewed text. **Explain this error** lets you correct text recognized by local OCR. **Walk me through it** gives one step at a time.
 - **System info** is optional. Enable it under **Appearance → Start screen**. The overview cards show live readings, with graphs for resources such as CPU and memory. Open a card for details. **Storage** lists disks and free space. **Processor** and **Memory** show the busiest programs and let you confirm stopping an eligible program you own.
 
+### Attach files and search a project
+
+Drop files onto the chat or click the paperclip. Review the filenames, text excerpts and image thumbnails, and remove any file you do not want to send. You can stage files first and then dictate the question. Each submission can include up to eight files, 8 MiB per file, with up to 100,000 characters of document text in total. PDFs need a text layer. PNG, JPEG and WebP images need a model with vision enabled. The selected model receives the attachments with this request. Happy Bot keeps the files staged if the service fails.
+
+To search code, ask “Search for `preferred_language` inside my project at `/home/me/Projects/example`.” The tool follows ripgrep’s ignore rules, skips files over 2 MiB, and returns up to 15 matches. Click a match to open the file at that line in Kate or KWrite. Web questions use your configured web search tool and show clickable source links.
+
 ## Use the microphone or selected text
 
-Turn on **AI Model → Voice input → Show the microphone** and configure a speech-to-text service. Click the microphone and speak. A pause or another click ends the recording. Happy Bot sends the speech to that service and submits the transcript to your AI immediately.
+Turn on **AI Model → Voice input → Show the microphone**. Choose a transcription service, local whisper.cpp model, or running live Whisper D-Bus service. If a hosted transcription endpoint requires an API key, enter it under **Speech service settings**. Click the microphone and speak. A pause or another click ends the recording. Happy Bot sends the speech to that service and submits the transcript to your AI immediately.
+
+For spoken answers, choose **AI Model → Read aloud**. Use a system Speech Dispatcher voice, choose a local Piper model file, or browse the downloadable Piper voices. **Preview voice** starts a sample. In chat, **Read aloud** starts the chosen reply and **Stop reading** interrupts it.
 
 Under **System Settings → Shortcuts → Happy Bot Shortcuts**, you can assign keys to **Talk to Happy Bot** and **Fix selected text**. For the latter, select text in another app and press your shortcut. Choose **Fix grammar**, **Shorter**, **Translate** or **Explain**, or type an instruction. Review the result and choose **Copy** or **Replace**. Terminals offer Copy only. Replacing text uses Plasma’s keyboard-control permission.
 

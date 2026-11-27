@@ -65,6 +65,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import read_aloud
 from . import (desktop_context, mascot_nudges, routines, selection_fix, sounds, system_monitor, user_timers, voice, web_preferences,
                wikipedia_library, wikipedia_pages, wikipedia_reader, wikipedia_setup)
 from .system_sensors import SensorSampler
@@ -208,6 +209,7 @@ class AssistantServer(ThreadingHTTPServer):
         self.history_clear_lock = threading.Lock()
         self.activity = IconActivity(self.search_history.index.history_since, read_clear_time(self.conversation_clear_marker))
         self.approvals = ApprovalBroker()
+        self.reader = read_aloud.Reader(self.runtime_dir)
         self.voice = voice.Listener(self.runtime_dir, self.activity.set_recording)
         self.selection = selection_fix.SelectionNote()  # "Fix selected text": noted when its shortcut is pressed
         self.wikipedia_download = wikipedia_setup.DownloadJob()  # offline Wikipedia's background download
@@ -290,6 +292,7 @@ class AssistantServer(ThreadingHTTPServer):
             self.state.last_error = "; ".join(problems)
 
     def shutdown_tools(self) -> None:
+        self.reader.stop()
         self.mcp.close_all()
         self.wikipedia_pages.close()
 

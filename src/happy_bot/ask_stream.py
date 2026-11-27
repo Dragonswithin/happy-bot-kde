@@ -99,7 +99,7 @@ import urllib.request
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import app_context, desktop_actions, remembered_facts
+from . import attachments, app_context, desktop_actions, remembered_facts
 from . import settings as settings_store
 from . import sounds, spend, ui_settings
 from .agent_loop import run_turn, system_prompt
@@ -188,6 +188,17 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
             deliver({"type": "error", "code": "not_configured", "message": "No AI in your list can answer: "
                   + "; ".join(skipped) + ". Change this on the AI Model page."})
             return
+        try:
+            files = attachments.load(body.get("attachments", []))
+            if files and [item.digest for item in files] != body.get("attachment_digests"):
+                raise ValueError("An attachment changed after preview. Remove it and attach it again.")
+            if any(item.kind == "image" for item in files):
+                if not chain[0][1].get("vision"):
+                    raise ValueError("Choose a model with vision or remove the image.")
+                chain = [entry for entry in chain if entry[1].get("vision")]
+        except (OSError, ValueError) as error:
+            deliver({"type": "error", "code": "attachment", "message": str(error)})
+            return
         conversation = server.conversations.acquire_turn(str(body.get("conversation_id") or ""))
         if conversation is None:
             deliver({"type": "error", "message": "The assistant is still working on the previous request.", "code": "busy"})
@@ -258,7 +269,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         if is_local_address(first["base_url"]) and model_busy(first["base_url"]):
             emit({"type": "notice", "message": "The model is busy with another program; your request will start "
                                                "when it is free."})
-        _run_chain(chain, conversation, registry, emit, gate, agent, turn_image, body.get("walkthrough") is True)
+        _run_chain(chain, conversation, registry, emit, gate, agent, turn_image, body.get("walkthrough") is True, files)
     finally:
         if body.get("ephemeral") is True:
             server.conversations.forget(conversation.id)
@@ -314,7 +325,7 @@ def _usable(settings: dict[str, Any], names: list[str]) -> tuple[list[tuple[str,
     return chain, skipped
 
 
-def _run_chain(chain, conversation, registry, emit, gate, agent, turn_image=None, walkthrough=False) -> None:
+def _run_chain(chain, conversation, registry, emit, gate, agent, turn_image=None, walkthrough=False, files=()) -> None:
     """Give the request to each model in turn until one finishes it (see the module docstring)."""
     carried: list[dict[str, str]] = []
     forward = emit
@@ -322,7 +333,7 @@ def _run_chain(chain, conversation, registry, emit, gate, agent, turn_image=None
         last = index == len(chain) - 1
         held = _attempt(provider, name, model, conversation, registry, forward, gate, agent,
                         hold_first_error=not last, hand_over=model.get("hand_over_long", False) and not last,
-                        turn_image=turn_image, walkthrough=walkthrough)
+                        turn_image=turn_image, walkthrough=walkthrough, files=files)
         if held is None:
             return
         following = chain[index + 1][0]
@@ -414,7 +425,7 @@ def preview_context(server, conversation_id: str, chosen: str) -> dict:
 
 def _attempt(provider, name: str, model: dict[str, Any], conversation, registry, emit, gate, agent,
              hold_first_error: bool, hand_over: bool = False, turn_image: str | None = None,
-             walkthrough: bool = False) -> dict[str, Any] | None:
+             walkthrough: bool = False, files=()) -> dict[str, Any] | None:
     """Run the turn on one model; return a held event, or None when the turn ended here.
 
     With ``hold_first_error``, an error before anything happened is returned instead of shown, so the
@@ -449,7 +460,7 @@ def _attempt(provider, name: str, model: dict[str, Any], conversation, registry,
         registry = registry.without(frozenset({"recall"}))
 
     def prepare(history):
-        return _prepare_model_input(history, model, agent, turn_image, walkthrough)
+        return attachments.include(_prepare_model_input(history, model, agent, turn_image, walkthrough), files)
 
     run_turn(provider, conversation.history, registry, guarded, conversation.cancel, model["context_window"],
              max_steps=HAND_OVER_STEPS if hand_over else agent["max_steps"], gate=gate, redact=not local,

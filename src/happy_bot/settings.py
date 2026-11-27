@@ -550,6 +550,8 @@ def save_settings(settings: dict[str, Any], path: Path | None = None) -> dict[st
 def redacted(settings: dict[str, Any]) -> dict[str, Any]:
     """Copy for clients: environment values and non-empty API keys become ``None``."""
     view = copy.deepcopy(settings)
+    if view.get("voice", {}).get("api_key"):
+        view["voice"]["api_key"] = None
     for server in view.get("tool_servers", {}).values():
         server["env"] = {name: None for name in server.get("env", {})}
         server["headers"] = {name: None for name in server.get("headers", {})}
@@ -565,6 +567,10 @@ def merge_redacted(incoming: Any, stored: dict[str, Any]) -> Any:
     if not isinstance(incoming, dict):
         return incoming
     merged = copy.deepcopy(incoming)
+    voice = merged.get("voice")
+    if isinstance(voice, dict) and "api_key" in voice and voice["api_key"] is None:
+        previous = stored.get("voice", {})
+        voice["api_key"] = previous.get("api_key", "") if voice.get("base_url") == previous.get("base_url") else ""
     servers = merged.get("tool_servers")
     for name, server in (servers.items() if isinstance(servers, dict) else ()):
         if not isinstance(server, dict):

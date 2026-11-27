@@ -32,4 +32,13 @@ AssistantComboBox {
     model: [i18n("Automatic")].concat(session.models.map(item => item.online ? i18n("%1 (online)", item.name) : item.name))
     currentIndex: Math.max(0, names.indexOf(session.chatModel))
     onActivated: index => session.chatModel = names[index]
+    Accessible.name: i18n("AI for this chat")
+    AssistantToolTip {
+        nativeLook: picker.nativeLook
+        accent: picker.accent
+        text: session.chatModel === ""
+            ? i18n("Automatic: your AIs are asked in the order set on the AI Model page")
+            : i18n("This chat uses %1 only", session.chatModel)
+        visible: picker.hovered && !picker.popup.visible
+    }
 }

@@ -21,7 +21,8 @@ import json
 import re
 from typing import Any
 
-from ..mcp_client import McpError, McpManager
+from ..instant_search import extract_hits
+from ..mcp_client import McpError, McpManager, ToolResult
 from .registry import RISK_CHANGE, RISK_READ, Tool, ToolFailure, object_schema
 from .summaries import describe_search
 
@@ -47,6 +48,12 @@ def _make_handler(manager: McpManager, server: str, tool: str):
         return text
 
     return handler
+
+
+def web_card(text):
+    hits = [{"title": item["title"], "url": item["location"]}
+            for item in extract_hits(ToolResult(text), 6) if item["kind"] == "link"]
+    return {"kind": "web_sources", "links": hits} if hits else None
 
 
 def mcp_tools(manager: McpManager, settings: dict[str, Any]) -> tuple[list[Tool], list[str]]:
@@ -80,6 +87,7 @@ def mcp_tools(manager: McpManager, settings: dict[str, Any]) -> tuple[list[Tool]
                 description=description[:1000],
                 parameters=schema if isinstance(schema, dict) and schema.get("type") == "object" else object_schema(),
                 risk=RISK_READ if (entry.get("read_only") or role) else RISK_CHANGE,
+                card=web_card if role == "web_search" else None,
                 handler=_make_handler(manager, server, name),
                 source=server,
                 summarize=describe_search(role, server, name, query_arguments.get((server, name))),

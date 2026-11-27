@@ -46,6 +46,7 @@ import io
 import json
 import re
 import shutil
+import tempfile
 import subprocess
 import threading
 import time
@@ -57,11 +58,13 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from . import sounds
+from . import glib_loop, session_dbus, sounds
 from .redaction import is_local_address
 from .runtime_paths import clear_cache_files
 
-VOICE_DEFAULTS: dict[str, Any] = {"enabled": False, "base_url": "", "model": "", "language": "en"}
+VOICE_DEFAULTS: dict[str, Any] = {"enabled": False, "base_url": "", "model": "", "language": "en",
+                                 "input_engine": "service", "whisper_model": "", "api_key": "",
+                                 "speech_engine": "dispatcher", "dispatcher_voice": "", "piper_model": ""}
 
 RATE = 16000                    # samples per second, mono, 16-bit
 CHUNK_SECONDS = 0.1
@@ -99,10 +102,14 @@ def validate_voice(raw: Any) -> dict[str, Any]:
     voice = {**VOICE_DEFAULTS, **raw}
     if not isinstance(voice["enabled"], bool):
         raise VoiceSettingsError("'voice': 'enabled' must be true or false")
-    for key in ("base_url", "model", "language"):
+    for key in ("base_url", "model", "language", "dispatcher_voice", "piper_model", "whisper_model", "api_key"):
         if not isinstance(voice[key], str):
             raise VoiceSettingsError(f"'voice': '{key}' must be text")
         voice[key] = voice[key].strip()
+    if voice["input_engine"] not in ("service", "whisper_cli", "live_dbus"):
+        raise VoiceSettingsError("Choose a supported speech input.")
+    if voice["speech_engine"] not in ("dispatcher", "piper"):
+        raise VoiceSettingsError("Choose Speech Dispatcher or Piper.")
     voice["base_url"] = voice["base_url"].rstrip("/")
     if voice["base_url"] and not voice["base_url"].startswith(("http://", "https://")):
         raise VoiceSettingsError("'voice': 'base_url' must start with http:// or https://")
@@ -160,10 +167,27 @@ def _multipart(fields: dict[str, str], audio: bytes) -> tuple[bytes, str]:
 
 def transcribe(voice: dict[str, Any], audio: bytes, timeout: float = TRANSCRIBE_TIMEOUT) -> str:
     """The text the service hears in ``audio`` (a WAV file's bytes); raises ``VoiceError``."""
+    if voice.get("input_engine") == "whisper_cli":
+        from .runtime_paths import ensure_runtime_root
+        with tempfile.NamedTemporaryFile(dir=ensure_runtime_root(), suffix=".wav") as recording:
+            recording.write(audio)
+            recording.flush()
+            try:
+                completed = subprocess.run(["whisper-cli", "-m", voice["whisper_model"], "-nt", "-np",
+                                            "-l", voice["language"] or "auto", "-f", recording.name],
+                                           capture_output=True, text=True, timeout=timeout)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                raise VoiceError("service", "whisper-cli could not transcribe the recording. Check the installation and model.") from error
+            if completed.returncode:
+                raise VoiceError("service", "Whisper could not load the model or transcribe the recording.")
+            return completed.stdout.strip()
     body, content_type = _multipart({"model": voice["model"], "language": voice["language"],
                                      "response_format": "json"}, audio)
+    headers = {"Content-Type": content_type}
     request = Request(f"{voice['base_url']}/audio/transcriptions", data=body, method="POST",
-                      headers={"Content-Type": content_type})
+                      headers=headers)
+    if voice.get("api_key"):
+        request.add_unredirected_header("Authorization", "Bearer " + voice["api_key"])
     try:
         with urlopen(request, timeout=timeout) as response:
             document = json.loads(response.read().decode("utf-8", errors="replace"))
@@ -179,6 +203,18 @@ def transcribe(voice: dict[str, Any], audio: bytes, timeout: float = TRANSCRIBE_
 
 
 def _usable(voice: dict[str, Any], local_only: bool) -> None:
+    if voice.get("input_engine") == "live_dbus":
+        try:
+            available = "org.kde.assistant.stt" in session_dbus.names("org.kde.assistant.stt")
+        except (session_dbus.DBusError, session_dbus.DBusUnavailable) as error:
+            raise VoiceError("service", str(error)) from error
+        if not available:
+            raise VoiceError("not_set_up", "Start your local live Whisper D-Bus service or choose another speech input.")
+        return
+    if voice.get("input_engine") == "whisper_cli":
+        if not shutil.which("whisper-cli") or not Path(voice["whisper_model"]).is_file():
+            raise VoiceError("not_set_up", "Install whisper-cli and choose its local Whisper model file.")
+        return
     if not voice["base_url"]:
         raise VoiceError("not_set_up", "Speech to text is not set up yet (AI Model settings, Voice).")
     if local_only and not is_local_address(voice["base_url"]):
@@ -188,6 +224,8 @@ def _usable(voice: dict[str, Any], local_only: bool) -> None:
 def check_service(voice: dict[str, Any], local_only: bool = False) -> dict[str, Any]:
     """Send half a second of silence; ``{"ok": True}`` when the service answers with text."""
     _usable(voice, local_only)
+    if voice.get("input_engine") == "live_dbus":
+        return {"ok": True}
     transcribe(voice, _wav(b"\0\0" * (RATE // 2)), timeout=30.0)
     return {"ok": True}
 
@@ -234,6 +272,8 @@ class Listener:
         try:
             self.active, self._discard = True, False
             self._stop.clear()
+            if voice.get("input_engine") == "live_dbus":
+                return self._live_text()
             command = _recorder()
             with sounds.audio_lock:
                 if not self._stop.is_set():
@@ -248,6 +288,38 @@ class Listener:
         finally:
             self.active = False
             self._lock.release()
+
+    def _live_text(self):
+        """Accept only completed phrases from the selected service during this listen request."""
+        Gio, _, bus = session_dbus._bus()
+        glib_loop.ensure_running()
+        phrases = []
+        last = time.monotonic()
+        def received(connection, sender, path, interface, signal, parameters):
+            nonlocal last
+            phrase, = parameters.unpack()
+            if isinstance(phrase, str) and phrase.strip():
+                phrases.append(phrase.strip())
+                last = time.monotonic()
+        handle = bus.signal_subscribe("org.kde.assistant.stt", "org.kde.assistant.stt", "TranscribedText",
+                                      "/org/kde/assistant/stt", None, Gio.DBusSignalFlags.NONE, received)
+        try:
+            if self._capture_changed:
+                self._capture_changed(True)
+            started = time.monotonic()
+            while not self._stop.wait(.1):
+                now = time.monotonic()
+                if now - started >= MAX_SECONDS or now - last > (QUIET_SECONDS if phrases else WAIT_FOR_SPEECH_SECONDS):
+                    break
+            if self._discard:
+                return {"text": "", "discarded": True}
+            if not phrases:
+                raise VoiceError("no_speech", "The live speech service returned no words.")
+            return {"text": " ".join(phrases)}
+        finally:
+            bus.signal_unsubscribe(handle)
+            if self._capture_changed:
+                self._capture_changed(False)
 
     def _record(self, command: list[str]) -> tuple[bytes, float]:
         """Raw sound from the microphone until the user pauses (or the limits), and the mean square of

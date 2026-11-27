@@ -173,6 +173,53 @@ Item {
     property string conversationTitle: ""
     property double conversationCreatedAt: 0
     property var models: []
+    property var stagedByChat: ({})
+    readonly property string stagingKey: chatParked ? "" : conversationId
+    readonly property var staged: stagedByChat[stagingKey] || []
+    property string attachmentError: ""
+    property int stageRevision: 0
+    property bool checkingFiles: false
+    property string sentDraft: ""
+    property string sentKey: ""
+    property var sentFiles: []
+    signal recoverDraft(string message)
+    readonly property var attachmentModel: models.find(item => item.name === chatModel) || models[0]
+    readonly property bool incompatibleImage: staged.some(item => item.kind === "image") && !attachmentModel?.vision
+
+    function setStaged(key, files) {
+        const next = Object.assign({}, stagedByChat)
+        if (files.length) next[key] = files
+        else delete next[key]
+        stagedByChat = next
+    }
+
+    function stageFiles(paths) {
+        if (busy || checkingFiles || !paths.length) return
+        const revision = ++stageRevision
+        const key = stagingKey
+        const all = Array.from(new Set(staged.map(item => item.path).concat(paths)))
+        checkingFiles = true
+        attachmentError = ""
+        request("POST", "/attachments/preview", {paths: all}, data => {
+            if (revision !== stageRevision) return
+            checkingFiles = false
+            setStaged(key, data.items.map((item, index) => Object.assign({}, item, {path: all[index]})))
+        }, data => {
+            if (revision !== stageRevision) return
+            checkingFiles = false
+            attachmentError = data.error
+        })
+    }
+
+    function restoreFailedRequest() {
+        if (!sentDraft) return
+        if (sentKey !== conversationId) setStaged(sentKey, [])
+        setStaged(conversationId, sentFiles)
+        saveChatDraft(conversationId, sentDraft)
+        recoverDraft(sentDraft)
+        sentDraft = ""
+    }
+
     property string chatModel: ""
     property var contextUsage: null
     readonly property var contextModel: models.find(item => item.name === (chatModel || contextUsage?.model))
@@ -407,6 +454,12 @@ Item {
             session.webStartLoading = false;
         }
         if (chatsCleared) {
+            ++session.stageRevision;
+            session.checkingFiles = false;
+            session.stagedByChat = {};
+            session.sentFiles = [];
+            session.sentDraft = "";
+            session.attachmentError = "";
             session.chatDrafts = {};
             session.conversationClearRevision = chats;
         }
@@ -885,6 +938,9 @@ Item {
     function deleteConversation(conversationId) {
         request("POST", "/conversations/delete", { id: conversationId }, function(data) {
             session.saveChatDraft(conversationId, "");
+            ++session.stageRevision;
+            session.checkingFiles = false;
+            session.setStaged(conversationId, []);
             if (conversationId === session.conversationId) {
                 session.newChat();
             }
@@ -1023,9 +1079,13 @@ Item {
     /** Sends one request to the assistant. Returns false if it was not sent. */
     function ask(message) {
         let text = (message || "").trim();
-        if (!text || session.busy || session.helpPending || session.loadingChatId) {
+        if (!text || session.checkingFiles || session.incompatibleImage || session.busy || session.helpPending || session.loadingChatId) {
             return false;
         }
+        session.sentFiles = session.staged.slice()
+        session.sentKey = session.stagingKey
+        session.sentDraft = text
+        session.attachmentError = ""
         if (session.chatParked) {
             const model = session.chatModel;
             resetTranscript();
@@ -1044,6 +1104,8 @@ Item {
         setStatus("thinking", i18n("Thinking"));
         appendEntry("user", text);
         const body = { message: text, conversation_id: session.conversationId, model: session.chatModel,
+                       attachments: session.sentFiles.map(item => item.path),
+                       attachment_digests: session.sentFiles.map(item => item.digest),
                        buttons: true, about_window: session.helpChat ? session.helpWindow : session.helpWith };
         if (session.helpChat) {
             body.full_context = true;
@@ -1085,9 +1147,15 @@ Item {
                 }
                 if (xhr.status === 200) {
                     session.consumeStream(xhr);
+                    if (session.sentDraft) {
+                        session.restoreFailedRequest();
+                        session.appendEntry("error", i18n("The connection closed before the reply finished. You can retry your request."));
+                    }
                 } else if (xhr.status === 0) {
+                    session.restoreFailedRequest();
                     session.appendEntry("error", i18n("The assistant is not running"));
                 } else {
+                    session.restoreFailedRequest();
                     session.appendEntry("error", i18n("The assistant could not take the request (%1)", xhr.status));
                 }
                 session.finishStream();
@@ -1204,6 +1272,11 @@ Item {
             break;
         }
         case "done": {
+            if (session.activeStream && session.sentDraft) {
+                session.setStaged(session.sentKey, []);
+                session.sentDraft = "";
+                session.sentFiles = [];
+            }
             // The daemon's record of what was not done, shown after the
             // answer so it cannot be talked over by the model's own account.
             const reasons = { failed: i18n("failed"), declined: i18n("you declined"), not_run: i18n("not run") };
@@ -1226,6 +1299,7 @@ Item {
             appendEntry("notice", event.message || "");
             break;
         case "error":
+            if (session.activeStream) session.restoreFailedRequest();
             // An error the user fixes in settings gets a button that opens them.
             appendEntry(event.code === "not_configured" ? "setup" : "error", event.message || i18n("Request failed"));
             break;
@@ -1237,6 +1311,7 @@ Item {
         if (!xhr) {
             return;
         }
+        session.restoreFailedRequest();
         session.activeStream = null;
         xhr.abort();
         if (session.conversationId) {

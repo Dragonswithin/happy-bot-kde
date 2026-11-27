@@ -486,13 +486,13 @@ The existing panel search, popup, and floating shortcut are the entry points.
 
 | Feature | Happy Bot baseline | Remaining work |
 | --- | --- | --- |
-| Multiple providers and model discovery | Configurable local and hosted models, OpenAI-compatible endpoints, per-chat model choice, and model discovery. | Verify OpenRouter, OpenAI, Gemini, LM Studio, Ollama, llama.cpp, and custom endpoints. Fill compatibility gaps in Phase 14. |
+| Multiple providers and model discovery | Configurable local and hosted models, OpenAI-compatible endpoints, per-chat model choice, and model discovery. | Tested configured local and hosted models. See the [compatibility results](COMPATIBILITY.md) for coverage and setup gaps. |
 | Persistent memory | Behaviour → Remembered facts and chat share one editable local list. Each request applies the current list according to Application context privacy. | Built in Phase 13. |
 | Task manager | Tasks screen and chat share the existing Markdown checklist. Both support groups, priorities, dates, recurrence, subtasks, and task reminders. | Built in Phase 13. |
-| Voice typing | Voice input with configurable Whisper endpoints. | Phase 14 verifies local CLI, local live D-Bus transcription, hosted Whisper, and LM Studio voice input. Add missing routes. |
-| Spoken replies | Event sounds and voice input. | Phase 14 adds Read aloud with Speech Dispatcher and Piper, voice download and selection, and playback controls. |
-| Text, image, and PDF attachments | File drops, image input, and screenshot previews. | Phase 14 verifies text, vision, and PDF attachments with an explicit preview and removal before sending. Fill gaps in extraction and drag-and-drop. |
-| Web and local code search | Web finder and configurable search tools, indexed file search, and local file-content tools. | Phase 14 verifies DuckDuckGo, Tavily, SearXNG, and Google through compatible integrations, and adds an explicit grep/ripgrep code search workflow. |
+| Voice typing | Microphone input with a configurable transcription endpoint and optional key, local whisper.cpp CLI, or live Whisper D-Bus service. | See [speech input checks](COMPATIBILITY.md). |
+| Spoken replies | Manual Read aloud and Stop on replies, with Speech Dispatcher and Piper voice selection, Piper downloads and settings preview. | Built in Phase 14. |
+| Text, image, and PDF attachments | Chat accepts drops and a multi-file picker, previews each file, supports removal, and restores failed requests. | Built in Phase 14. |
+| Web and local code search | Configured web search returns clickable sources. Project text search returns clickable file and line matches. | Built in Phase 14. See the [search checks](COMPATIBILITY.md). |
 | Approved shell execution | Existing approval cards, streamed command output, and Stop. | Covered. Keep checking approval, cancellation, and output in normal workflows. |
 | Live context tracker | The chat meter shows per-request usage, configured capacity, a labeled estimate or provider count, and a near-limit warning. | Built in Phase 13. |
 | Pin chat above windows | Pin window beside Close keeps the panel or floating popup visible while another app has keyboard focus. | Built in Phase 13. |
@@ -536,7 +536,7 @@ when it is placed in a phase here. Image and voice input, first deferred
 on 2026-11-23, were built
 on 2026-11-25 once the maintainer gave the GPU service a vision projector
 and the NPU service Whisper (see the findings below and the backlog's "Image
-And Voice Input"); spoken answers are still to come.
+And Voice Input"). Phase 14 added on-demand spoken replies.
 
 ## Phase Findings
 

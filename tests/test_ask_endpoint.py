@@ -239,6 +239,26 @@ class AskEndpointTests(unittest.TestCase):
         self.request("POST", "/ask", {"message": "how do I split the view?", "about_window": about}).read()
         self.assertEqual(self.model.requests[-1]["messages"][-1]["content"], "how do I split the view?")
 
+    def test_attachment_changes_require_another_preview(self):
+        self.configure()
+        file = Path(self._tmp.name) / "report.txt"
+        file.write_text("Initial content")
+        params = {"paths": [str(file)]}
+        preview, = self.call("POST", "/attachments/preview", params)["items"]
+        body = {"message": "Summarize this", "attachments": params["paths"], "attachment_digests": [preview["digest"]]}
+        file.write_text("Revised content")
+        self.assertIn("changed after preview", self.request("POST", "/ask", body).read().decode())
+        self.assertFalse(self.model.requests)
+        preview, = self.call("POST", "/attachments/preview", params)["items"]
+        body["attachment_digests"] = [preview["digest"]]
+        self.model.replies.append(chunks_for("Done."))
+        self.request("POST", "/ask", body).read()
+        self.assertIn("Revised content", self.model.requests[-1]["messages"][-1]["content"])
+        archive = self.call("GET", "/conversations")["conversations"][0]
+        chat = self.call("GET", "/conversation?id=" + archive["id"])
+        self.assertNotIn("Revised content", json.dumps(chat))
+        self.assertNotIn("report.txt", json.dumps(chat))
+
     def test_help_attaches_the_preview_chosen_by_this_client(self) -> None:
         self.configure()
         folder = self.server.runtime_dir / "screenshots"
@@ -404,7 +424,7 @@ class AskEndpointTests(unittest.TestCase):
         self.assertIsNone(view["settings"]["models"]["m"]["api_key"])
         health = self.call("GET", "/health")
         self.assertTrue(health["setup"]["model"])
-        self.assertEqual(health["models"], [{"name": "m", "online": False, "context_window": 0}])  # for the popup's picker; no secrets
+        self.assertEqual(health["models"], [{"name": "m", "online": False, "vision": False, "context_window": 0}])  # for the popup's picker; no secrets
         self.call("PUT", "/settings", {"settings": view["settings"]})
         self.assertEqual(self.server.settings["models"]["m"]["api_key"], "sk-secret")
 

@@ -22,6 +22,10 @@ Item {
             property int programRequests: 0
             property string lastProgramPath: ""
             function request(method, path, body, success, failure) {
+                if (path === "/attachments/preview") {
+                    success({items: body.paths.map(path => ({name:path.split("/").pop(), kind:"image", digest:"fixture"}))});
+                    return;
+                }
                 if (path.startsWith("/context/usage")) {
                     const model = path.endsWith("model=Wide") ? "Wide" : "Local";
                     success({context_usage: {model: model, used: 700,
@@ -64,6 +68,28 @@ Item {
         name: "ViewHeading"
         when: windowShown
         property var heading
+
+        function test_attachment_requires_vision_and_recovers_with_draft() {
+            session.stageFiles([decodeURIComponent(Qt.resolvedUrl("../docs/images/happy-bot.webp").toString().slice(7))]);
+            compare(session.staged.length, 1);
+            session.models = [{name:"Text", vision:false}, {name:"Vision", vision:true}];
+            session.chatModel = "Text";
+            verify(session.incompatibleImage);
+            verify(!session.ask("Describe this"));
+            session.chatModel = "Vision";
+            verify(!session.incompatibleImage);
+            session.stageFiles([decodeURIComponent(Qt.resolvedUrl("../docs/images/happy-bot.webp").toString().slice(7))]);
+            compare(session.staged.length, 1);
+            session.sentDraft = "Describe this";
+            session.sentKey = "";
+            session.sentFiles = session.staged.slice();
+            session.conversationId = "accepted-before-error";
+            session.restoreFailedRequest();
+            compare(session.chatDrafts[session.conversationId], "Describe this");
+            compare(session.staged[0].name, "happy-bot.webp");
+            session.applyHistoryClears({conversation_clear_revision: session.conversationClearRevision + 1});
+            compare(session.staged.length, 0);
+        }
 
         function initTestCase() {
             heading = findChild(view, "viewHeading");

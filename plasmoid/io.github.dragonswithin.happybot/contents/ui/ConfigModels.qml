@@ -35,6 +35,12 @@ KCM.SimpleKCM {
             page: store
         }
 
+        SetupReadAloud {
+            Layout.fillWidth: true
+            visible: store.ready
+            page: store
+        }
+
         SetupVoice {
             Layout.fillWidth: true
             visible: store.ready

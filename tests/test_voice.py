@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import isolation  # noqa: E402,F401  (must come before the package: private runtime dir)
 
 from happy_bot import voice  # noqa: E402
-from happy_bot.settings import SettingsError, validate_settings  # noqa: E402
+from happy_bot.settings import SettingsError, merge_redacted, redacted, validate_settings  # noqa: E402
 
 # Writes `quiet` tenths of a second of near-silence, `loud` of a loud tone (paced, as a real microphone
 # delivers sound over time), then quiet until killed.
@@ -45,6 +45,7 @@ while True:
 class Speech(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 (http.server's name)
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        self.server.authorization = self.headers.get("Authorization")
         self.server.uploads.append((self.path, self.headers.get("Content-Type", ""), body))
         reply = json.dumps({"text": " turn on night light "}).encode()
         self.send_response(200)
@@ -58,6 +59,26 @@ class Speech(BaseHTTPRequestHandler):
 
 
 class VoiceSettingsTests(unittest.TestCase):
+    def test_speech_key_only_kept_for_same_endpoint(self):
+        saved = validate_settings({"voice": {"base_url": "https://speech.example/v1", "api_key": "test-key"}})
+        view = redacted(saved)
+        self.assertIsNone(view["voice"]["api_key"])
+        self.assertEqual(merge_redacted(view, saved)["voice"]["api_key"], "test-key")
+        view["voice"]["base_url"] = "https://other.example/v1"
+        self.assertEqual(merge_redacted(view, saved)["voice"]["api_key"], "")
+
+    def test_cli_transcription_reads_a_private_wav(self):
+        args = {**voice.VOICE_DEFAULTS, "input_engine": "whisper_cli", "whisper_model": "test model.bin"}
+        def run(command, **kwargs):
+            self.assertEqual(command[:3], ["whisper-cli", "-m", "test model.bin"])
+            path = Path(command[-1])
+            self.assertEqual(path.read_bytes(), b"test-audio")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            return mock.Mock(returncode=0, stdout=" words ")
+        with mock.patch("subprocess.run", side_effect=run) as command:
+            self.assertEqual(voice.transcribe(args, b"test-audio"), "words")
+        self.assertFalse(Path(command.call_args.args[0][-1]).exists())
+
     def test_defaults_and_refusals(self) -> None:
         self.assertEqual(validate_settings({})["voice"], voice.VOICE_DEFAULTS)
         cleaned = voice.validate_voice({"enabled": True, "base_url": " http://127.0.0.1:52625/v1/ ", "language": "de"})
@@ -81,6 +102,11 @@ class ListeningTests(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.runtime = Path(folder.name)
         self.listener = voice.Listener(self.runtime)
+
+    def test_authenticated_transcription(self):
+        self.assertEqual(voice.transcribe({**self.voice, "api_key": "voice-fixture"}, voice._wav(bytes(1600))),
+                         "turn on night light")
+        self.assertEqual(self.server.authorization, "Bearer voice-fixture")
 
     def microphone(self, quiet: int, loud: int, level: int = 8000):
         return mock.patch.object(voice, "_recorder", return_value=[sys.executable, "-c", FAKE_MICROPHONE, str(quiet),

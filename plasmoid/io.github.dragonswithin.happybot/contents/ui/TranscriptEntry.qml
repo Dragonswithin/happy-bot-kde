@@ -61,6 +61,8 @@ Item {
     required property string progress
     required property string card
     // Answer buttons are clickable only while the assistant is not working (set by ResultsView.qml).
+    property string matchError: ""
+    property var client: null
     property bool choicesEnabled: true
     readonly property var cardData: {
         try {
@@ -238,6 +240,38 @@ Item {
                         }
                     }
 
+                    Repeater {
+                        model: entry.cardData?.kind === "project_matches" ? entry.cardData.matches : []
+                        delegate: PlasmaComponents3.ToolButton {
+                            id: matchButton
+                            required property var modelData
+                            Layout.fillWidth: true
+                            text: modelData.path.split("/").pop() + ":" + modelData.line + "  " + modelData.text
+                            onClicked: entry.client.request("POST", "/project/open",
+                                {path: modelData.path, line: modelData.line}, () => {}, data => entry.matchError = data.error)
+                            AssistantToolTip {
+                                text: matchButton.modelData.path
+                                visible: matchButton.hovered
+                            }
+                        }
+                    }
+                    PlasmaComponents3.Label {
+                        visible: !!entry.matchError
+                        text: entry.matchError
+                        wrapMode: Text.Wrap
+                    }
+
+                    Repeater {
+                        model: entry.cardData?.kind === "web_sources" ? entry.cardData.links : []
+                        delegate: Kirigami.LinkButton {
+                            required property var modelData
+                            Layout.maximumWidth: entry.width - entry.gutter
+                            elide: Text.ElideRight
+                            text: modelData.title || modelData.url
+                            onClicked: entry.linkActivated(modelData.url)
+                        }
+                    }
+
                     // answer buttons the assistant offered (ChoicesCard.qml); a click is the user's next message
                     Loader {
                         Layout.fillWidth: true
@@ -260,18 +294,27 @@ Item {
                         onLinkActivated: link => entry.linkActivated(link)
                     }
 
-                    PlasmaComponents3.ToolButton {
+                    RowLayout {
                         Layout.alignment: Qt.AlignRight
                         visible: entry.kind === "assistant" && entry.text.length > 0
-                        icon.name: "edit-copy"
-                        text: i18n("Copy answer")
-                        display: PlasmaComponents3.AbstractButton.IconOnly
-                        AssistantToolTip {
-                            accent: entry.accent
-                            text: parent.text
-                            visible: parent.hovered
+
+                        ReadAloudButton {
+                            objectName: "replyReader"
+                            client: entry.client
+                            passage: entry.text
+                            visible: entry.choicesEnabled || !!job || pending
                         }
-                        onClicked: answerText.copyAll()
+                        PlasmaComponents3.ToolButton {
+                            icon.name: "edit-copy"
+                            text: i18n("Copy answer")
+                            display: PlasmaComponents3.AbstractButton.IconOnly
+                            AssistantToolTip {
+                                accent: entry.accent
+                                text: parent.text
+                                visible: parent.hovered
+                            }
+                            onClicked: answerText.copyAll()
+                        }
                     }
 
                     // approval

@@ -160,7 +160,8 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import conversation_export, remembered_facts, task_routes
+from .tools import project_search
+from . import attachments, read_aloud, conversation_export, remembered_facts, task_routes
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import help_screenshot, settings as settings_store, sounds, ui_settings, web_preferences
@@ -202,12 +203,14 @@ def health(server: "AssistantServer", query: dict[str, list[str]], body: dict[st
     }
     # The popup's per-chat picker: names and whether each is online, in the user's order. No secrets.
     payload["models"] = [{"name": name, "online": not is_local_address(server.settings["models"][name]["base_url"]),
+                          "vision": bool(server.settings["models"][name].get("vision")),
                           "context_window": server.settings["models"][name]["context_window"]}
                          for name in server.settings.get("model_order", [])]
     payload["ui"] = server.settings.get("ui") or {}
     # The microphone button shows when the user switched it on and a speech service is set.
     voice_settings = server.settings.get("voice") or {}
-    payload["voice"] = {"enabled": bool(voice_settings.get("enabled") and voice_settings.get("base_url")),
+    input_configured = voice_settings.get("input_engine", "service") != "service" or voice_settings.get("base_url")
+    payload["voice"] = {"enabled": bool(voice_settings.get("enabled") and input_configured),
                         "listening": server.voice.active}
     wikipedia = server.settings.get("wikipedia") or {}
     payload["wikipedia"] = bool(wikipedia.get("server") and wikipedia.get("folder"))  # its finder can be offered
@@ -333,6 +336,59 @@ def voice_listen(server: "AssistantServer", query: dict[str, list[str]], body: d
     return 200, {"ok": True, **heard}
 
 
+def open_project_match(server, query, body) -> Reply:
+    try:
+        project_search.open_line(body.get("path"), body.get("line"))
+        return 200, {"ok": True}
+    except (ValueError, OSError) as error:
+        return _error(400, str(error), "open_failed")
+
+
+def preview_attachments(server, query, body) -> Reply:
+    try:
+        items = attachments.load(body.get("paths"))
+        return 200, {"items": [item.preview() for item in items]}
+    except (OSError, ValueError) as error:
+        return _error(400, str(error), "attachment")
+
+
+def piper_voices(server, query, body) -> Reply:
+    if server.settings["agent"].get("local_only"):
+        return _error(403, "Local only is on. Choose a voice file already on this computer.", "local_only")
+    try:
+        if "voice" in body:
+            return 200, {"path": read_aloud.download_voice(body["voice"])}
+        return 200, {"voices": sorted(read_aloud.piper_catalog())}
+    except (ValueError, OSError, KeyError) as error:
+        return _error(400, str(error), "speech")
+
+
+def read_reply(server, query, body) -> Reply:
+    try:
+        job = server.reader.start(body.get("text"), server.settings["voice"])
+    except ValueError as error:
+        return _error(400, str(error), "speech")
+    return 200, {"ok": True, "job": job}
+
+
+def read_status(server, query, body) -> Reply:
+    return 200, server.reader.status(query.get("job", [""])[0])
+
+
+def read_stop(server, query, body) -> Reply:
+    server.reader.stop(str(body.get("job", "")))
+    return 200, {"ok": True}
+
+
+def read_voices(server, query, body) -> Reply:
+    try:
+        if _first(query, "engine") == "piper":
+            return 200, {"voices": read_aloud.installed_voices()}
+        return 200, {"voices": read_aloud.voices()}
+    except Exception as error:
+        return _error(503, str(error), "speech")
+
+
 def voice_stop(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     return 200, {"ok": True, "was_listening": server.voice.stop(discard=body.get("discard") is True)}
 
@@ -341,7 +397,7 @@ def voice_check(server: "AssistantServer", query: dict[str, list[str]], body: di
     """Checks ``body["voice"]`` (the settings page's unsaved fields) or else the saved voice settings."""
     agent = server.settings.get("agent") or {}
     try:
-        wanted = voice.validate_voice(body["voice"]) if isinstance(body.get("voice"), dict) \
+        wanted = voice.validate_voice(settings_store.merge_redacted(body, server.settings)["voice"]) if isinstance(body.get("voice"), dict) \
             else server.settings.get("voice") or voice.VOICE_DEFAULTS
         return 200, voice.check_service(wanted, bool(agent.get("local_only")))
     except voice.VoiceSettingsError as error:
@@ -1002,6 +1058,13 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/app"): app_change,
     ("POST", "/app/show"): app_show,
     ("POST", "/app/panel-press"): app_panel_press,
+    ("POST", "/project/open"): open_project_match,
+    ("POST", "/attachments/preview"): preview_attachments,
+    ("POST", "/speech/piper-voices"): piper_voices,
+    ("POST", "/speech/read"): read_reply,
+    ("POST", "/speech/stop"): read_stop,
+    ("GET", "/speech/status"): read_status,
+    ("GET", "/speech/voices"): read_voices,
     ("POST", "/voice/listen"): voice_listen,
     ("POST", "/voice/stop"): voice_stop,
     ("POST", "/voice/check"): voice_check,

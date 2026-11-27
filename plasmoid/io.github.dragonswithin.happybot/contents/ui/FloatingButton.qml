@@ -107,7 +107,6 @@ PositionedWindow {
     signal hitActivated(string location)
     signal resultActivated(var hit)
     signal fileActionRequested(var hit, string action)
-    signal filesDropped(var paths)
     signal closeRequested()
     signal settingsRequested()
     signal dismissed()
@@ -223,7 +222,7 @@ PositionedWindow {
     onPlacedYChanged: layout()
     // A click anywhere else takes focus away: close, as the panel popup does; not while `holdOpen`
     // (the application is briefly made active for a "Help with …" screenshot).
-    readonly property bool holdOpen: session.capturing || view.windowPinned
+    readonly property bool holdOpen: session.capturing || view.windowPinned || view.choosingFiles
     onActiveChanged: if (!active && expanded && !holdOpen) close()
 
     Timer {
@@ -267,7 +266,6 @@ PositionedWindow {
             onHitActivated: location => floating.hitActivated(location)
             onResultActivated: hit => floating.resultActivated(hit)
             onFileActionRequested: (hit, action) => floating.fileActionRequested(hit, action)
-            onFilesDropped: paths => floating.filesDropped(paths)
             onCloseRequested: floating.closeRequested()
             onSettingsRequested: floating.settingsRequested()
         }

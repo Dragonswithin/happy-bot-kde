@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Dialogs as Dialogs
 
 import org.kde.kirigami as Kirigami
 
@@ -37,6 +38,8 @@ SettingsSection {
     appearance: page.settings?.ui
     required property var page
     readonly property var voice: page.settings && page.settings.voice ? page.settings.voice : null
+    readonly property string engine: voice?.input_engine || "service"
+    readonly property bool nativeLook: !(appearance?.robot_mascot ?? true)
     property bool busy: false
     property string result: ""
     property bool resultIsError: false
@@ -53,7 +56,8 @@ SettingsSection {
     }
 
     function typed() {
-        return { enabled: micShown.checked, base_url: address.text.trim(), model: model.text.trim(),
+        return { input_engine: section.engine, whisper_model: section.voice?.whisper_model || "",
+                 api_key: section.voice?.api_key === null ? null : section.voice?.api_key || "", enabled: micShown.checked, base_url: address.text.trim(), model: model.text.trim(),
                  language: language.text.trim() };
     }
 
@@ -101,8 +105,31 @@ SettingsSection {
         visible: serviceSettings.checked
         Layout.fillWidth: true
 
+        AssistantComboBox {
+            Accessible.name: i18n("Speech input")
+            Kirigami.FormData.label: i18n("Speech input")
+            accent: section.accent
+            nativeLook: section.nativeLook
+            model: [i18n("Transcription service"), i18n("Local whisper.cpp"), i18n("Live Whisper over D-Bus")]
+            readonly property var engines: ["service", "whisper_cli", "live_dbus"]
+            currentIndex: engines.indexOf(section.engine)
+            onActivated: index => section.set("input_engine", engines[index])
+        }
+        QQC2.Button {
+            visible: section.engine === "whisper_cli"
+            Kirigami.FormData.label: i18n("Whisper model")
+            text: section.voice?.whisper_model?.split("/").pop() || i18n("Choose model file…")
+            onClicked: whisperPicker.open()
+        }
+        QQC2.Label {
+            visible: section.engine === "live_dbus"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            text: i18n("Uses completed phrases from the running org.kde.assistant.stt service while Happy Bot is listening.")
+        }
         QQC2.TextField {
             id: address
+            visible: section.engine === "service"
             Kirigami.FormData.label: i18n("Service address:")
             Layout.fillWidth: true
             placeholderText: "http://127.0.0.1:52625/v1"
@@ -111,6 +138,7 @@ SettingsSection {
         }
 
         QQC2.Button {
+            visible: section.engine === "service"
             text: i18n("Find on this computer")
             icon.name: "edit-find"
             enabled: !section.busy
@@ -118,7 +146,20 @@ SettingsSection {
         }
 
         QQC2.TextField {
+            visible: section.engine === "service"
+            Kirigami.FormData.label: i18n("API key")
+            echoMode: TextInput.Password
+            placeholderText: section.voice?.api_key === null ? i18n("Saved key") : i18n("Optional")
+            onEditingFinished: if (text) { section.set("api_key", text); clear() }
+        }
+        QQC2.Button {
+            visible: section.engine === "service" && section.voice?.api_key === null
+            text: i18n("Remove saved key")
+            onClicked: section.set("api_key", "")
+        }
+        QQC2.TextField {
             id: model
+            visible: section.engine === "service"
             Kirigami.FormData.label: i18n("Speech model:")
             Layout.fillWidth: true
             placeholderText: i18n("Optional, e.g. whisper-v3:turbo")
@@ -128,6 +169,7 @@ SettingsSection {
 
         QQC2.TextField {
             id: language
+            visible: section.engine !== "live_dbus"
             Kirigami.FormData.label: i18n("Language code:")
             Layout.preferredWidth: Kirigami.Units.gridUnit * 8
             placeholderText: i18n("e.g. en or de")
@@ -138,9 +180,15 @@ SettingsSection {
         QQC2.Button {
             text: i18n("Test speech service")
             icon.name: "media-playback-start"
-            enabled: !section.busy && address.text.trim().length > 0
+            enabled: !section.busy && (section.engine !== "service" || address.text.trim().length > 0)
             onClicked: section.test()
         }
+    }
+
+    Dialogs.FileDialog {
+        id: whisperPicker
+        title: i18n("Choose a local whisper.cpp model")
+        onAccepted: section.set("whisper_model", decodeURIComponent(String(selectedFile).replace(/^file:\/\//, "")))
     }
 
     Kirigami.InlineMessage {
