@@ -499,7 +499,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Persistent mini-apps | Desktop tools and configurable start screen. | Phase 15 adds a library for creating, opening, editing, and removing HTML/CSS/JS mini-apps, manually or from chat, with an isolated preview. |
 | Live context tracker | Per-chat model selection and conversation history. | Phase 13 adds live token use and context capacity when available, with estimates labeled and clear near-limit states. |
 | Pin chat above windows | The floating shortcut stays accessible and the popup normally dismisses on focus loss. | Phase 13 adds explicit Pin/Unpin for the opened assistant. |
-| Mobile web access | Desktop-local app with authenticated loopback service. | Phase 16 adds optional phone pairing by QR code and a touch-friendly chat interface. |
+| Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
 | Prayer times and Hijri calendar | Timers and reminders. | Phase 16 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
 | Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
 | Markdown export | CLI backup can export conversations with settings. | Phase 13 adds Save conversation as Markdown from the chat UI. |
@@ -535,17 +535,12 @@ workspace. Run a calculation in the JavaScript sandbox and verify isolation.
 Create and revise a mini-app manually and through chat, open it again after
 restart, and remove it from the library.
 
-**Phase 16: Mobile access and optional calendar tools.** Build a separately
-enabled mobile companion interface with short-lived pairing codes, per-device
-revocation, and explicit desktop approval for system changes. Keep the main
-daemon on loopback. Add an optional Hijri calendar and prayer-time view with
-user-chosen location and calculation settings, with location sharing disclosed
-if the selected provider is online.
+**Phase 16: Optional calendar tools.** Add an optional Hijri calendar and
+prayer-time view with user-chosen location and calculation settings. Disclose
+location sharing if the selected provider is online.
 
-*Exit:* pair a phone, open and continue a chat over the paired connection,
-reject an unpaired request, and revoke the phone's access. Verify prayer
-times for a known location, calculation method, and date, including reminder
-delivery through Happy Bot's existing controls.
+*Exit:* verify prayer times for a known location, calculation method, and
+date, including reminder delivery through Happy Bot's existing controls.
 
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog and
