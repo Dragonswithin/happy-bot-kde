@@ -478,6 +478,75 @@ search position, questions answered from the selected page with links to
 the supporting passage, and a comparison of two selected pages with a
 source beside each difference.
 
+### KDE Assistant feature parity
+
+This checklist follows the [KDE Assistant feature list](https://github.com/hadealahmad/KDE-Assisstant#features).
+It records what Happy Bot already has and schedules the remaining workflows.
+The existing panel search, popup, and floating shortcut are the entry points.
+
+| Feature | Happy Bot baseline | Remaining work |
+| --- | --- | --- |
+| Multiple providers and model discovery | Configurable local and hosted models, OpenAI-compatible endpoints, per-chat model choice, and model discovery. | Verify OpenRouter, OpenAI, Gemini, LM Studio, Ollama, llama.cpp, and custom endpoints. Fill compatibility gaps in Phase 14. |
+| Persistent memory | Remember, forget, and recall tools store facts in editable Behaviour instructions and apply them to new conversations. | Phase 13 gives facts their own editable list and brings them into subsequent requests according to the user's privacy settings. |
+| Task manager | Notes, task checklists, reminders, and scheduled routines. | Phase 13 adds task groups, priorities, due dates, recurrence, subtasks, and manual and conversational editing. |
+| Voice typing | Voice input with configurable Whisper endpoints. | Phase 14 verifies local CLI, local live D-Bus transcription, hosted Whisper, and LM Studio voice input. Add missing routes. |
+| Spoken replies | Event sounds and voice input. | Phase 14 adds Read aloud with Speech Dispatcher and Piper, voice download and selection, and playback controls. |
+| Text, image, and PDF attachments | File drops, image input, and screenshot previews. | Phase 14 verifies text, vision, and PDF attachments with an explicit preview and removal before sending. Fill gaps in extraction and drag-and-drop. |
+| Web and local code search | Web finder and configurable search tools, indexed file search, and local file-content tools. | Phase 14 verifies DuckDuckGo, Tavily, SearXNG, and Google through compatible integrations, and adds an explicit grep/ripgrep code search workflow. |
+| Approved shell execution | Existing approval cards, streamed command output, and Stop. | Covered. Keep checking approval, cancellation, and output in normal workflows. |
+| OpenCode integration | External MCP tooling and existing approval and progress UI. | Phase 15 adds an optional coding session with model selection, scoped workspace access, streaming output, Stop, and resume. |
+| Sandboxed JavaScript | Quick calculations and shell tools. | Phase 15 adds a bounded JavaScript tool for calculations and data processing, with approval and a sandbox that denies filesystem and network access by default. |
+| Persistent mini-apps | Desktop tools and configurable start screen. | Phase 15 adds a library for creating, opening, editing, and removing HTML/CSS/JS mini-apps, manually or from chat, with an isolated preview. |
+| Live context tracker | Per-chat model selection and conversation history. | Phase 13 adds live token use and context capacity when available, with estimates labeled and clear near-limit states. |
+| Pin chat above windows | The floating shortcut stays accessible and the popup normally dismisses on focus loss. | Phase 13 adds explicit Pin/Unpin for the opened assistant. |
+| Mobile web access | Desktop-local app with authenticated loopback service. | Phase 16 adds optional phone pairing by QR code and a touch-friendly chat interface. |
+| Prayer times and Hijri calendar | Timers and reminders. | Phase 16 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
+| Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
+| Markdown export | CLI backup can export conversations with settings. | Phase 13 adds Save conversation as Markdown from the chat UI. |
+
+**Phase 13: Everyday assistant features.** Build the task manager on the
+existing reminders and notes, then add the memory editor, live context use,
+chat pinning, and Markdown export. Keep remembered facts editable and apply
+model privacy settings before including them in context.
+
+*Exit:* make a recurring task manually and through chat, add a subtask,
+restart Happy Bot and verify due dates and completion survive. Save and
+forget a preference and check that the next eligible request sees the change.
+Verify context use, pin the popup while using another window, and export a
+conversation with its code blocks and messages intact.
+
+**Phase 14: Models, voice, files, and search.** Build the provider and search
+compatibility checks around the existing adapters. Add spoken replies,
+complete the attachment workflows, and make local code search available
+from the assistant. Keep all provider and search endpoints user-selected.
+
+*Exit:* connect a local and a hosted model, discover and switch models,
+transcribe and read a reply aloud, submit a text file, image, and PDF,
+search a local project, and get linked web results from configured providers.
+The documented compatibility list records the outcome for each provider.
+
+**Phase 15: Coding and mini-apps.** Start with the existing approval,
+streaming, and cancellation UI. Add optional OpenCode sessions, a sandboxed
+JavaScript tool, and persistent mini-apps with isolated previews and explicit
+approval for capabilities beyond the preview.
+
+*Exit:* approve, pause or stop, and resume a coding session in a chosen
+workspace. Run a calculation in the JavaScript sandbox and verify isolation.
+Create and revise a mini-app manually and through chat, open it again after
+restart, and remove it from the library.
+
+**Phase 16: Mobile access and optional calendar tools.** Build a separately
+enabled mobile companion interface with short-lived pairing codes, per-device
+revocation, and explicit desktop approval for system changes. Keep the main
+daemon on loopback. Add an optional Hijri calendar and prayer-time view with
+user-chosen location and calculation settings, with location sharing disclosed
+if the selected provider is online.
+
+*Exit:* pair a phone, open and continue a chat over the paired connection,
+reject an unpaired request, and revoke the phone's access. Verify prayer
+times for a known location, calculation method, and date, including reminder
+delivery through Happy Bot's existing controls.
+
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog and
 the maintainer's priorities are in `docs/FEATURES.md`. Work is scheduled
