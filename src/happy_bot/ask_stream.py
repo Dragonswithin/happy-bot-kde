@@ -244,6 +244,7 @@ def stream_ask(server: "AssistantServer", body: dict[str, Any], send: Callable[[
         emit({
             "type": "start",
             "conversation_id": conversation.id,
+            "title": conversation.title,
             "created": conversation.created,
             "model": chain[0][0],
             "tools": registry.names(),

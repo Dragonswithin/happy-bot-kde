@@ -349,7 +349,10 @@ Item {
             mouseClick(findChild(view, "conversation-a"));
             compare(heading.text, "Storage");
             compare(view.inputText, "And the second disk?");
-            view.parkChat();
+            verify(!findChild(view, "assistantBack").visible);
+            const closeDrawer = button(view, "Return to start screen");
+            compare(closeDrawer.icon.name, "go-next");
+            mouseClick(closeDrawer);
             compare(heading.text, "Start screen");
             compare(session.entries.count, 1);
             session.busy = true;
@@ -368,7 +371,7 @@ Item {
             mouseClick(button(view, "Previous chats"));
             verify(view.sidebarVisible);
             wait(250);
-            compare(view.width, width);
+            compare(view.width, width + view.sidebarWidth);
             view.popupHidden();
             view.prepareOpen(Date.now());
             verify(!findChild(view, "conversationDrawer").visible);
@@ -376,8 +379,35 @@ Item {
             wait(250);
             mouseClick(findChild(view, "conversation-context-test"));
             compare(session.conversationId, "context-test");
+            verify(view.sidebarVisible);
+            mouseClick(button(view, "Return to start screen"));
             verify(!view.sidebarVisible);
+            compare(view.width, width);
             verify(!session.busy);
+        }
+
+        function test_firstMessageOpensCurrentChatInSidebar() {
+            const compactWidth = view.width;
+            verify(!view.sidebarVisible);
+            session.appendEntry("user", "Check storage");
+            verify(view.sidebarVisible);
+            compare(view.drawerChats.length, 1);
+            compare(view.drawerChats[0].title, "Check storage");
+            compare(view.width, compactWidth + view.sidebarWidth);
+            session.applyEvent({type: "start", conversation_id: "first", title: "Storage check"});
+            compare(view.drawerChats[0].id, "first");
+            compare(view.drawerChats[0].title, "Storage check");
+            compare(heading.text, "Storage check");
+            session.history = [{id: "first", title: "Storage check", updated: 1}];
+            compare(view.drawerChats.length, 1);
+            view.popupHidden();
+            view.prepareOpen(Date.now());
+            verify(view.sidebarVisible);
+            waitForRendering(view);
+            mouseClick(button(view, "Return to start screen"));
+            compare(heading.text, "Start screen");
+            verify(!view.sidebarVisible);
+            compare(view.width, compactWidth);
         }
 
         function test_chatTitles() {

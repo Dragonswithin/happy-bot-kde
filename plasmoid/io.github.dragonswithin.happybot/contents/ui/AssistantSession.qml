@@ -170,6 +170,7 @@ Item {
     property string statusText: i18n("Starting")
     property bool busy: false
     property string conversationId: ""
+    property string conversationTitle: ""
     property double conversationCreatedAt: 0
     property var models: []
     property string chatModel: ""
@@ -858,6 +859,7 @@ Item {
             if (session.conversationLoad !== load) return;
             if (session.conversationClearRevision !== revision && !(data.created > session.conversationClearRevision)) return;
             session.loadingChatId = "";
+            session.conversationTitle = data.title || "";
             session.conversationId = data.id;
             session.conversationCreatedAt = Number(data.created || 0);
             session.helpChat = false;
@@ -1005,6 +1007,7 @@ Item {
         ++session.conversationLoad;
         session.chatParked = false;
         session.contextUsage = null;
+        session.conversationTitle = "";
         session.conversationId = "";
         session.conversationCreatedAt = 0;
         session.chatModel = "";
@@ -1139,6 +1142,7 @@ Item {
             appendEntry("user", event.text);
             break;
         case "start":
+            if (event.title) session.conversationTitle = event.title;
             session.conversationId = event.conversation_id;
             session.conversationCreatedAt = Number(event.created || session.conversationCreatedAt);
             (event.warnings || []).forEach(warning => session.appendEntry("notice", warning));

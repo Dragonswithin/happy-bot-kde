@@ -101,18 +101,18 @@ AssistantSurface {
     property bool historyOpen: false
     Shortcut {
         sequence: "Escape"
-        enabled: view.sidebarVisible && !!view.Window.window?.active
+        enabled: view.historyOpen && view.sidebarVisible && !!view.Window.window?.active
         onActivated: {
-            view.historyOpen = false;
+            view.parkChat();
             view.focusInput();
         }
     }
-    readonly property bool sidebarVisible: historyOpen && !helpVisible
+    readonly property bool sidebarVisible: !helpVisible && (historyOpen || (conversationVisible && !welcomeVisible && session.hasTranscript))
     readonly property var drawerChats: {
         const rows = session.history.slice();
         const id = session.conversationId;
         if ((session.hasTranscript || (id && session.chatDrafts[id])) && !rows.some(row => row.id === id)) {
-            rows.unshift({id, title: (session.entries.count ? session.entries.get(0).text : "") || i18n("Chat with Happy Bot")});
+            rows.unshift({id, title: session.conversationTitle || (session.entries.count ? session.entries.get(0).text : "") || i18n("Chat with Happy Bot")});
         }
         if (session.chatDrafts[""] && !rows.some(row => row.id === ""))
             rows.unshift({id: "", title: i18n("Unsent message")});
@@ -148,7 +148,6 @@ AssistantSurface {
     }
     function resumeChat(id) {
         rememberInput();
-        historyOpen = false;
         if (!id && !session.busy && session.conversationId) {
             session.chatParked = true;
             session.stopFinding();
@@ -160,7 +159,7 @@ AssistantSurface {
         }
         focusInput();
     }
-    readonly property int sidebarWidth: Kirigami.Units.gridUnit * 10
+    readonly property int sidebarWidth: Kirigami.Units.gridUnit * 15
     readonly property string query: inputText.trim()
     readonly property bool webStartVisible: filesVisible && session.finder === "web" && !query.length
     property int webStartIndex: -1
@@ -243,7 +242,7 @@ AssistantSurface {
 
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits
+    implicitWidth: Kirigami.Units.gridUnit * widthInGridUnits + (sidebarVisible ? sidebarWidth : 0)
     // Rounded, and computed only from exact sizes (plain columns, never a
     // ListView's estimated contentHeight): the popup window resizes to this,
     // and anything that changed with the window's size would make it jump.
@@ -310,7 +309,7 @@ AssistantSurface {
             }
             if (!view.welcomeVisible && view.session.hasTranscript) {
                 const chat = view.session.history.find(item => item.id === view.session.conversationId);
-                return { text: chat?.title || i18n("Chat with Happy Bot"), icon: view.assistantIcon };
+                return { text: chat?.title || view.session.conversationTitle || i18n("Chat with Happy Bot"), icon: view.assistantIcon };
             }
             return { text: i18n("Start screen"), icon: view.assistantIcon };
         }
@@ -412,9 +411,9 @@ AssistantSurface {
         Layout.row: 0
         Layout.column: 0
         visible: view.session.finding || view.fixVisible || view.systemVisible || view.tasksVisible
-            || view.helpVisible || view.articleVisible || (!view.welcomeVisible && view.session.hasTranscript)
+            || view.helpVisible || view.articleVisible
         icon.name: "go-previous"
-        text: view.conversationVisible && !view.helpVisible && view.session.hasTranscript ? i18n("Close chat") : i18n("Back")
+        text: i18n("Back")
         AssistantToolTip {
             nativeLook: view.nativeLook
             accent: view.accent
@@ -438,8 +437,6 @@ AssistantSurface {
                 }
             } else if (view.session.finding) {
                 view.session.stopFinding();
-            } else {
-                view.parkChat();
             }
         }
     }
@@ -470,22 +467,27 @@ AssistantSurface {
             rows: 1
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
-            anchors.leftMargin: view.inset
-            anchors.rightMargin: anchors.leftMargin
+            anchors.leftMargin: view.inset + Math.max(0, view.width - Kirigami.Units.gridUnit * view.widthInGridUnits)
+            anchors.rightMargin: view.inset
             columnSpacing: Kirigami.Units.largeSpacing
 
             PlasmaComponents3.ToolButton {
                 Layout.row: 0
                 Layout.column: 1
                 visible: !view.helpVisible
-                icon.name: view.historyOpen ? "go-next" : "go-previous"
-                text: i18n("Previous chats")
+                icon.name: view.sidebarVisible ? "go-next" : "go-previous"
+                text: view.sidebarVisible ? i18n("Return to start screen") : i18n("Previous chats")
                 display: QQC2.AbstractButton.IconOnly
-                checked: view.historyOpen
+                checked: view.sidebarVisible
                 Accessible.name: text
                 onClicked: {
-                    view.historyOpen = !view.historyOpen;
-                    if (view.historyOpen) view.session.refreshHistory();
+                    if (view.sidebarVisible) {
+                        view.parkChat();
+                        view.focusInput();
+                    } else {
+                        view.historyOpen = true;
+                        view.session.refreshHistory();
+                    }
                 }
                 AssistantToolTip {
                     accent: view.accent
@@ -592,7 +594,7 @@ AssistantSurface {
                 }
                 Keys.onEscapePressed: {
                     if (view.historyOpen) {
-                        view.historyOpen = false;
+                        view.parkChat();
                     } else if (text.length > 0) {
                         text = "";
                     } else if (view.helpVisible) {
@@ -685,7 +687,7 @@ AssistantSurface {
 
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: Math.min(parent.width * 0.8, view.sidebarWidth * 1.5)
+            width: Math.min(parent.width * 0.4, view.sidebarWidth)
             visible: view.sidebarVisible
 
             PlasmaComponents3.Label {
@@ -836,18 +838,11 @@ AssistantSurface {
             }
         }
 
-        MouseArea {
-            anchors.fill: parent
-            visible: view.sidebarVisible
-            z: 1
-            onClicked: view.historyOpen = false
-        }
-
         // --- files or conversation -----------------------------------------
         Item {
             id: content
 
-            anchors.left: parent.left
+            anchors.left: view.sidebarVisible ? sidebar.right : parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom

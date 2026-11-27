@@ -160,8 +160,11 @@ class AskEndpointTests(unittest.TestCase):
     def test_conversation_is_remembered_and_new_ones_start_clean(self) -> None:
         self.configure()
         self.model.replies += [chunks_for("My name is Bot."), chunks_for("You asked my name."), chunks_for("New.")]
-        conversation_id = self.ask("what is your name")[0]["conversation_id"]
+        start = self.ask("what is your name")[0]
+        self.assertEqual(start["title"], "what is your name")
+        conversation_id = start["conversation_id"]
         follow_up = self.ask("what did I ask", conversation_id)
+        self.assertEqual(follow_up[0]["title"], start["title"])
         self.assertEqual(follow_up[0]["conversation_id"], conversation_id)
         roles = [message["role"] for message in self.model.requests[1]["messages"]]
         self.assertEqual(roles, ["system", "user", "assistant", "user"])
