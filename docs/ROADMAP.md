@@ -487,7 +487,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Feature | Happy Bot baseline | Remaining work |
 | --- | --- | --- |
 | Multiple providers and model discovery | Configurable local and hosted models, OpenAI-compatible endpoints, per-chat model choice, and model discovery. | Verify OpenRouter, OpenAI, Gemini, LM Studio, Ollama, llama.cpp, and custom endpoints. Fill compatibility gaps in Phase 14. |
-| Persistent memory | Remember, forget, and recall tools store facts in editable Behaviour instructions and apply them to new conversations. | Phase 13 gives facts their own editable list and brings them into subsequent requests according to the user's privacy settings. |
+| Persistent memory | Behaviour → Remembered facts and chat share one editable local list. Each request applies the current list according to Application context privacy. | Built in Phase 13. |
 | Task manager | Tasks screen and chat share the existing Markdown checklist. Both support groups, priorities, dates, recurrence, subtasks, and task reminders. | Built in Phase 13. |
 | Voice typing | Voice input with configurable Whisper endpoints. | Phase 14 verifies local CLI, local live D-Bus transcription, hosted Whisper, and LM Studio voice input. Add missing routes. |
 | Spoken replies | Event sounds and voice input. | Phase 14 adds Read aloud with Speech Dispatcher and Piper, voice download and selection, and playback controls. |
@@ -1515,6 +1515,20 @@ An isolated Plasma Wayland session also opened Tasks from the panel and
 edited both an existing checklist entry and a chat-created task. Generated
 units passed systemd verification. A live user systemd smoke test enabled,
 rescheduled, and advanced a recurring task timer, then removed its test units.
+
+**Phase 13 remembered facts.** Behaviour has a searchable fact list with
+direct edits and delete confirmation. Chat uses the same list and asks before
+saving or deleting a personal fact. Legacy facts after the original suggested
+instructions move automatically. For custom instructions, the editor offers
+an explicit move for individual bullets because the old format gives both
+kinds of lines the same markup.
+
+The model gets the current fact list on each eligible request, including open
+chats. The Application context policy determines eligibility, and earlier tool
+records do not replay old facts. Normal chat history remains separate.
+The provider-boundary test checked edits and deletion within an open chat
+and blocked hosted recall. An isolated Plasma Wayland session exercised the
+Behaviour editor against the daemon with a legacy fact.
 
 ## Decisions
 

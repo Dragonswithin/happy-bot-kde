@@ -251,6 +251,22 @@ class AssistantServer(ThreadingHTTPServer):
             self.sync_routines()
             return stored
 
+    def mutate_settings(self, mutate) -> dict[str, Any]:
+        """Apply a read-modify-write edit against the latest settings."""
+        import copy
+
+        with self._settings_lock:
+            changed = copy.deepcopy(self.settings)
+            mutate(changed)
+            return self.replace_settings(changed)
+
+    def update_redacted_settings(self, incoming: Any) -> dict[str, Any]:
+        with self._settings_lock:
+            merged = settings_store.merge_redacted(incoming, self.settings)
+            if isinstance(merged, dict) and isinstance(merged.setdefault("agent", {}), dict):
+                merged["agent"]["remembered_facts"] = self.settings["agent"]["remembered_facts"]
+            return self.replace_settings(merged)
+
     def update_ui(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Apply a partial edit to the latest saved UI settings from either surface."""
         with self._settings_lock:

@@ -81,21 +81,119 @@ class NoteTests(unittest.TestCase):
 
 
 class MemoryTests(unittest.TestCase):
-    def test_facts_go_into_the_visible_instructions_and_can_be_forgotten(self) -> None:
+    def test_chat_facts_are_separate_from_instructions(self) -> None:
         store = Store({"agent": {"instructions": "Answer briefly."}})
         tools = {tool.name: tool for tool in memory_tools(store.read, store.update)}
         tools["remember"].handler({"fact": "My notes are in ~/Notes"})
-        self.assertEqual(store.settings["agent"]["instructions"], "Answer briefly.\n- My notes are in ~/Notes")
+        self.assertEqual(store.settings["agent"]["instructions"], "Answer briefly.")
+        self.assertEqual(store.settings["agent"]["remembered_facts"], ["My notes are in ~/Notes"])
         self.assertEqual(tools["remember"].handler({"fact": "my notes are in ~/notes"}), "That is already remembered.")
         self.assertEqual(tools["forget"].risk, RISK_DANGER)
         self.assertIn("Forgot 1", tools["forget"].handler({"about": "notes"}))
-        self.assertEqual(tools["recall"].handler({}), "Answer briefly.")
+        self.assertEqual(tools["recall"].handler({}), "Nothing is remembered about the user yet.")
 
-    def test_the_length_limit_is_reported(self) -> None:
-        store = Store({"agent": {"instructions": "x" * 3990}})
+    def test_length_limit_is_independent_of_instructions(self) -> None:
+        store = Store({"agent": {"instructions": "x" * 4000}})
         tools = {tool.name: tool for tool in memory_tools(store.read, store.update)}
-        with self.assertRaisesRegex(ToolFailure, "shorten their instructions"):
-            tools["remember"].handler({"fact": "a fact that does not fit"})
+        tools["remember"].handler({"fact": "fits even though instructions are full"})
+        with self.assertRaisesRegex(ToolFailure, "500"):
+            tools["remember"].handler({"fact": "y" * 501})
+
+    def test_migration_edit_and_reload(self) -> None:
+        from happy_bot.daemon_routes import edit_remembered_fact
+        from happy_bot.settings import SUGGESTED_INSTRUCTIONS, save_settings, load_settings
+
+        store = Store({"agent": {"instructions": SUGGESTED_INSTRUCTIONS + "\n- My notes are in ~/Notes"}})
+        self.assertEqual(store.settings["agent"]["instructions"], SUGGESTED_INSTRUCTIONS)
+        self.assertEqual(store.settings["agent"]["remembered_facts"], ["My notes are in ~/Notes"])
+        store.mutate_settings = store.update
+        status, _ = edit_remembered_fact(
+            store, {}, {"action": "edit", "old": "My notes are in ~/Notes", "fact": "My notes are in ~/Documents"}
+        )
+        self.assertEqual(status, 200)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            save_settings(store.settings, path)
+            again = load_settings(path)
+            self.assertEqual(again["agent"]["remembered_facts"], ["My notes are in ~/Documents"])
+            self.assertEqual(again, validate_settings(again))
+
+    def test_custom_bullets_move_only_when_selected(self) -> None:
+        from happy_bot.daemon_routes import edit_remembered_fact
+
+        store = Store({"agent": {"instructions": "- Answer briefly.\n- Use Kate."}})
+        self.assertEqual(store.settings["agent"]["remembered_facts"], [])
+        store.mutate_settings = store.update
+        status, _ = edit_remembered_fact(store, {}, {"action": "move", "old": "- Use Kate."})
+        self.assertEqual(status, 200)
+        self.assertEqual(store.settings["agent"]["instructions"], "- Answer briefly.")
+        self.assertEqual(store.settings["agent"]["remembered_facts"], ["Use Kate."])
+
+    def test_open_chat_updates_and_privacy_apply_at_provider_boundary(self) -> None:
+        from unittest.mock import patch
+        from happy_bot.ask_stream import stream_ask
+        from happy_bot.daemon_http import AssistantServer
+        from happy_bot.daemon_routes import edit_remembered_fact
+        from happy_bot.conversation import TextDelta, TurnEnd
+
+        calls = []
+
+        class Provider:
+            def stream(self, messages, tools, cancel):
+                calls.append((messages[0].text, [tool.name for tool in tools]))
+                yield TextDelta("Done.")
+                yield TurnEnd("stop", 1, 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            server = AssistantServer("127.0.0.1", 0, path / "runtime", path / "config.json", path / "history")
+            try:
+                server.replace_settings({"models": {
+                    "local": {"provider": "openai_compatible", "base_url": "http://127.0.0.1:8000/v1", "model": "test"},
+                    "hosted": {"provider": "openai_compatible", "base_url": "https://model.example/v1", "model": "test"},
+                }, "agent": {"app_context": "local"}})
+                chat = {tool.name: tool for tool in memory_tools(lambda: server.settings, server.mutate_settings)}
+                chat["remember"].handler({"fact": "memory-original-value"})
+                events = []
+                with patch("happy_bot.ask_stream.create_provider", return_value=Provider()), \
+                     patch("happy_bot.ask_stream.app_context.background_note", return_value=""), \
+                     patch("happy_bot.ask_stream.sounds.play"):
+                    stream_ask(server, {"message": "First request", "model": "local"}, events.append)
+                    conversation = next(e["conversation_id"] for e in events if e["type"] == "start")
+                    self.assertIn("memory-original-value", calls[-1][0])
+                    status, _ = edit_remembered_fact(server, {}, {"action": "edit", "old": "memory-original-value",
+                                                                 "fact": "memory-replacement-value"})
+                    self.assertEqual(status, 200)
+                    stream_ask(server, {"message": "Next", "conversation_id": conversation, "model": "local"}, events.append)
+                    self.assertIn("memory-replacement-value", calls[-1][0])
+                    self.assertNotIn("memory-original-value", calls[-1][0])
+                    stream_ask(server, {"message": "Hosted", "conversation_id": conversation, "model": "hosted"}, events.append)
+                    self.assertNotIn("memory-replacement-value", calls[-1][0])
+                    self.assertNotIn("recall", calls[-1][1])
+                    status, _ = edit_remembered_fact(server, {}, {"action": "delete", "old": "memory-replacement-value"})
+                    self.assertEqual(status, 200)
+                    stream_ask(server, {"message": "After delete", "conversation_id": conversation, "model": "local"}, events.append)
+                    self.assertNotIn("memory-replacement-value", calls[-1][0])
+            finally:
+                server.server_close()
+
+    def test_model_payload_uses_live_facts_and_replaces_old_tool_transcripts(self) -> None:
+        from happy_bot.ask_stream import _model_memory
+        from happy_bot.conversation import Message, ToolCall
+
+        history = [
+            Message("system", "Normal instructions."),
+            Message("assistant", tool_calls=(ToolCall("1", "remember", {"fact": "obsolete saved value"}),)),
+            Message("tool", "obsolete saved value", tool_call_id="1", private=True),
+        ]
+        blocked = _model_memory(history, ["fresh saved value"], False)
+        updated = _model_memory(history, ["fresh saved value"], True)
+        deleted = _model_memory(history, [], True)
+        self.assertNotIn("saved value", repr(blocked))
+        self.assertIn("fresh saved value", updated[0].text)
+        self.assertNotIn("obsolete saved value", repr(updated))
+        self.assertNotIn("saved value", repr(deleted))
+        self.assertIn("obsolete saved value", repr(history))
 
 
 if __name__ == "__main__":

@@ -138,6 +138,9 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return list(self._tools)
 
+    def without(self, names: set[str] | frozenset[str]) -> "ToolRegistry":
+        return ToolRegistry([tool for tool in self._tools.values() if tool.name not in names])
+
     def reads_only(self) -> "ToolRegistry":
         """The same tools minus every one that can change anything, for a dry run."""
         return ToolRegistry([tool for tool in self._tools.values() if tool.risk == RISK_READ and tool.classify is None])

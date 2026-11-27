@@ -1,73 +1,64 @@
-"""Memory tools: the assistant remembers or forgets a fact about the user when asked.
-
-What the assistant knows about the user lives in one visible place: their
-instructions on the settings page (``agent.instructions``). ``remember``
-appends a line there ("My notes are in ~/Documents/Notes", "I live in
-Vancouver"), and ``forget`` removes the lines that mention some words, so
-every remembered fact can be read and edited by the user on the Behaviour
-page, and nothing is kept anywhere hidden. New facts take effect from the
-next new conversation, like any instruction.
-
-The tools change settings through the daemon (``read_settings`` /
-``update_settings``, as the routine tools do); the settings' length limit
-(``settings.MAX_INSTRUCTIONS_CHARS``) applies. ``remember`` is ``change``;
-``forget`` is ``danger`` because it deletes something the user told it.
-"""
+"""Chat tools for the same remembered facts shown in Behaviour settings."""
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from .registry import RISK_CHANGE, RISK_DANGER, RISK_READ, Tool, ToolFailure, object_schema
+from .. import remembered_facts
+from .registry import RISK_DANGER, RISK_READ, Tool, ToolFailure, object_schema
 
 
 def memory_tools(read_settings: Callable[[], dict[str, Any]], update_settings) -> list[Tool]:
-    from ..settings import SettingsError
+    def remember(arguments: dict[str, Any]) -> str:
+        try:
+            fact = remembered_facts.normalize(arguments.get("fact"))
+            added = False
 
-    def instructions() -> str:
-        return (read_settings().get("agent") or {}).get("instructions", "")
+            def mutate(settings):
+                nonlocal added
+                facts = settings["agent"]["remembered_facts"]
+                if any(item.casefold() == fact.casefold() for item in facts):
+                    return
+                facts.append(fact)
+                added = True
 
-    def save(text: str) -> None:
-        def mutate(settings: dict[str, Any]) -> None:
-            settings.setdefault("agent", {})["instructions"] = text
+            update_settings(mutate)
+        except (ValueError, OSError) as error:
+            raise ToolFailure(str(error)) from error
+        return "Saved in Behaviour → Remembered facts." if added else "That is already remembered."
+
+    def forget(arguments: dict[str, Any]) -> str:
+        words = str(arguments.get("about") or "").strip().casefold()
+        if len(words) < 3:
+            raise ToolFailure("Enter at least three characters from a remembered fact.")
+        removed = 0
+
+        def mutate(settings):
+            nonlocal removed
+            facts = settings["agent"]["remembered_facts"]
+            kept = [item for item in facts if words not in item.casefold()]
+            removed = len(facts) - len(kept)
+            settings["agent"]["remembered_facts"] = kept
 
         try:
             update_settings(mutate)
-        except SettingsError as error:
-            raise ToolFailure(f"{error}. Ask the user to shorten their instructions on the Behaviour page.") from error
-
-    def remember(arguments: dict[str, Any]) -> str:
-        fact = " ".join(str(arguments.get("fact") or "").split())
-        if not fact:
-            raise ToolFailure("'fact' is required")
-        current = instructions()
-        if fact.lower() in current.lower():
-            return "That is already remembered."
-        save((current.rstrip() + "\n" if current.strip() else "") + f"- {fact}")
-        return f"Remembered: {fact}. It is listed in the assistant's settings under Behaviour, Your instructions."
-
-    def forget(arguments: dict[str, Any]) -> str:
-        words = str(arguments.get("about") or "").strip().lower()
-        if len(words) < 3:
-            raise ToolFailure("'about' must be at least a few letters of what to forget")
-        lines = instructions().splitlines()
-        kept = [line for line in lines if words not in line.lower()]
-        if len(kept) == len(lines):
-            return f"Nothing remembered mentions '{words}'."
-        save("\n".join(kept).strip())
-        return f"Forgot {len(lines) - len(kept)} line(s) mentioning '{words}'."
+        except (ValueError, OSError) as error:
+            raise ToolFailure(str(error)) from error
+        return f"Forgot {removed} fact(s)." if removed else "No remembered facts matched."
 
     def recall(arguments: dict[str, Any]) -> str:
-        return instructions() or "Nothing is remembered about the user yet."
+        facts = read_settings()["agent"]["remembered_facts"]
+        return "\n".join(f"- {fact}" for fact in facts) or "Nothing is remembered about the user yet."
 
     return [
-        Tool("remember", "Remember a fact or preference about the user for future conversations, when they ask "
-             "you to (\"remember that my notes are in ~/Notes\").", object_schema({"fact": {"type": "string"}}, ["fact"]),
-             RISK_CHANGE, remember, summarize=lambda a: f"Remember: {str(a.get('fact', ''))[:120]}"),
-        Tool("forget", "Forget remembered facts that mention some words, when the user asks.",
+        Tool("remember", "Save a fact for future requests only when the user explicitly asks to remember it.",
+             object_schema({"fact": {"type": "string"}}, ["fact"]), RISK_DANGER, remember,
+             classify=lambda a: (RISK_DANGER, "stores a personal fact for future requests"),
+             summarize=lambda a: f"Remember: {str(a.get('fact', ''))[:120]}", private=True),
+        Tool("forget", "Delete saved facts matching the phrase when the user explicitly asks to forget them.",
              object_schema({"about": {"type": "string"}}, ["about"]), RISK_DANGER, forget,
-             classify=lambda a: (RISK_DANGER, "deletes something you asked it to remember"),
-             summarize=lambda a: f"Forget what mentions '{a.get('about', '?')}'"),
-        Tool("recall", "Everything the user has asked the assistant to remember (their standing instructions).",
-             object_schema(), RISK_READ, recall, summarize=lambda a: "Check what is remembered"),
+             classify=lambda a: (RISK_DANGER, "deletes matching remembered facts"),
+             summarize=lambda a: f"Forget what mentions '{a.get('about', '?')}'", private=True),
+        Tool("recall", "Read the saved facts the user asked Happy Bot to remember.",
+             object_schema(), RISK_READ, recall, summarize=lambda a: "Check what is remembered", private=True),
     ]

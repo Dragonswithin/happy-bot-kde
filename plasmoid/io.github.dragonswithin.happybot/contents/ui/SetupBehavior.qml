@@ -282,12 +282,18 @@ ColumnLayout {
         }
     }
 
+    RememberedFacts {
+        Layout.fillWidth: true
+        page: section.page
+        instructionsSaved: instructions.text.trim() === section.agent?.instructions
+    }
+
     SettingsSection {
         appearance: section.page.settings?.ui
         Layout.fillWidth: true
         title: i18n("Your instructions")
         iconName: "document-edit"
-        description: i18n("Write one preference per line. Saved instructions apply to new conversations and follow your approval settings.")
+        description: i18n("Write one preference per line. Saved instructions apply to subsequent requests and follow your approval settings.")
 
         QQC2.ScrollView {
             Layout.fillWidth: true

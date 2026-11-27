@@ -158,7 +158,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import task_routes
+from . import remembered_facts, task_routes
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import help_screenshot, settings as settings_store, sounds, ui_settings, web_preferences
@@ -499,9 +499,42 @@ def get_settings(server: "AssistantServer", query: dict[str, list[str]], body: d
 
 def put_settings(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     try:
-        stored = server.replace_settings(settings_store.merge_redacted(body.get("settings"), server.settings))
+        stored = server.update_redacted_settings(body.get("settings"))
     except settings_store.SettingsError as exc:
         return _error(400, str(exc), "invalid")
+    return 200, {"ok": True, "settings": settings_store.redacted(stored)}
+
+
+def list_remembered_facts(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    return 200, {"ok": True, "facts": server.settings["agent"]["remembered_facts"]}
+
+
+def edit_remembered_fact(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    def mutate(settings):
+        agent = settings["agent"]
+        facts = agent["remembered_facts"]
+        action = body.get("action")
+        if action == "move":
+            remembered_facts.move_instruction(agent, body.get("old"))
+            return
+        if action == "add":
+            facts.append(remembered_facts.normalize(body.get("fact")))
+        elif action in ("edit", "delete"):
+            old = body.get("old")
+            if old not in facts:
+                raise ValueError("That fact changed. Reload and try again.")
+            index = facts.index(old)
+            if action == "edit":
+                facts[index] = remembered_facts.normalize(body.get("fact"))
+            else:
+                facts.pop(index)
+        else:
+            raise ValueError("Choose a remembered-fact action.")
+
+    try:
+        stored = server.mutate_settings(mutate)
+    except (ValueError, OSError) as error:
+        return _error(400, str(error), "invalid")
     return 200, {"ok": True, "settings": settings_store.redacted(stored)}
 
 
@@ -925,6 +958,8 @@ def cancel_reminder(server: "AssistantServer", query: dict[str, list[str]], body
 
 
 ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/memory"): list_remembered_facts,
+    ("POST", "/memory"): edit_remembered_fact,
     ("GET", "/tasks"): task_routes.list_tasks,
     ("POST", "/tasks"): task_routes.change_task,
     ("GET", "/icon/activity"): icon_activity,

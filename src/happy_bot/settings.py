@@ -152,6 +152,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent_loop import MAX_STEPS
+from . import remembered_facts
 from .ui_settings import UiSettingsError, validate_ui
 from .voice import VoiceSettingsError, validate_voice
 from .wikipedia_library import WikipediaError, validate_wikipedia
@@ -207,7 +208,7 @@ def config_path() -> Path:
 
 def default_agent() -> dict[str, Any]:
     return {
-        "instructions": SUGGESTED_INSTRUCTIONS, "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
+        "instructions": SUGGESTED_INSTRUCTIONS, "remembered_facts": [], "max_steps": MAX_STEPS, "notify_after_seconds": DEFAULT_NOTIFY_AFTER_SECONDS,
         "command_timeout_seconds": DEFAULT_TIMEOUT_SECONDS, "terminal": "", "disabled_tool_groups": [],
         "confirm_plans": False, "local_only": False, "app_context": APP_CONTEXT_DEFAULT,
         "load_plugins": False, "serve_tools": False,
@@ -252,6 +253,13 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
     _require(isinstance(instructions, str), "'agent': 'instructions' must be text")
     _require(len(instructions) <= MAX_INSTRUCTIONS_CHARS,
              f"'agent': 'instructions' may be at most {MAX_INSTRUCTIONS_CHARS} characters")
+    try:
+        if "remembered_facts" not in raw:
+            instructions, facts = remembered_facts.split_legacy(instructions.strip(), SUGGESTED_INSTRUCTIONS)
+        else:
+            facts = remembered_facts.validate(merged["remembered_facts"])
+    except ValueError as error:
+        raise SettingsError(str(error)) from error
     terminal = merged["terminal"]
     _require(terminal == "" or terminal in SUPPORTED_TERMINALS,
              f"'agent': 'terminal' must be empty (automatic) or one of {', '.join(SUPPORTED_TERMINALS)}")
@@ -264,6 +272,7 @@ def _validate_agent(raw: Any) -> dict[str, Any]:
         _require(group in TOOL_GROUPS, f"'agent': unknown tool group '{group}' (known: {', '.join(TOOL_GROUPS)})")
     return {
         "instructions": instructions.strip(),
+        "remembered_facts": facts,
         "max_steps": _whole_number(merged["max_steps"], 5, 200, "'agent': 'max_steps' must be a whole number from 5 to 200"),
         "notify_after_seconds": _whole_number(
             merged["notify_after_seconds"], 0, 3600, "'agent': 'notify_after_seconds' must be a whole number from 0 to 3600"),
