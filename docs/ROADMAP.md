@@ -494,13 +494,10 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Text, image, and PDF attachments | File drops, image input, and screenshot previews. | Phase 14 verifies text, vision, and PDF attachments with an explicit preview and removal before sending. Fill gaps in extraction and drag-and-drop. |
 | Web and local code search | Web finder and configurable search tools, indexed file search, and local file-content tools. | Phase 14 verifies DuckDuckGo, Tavily, SearXNG, and Google through compatible integrations, and adds an explicit grep/ripgrep code search workflow. |
 | Approved shell execution | Existing approval cards, streamed command output, and Stop. | Covered. Keep checking approval, cancellation, and output in normal workflows. |
-| OpenCode integration | External MCP tooling and existing approval and progress UI. | Phase 15 adds an optional coding session with model selection, scoped workspace access, streaming output, Stop, and resume. |
-| Sandboxed JavaScript | Quick calculations and shell tools. | Phase 15 adds a bounded JavaScript tool for calculations and data processing, with approval and a sandbox that denies filesystem and network access by default. |
-| Persistent mini-apps | Desktop tools and configurable start screen. | Phase 15 adds a library for creating, opening, editing, and removing HTML/CSS/JS mini-apps, manually or from chat, with an isolated preview. |
 | Live context tracker | Per-chat model selection and conversation history. | Phase 13 adds live token use and context capacity when available, with estimates labeled and clear near-limit states. |
 | Pin chat above windows | The floating shortcut stays accessible and the popup normally dismisses on focus loss. | Phase 13 adds explicit Pin/Unpin for the opened assistant. |
 | Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
-| Prayer times and Hijri calendar | Timers and reminders. | Phase 16 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
+| Prayer times and Hijri calendar | Timers and reminders. | Phase 15 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
 | Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
 | Markdown export | CLI backup can export conversations with settings. | Phase 13 adds Save conversation as Markdown from the chat UI. |
 
@@ -525,17 +522,7 @@ transcribe and read a reply aloud, submit a text file, image, and PDF,
 search a local project, and get linked web results from configured providers.
 The documented compatibility list records the outcome for each provider.
 
-**Phase 15: Coding and mini-apps.** Start with the existing approval,
-streaming, and cancellation UI. Add optional OpenCode sessions, a sandboxed
-JavaScript tool, and persistent mini-apps with isolated previews and explicit
-approval for capabilities beyond the preview.
-
-*Exit:* approve, pause or stop, and resume a coding session in a chosen
-workspace. Run a calculation in the JavaScript sandbox and verify isolation.
-Create and revise a mini-app manually and through chat, open it again after
-restart, and remove it from the library.
-
-**Phase 16: Optional calendar tools.** Add an optional Hijri calendar and
+**Phase 15: Optional calendar tools.** Add an optional Hijri calendar and
 prayer-time view with user-chosen location and calculation settings. Disclose
 location sharing if the selected provider is online.
 
