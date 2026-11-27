@@ -20,16 +20,23 @@ SettingsSection {
         .filter((line, index, lines) => line.startsWith("- ") && lines.indexOf(line) === index
             && lines.lastIndexOf(line) === index)
     readonly property var suggestions: [
-        { key: "name", label: i18n("What should Happy Bot call you?"), shortLabel: i18n("Preferred name") },
-        { key: "language", label: i18n("What language should Happy Bot reply in?"), shortLabel: i18n("Preferred language") },
-        { key: "units", label: i18n("Which measurement units do you prefer?"), shortLabel: i18n("Measurement units") }
+        { key: "name", label: i18n("Preferred name") },
+        { key: "language", label: i18n("Reply language"), options: [
+            ["Arabic", i18n("Arabic")], ["Chinese (Simplified)", i18n("Chinese (Simplified)")],
+            ["Chinese (Traditional)", i18n("Chinese (Traditional)")], ["Dutch", i18n("Dutch")],
+            ["English", i18n("English")], ["French", i18n("French")], ["German", i18n("German")],
+            ["Hindi", i18n("Hindi")], ["Italian", i18n("Italian")], ["Japanese", i18n("Japanese")],
+            ["Korean", i18n("Korean")], ["Polish", i18n("Polish")], ["Portuguese", i18n("Portuguese")],
+            ["Russian", i18n("Russian")], ["Spanish", i18n("Spanish")], ["Turkish", i18n("Turkish")],
+            ["Ukrainian", i18n("Ukrainian")]
+        ] },
+        { key: "units", label: i18n("Measurement units"), options: [
+            ["Metric", i18n("Metric")], ["US customary", i18n("US customary")], ["Imperial", i18n("Imperial")]
+        ] }
     ]
-    readonly property var shown: facts.filter(fact => labelFor(fact).toLowerCase().includes(search.text.trim().toLowerCase()))
+    readonly property var shown: facts.filter(fact => !fact.prompt
+        && fact.text.toLowerCase().includes(search.text.trim().toLowerCase()))
 
-    function labelFor(fact) {
-        const suggestion = suggestions.find(item => item.key === fact.prompt);
-        return suggestion ? i18n("%1: %2", suggestion.shortLabel, fact.text) : fact.text;
-    }
     appearance: page.settings?.ui
     title: i18n("Remembered facts")
     iconName: "document-properties"
@@ -80,40 +87,108 @@ SettingsSection {
         delegate: ColumnLayout {
             id: guided
             required property var modelData
-            readonly property bool saved: section.facts.some(fact => fact.prompt === modelData.key)
-            visible: !saved
+            readonly property var saved: section.facts.find(fact => fact.prompt === modelData.key) ?? null
+            readonly property var options: {
+                const choices = modelData.options ?? [];
+                return saved && !choices.some(choice => choice[0] === saved.text)
+                    ? [...choices, [saved.text, saved.text]] : choices;
+            }
+            readonly property string value: modelData.options
+                ? options[picker.currentIndex - 1]?.[0] ?? "" : answer.text.trim()
+            readonly property bool confirming: saved !== null && section.deleting?.prompt === modelData.key
             Layout.fillWidth: true
 
-            QQC2.Label {
-                text: guided.modelData.label
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
+            function restore() {
+                answer.text = saved?.text ?? "";
+                picker.currentIndex = options.findIndex(choice => choice[0] === saved?.text) + 1;
+                guidedPrivacy.checked = saved?.local_only ?? true;
             }
-            RowLayout {
+
+            Component.onCompleted: restore()
+            onSavedChanged: restore()
+
+            GridLayout {
                 Layout.fillWidth: true
+                columns: width >= Kirigami.Units.gridUnit * 27 ? 5 : 2
+
+                QQC2.Label {
+                    text: guided.modelData.label
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                    wrapMode: Text.Wrap
+                }
+
                 QQC2.TextField {
                     id: answer
                     objectName: "rememberedFact-" + guided.modelData.key
-                    Layout.fillWidth: true
+                    visible: !guided.modelData.options
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+                    Layout.maximumWidth: Kirigami.Units.gridUnit * 10
                     Accessible.name: guided.modelData.label
                     placeholderText: i18n("Optional")
                     maximumLength: 500
-                    onAccepted: if (addAnswer.enabled) addAnswer.clicked()
+                    onAccepted: if (saveAnswer.enabled) saveAnswer.clicked()
+                }
+
+                AssistantComboBox {
+                    id: picker
+                    objectName: "rememberedFactChoice-" + guided.modelData.key
+                    visible: !!guided.modelData.options
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+                    nativeLook: !section.appearance?.robot_mascot
+                    accent: section.accent
+                    Accessible.name: guided.modelData.label
+                    model: [i18n("Unspecified"), ...guided.options.map(choice => choice[1])]
+                }
+
+                QQC2.CheckBox {
+                    id: guidedPrivacy
+                    text: i18n("Local only")
+                    Accessible.name: i18n("Local only for %1", guided.modelData.label)
+                }
+
+                QQC2.Button {
+                    id: saveAnswer
+                    objectName: "saveRememberedFact-" + guided.modelData.key
+                    text: i18n("Save")
+                    Accessible.name: i18n("Save %1", guided.modelData.label)
+                    enabled: !section.busy && (guided.value !== (guided.saved?.text ?? "")
+                        || (!!guided.value && guidedPrivacy.checked !== guided.saved?.local_only))
+                    onClicked: {
+                        if (!guided.value)
+                            section.deleting = guided.saved;
+                        else
+                            section.change(guided.saved ? "edit" : "add", guided.saved, guided.value,
+                                guidedPrivacy.checked, guided.modelData.key);
+                    }
+                }
+
+                QQC2.ToolButton {
+                    icon.name: "edit-delete"
+                    Accessible.name: i18n("Clear %1", guided.modelData.label)
+                    visible: guided.saved !== null
+                    enabled: !section.busy
+                    onClicked: section.deleting = guided.saved
+                }
+            }
+
+            RowLayout {
+                visible: guided.confirming
+                Layout.fillWidth: true
+                QQC2.Label {
+                    text: i18n("Clear %1?", guided.modelData.label)
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
                 }
                 QQC2.Button {
-                    id: addAnswer
-                    text: i18n("Save")
-                    Accessible.name: i18n("Save %1", guided.modelData.shortLabel)
-                    enabled: answer.text.trim().length > 0 && !section.busy
-                    onClicked: section.change("add", "", answer.text, guidedPrivacy.checked, guided.modelData.key)
+                    text: i18n("Cancel")
+                    onClicked: { section.deleting = null; guided.restore(); }
+                }
+                QQC2.Button {
+                    text: i18n("Clear")
+                    enabled: !section.busy
+                    onClicked: section.change("delete", guided.saved, "")
                 }
             }
-            QQC2.CheckBox {
-                id: guidedPrivacy
-                text: i18n("Local only")
-                checked: true
-            }
-            onSavedChanged: if (saved) { answer.clear(); guidedPrivacy.checked = true; }
         }
     }
 
@@ -176,11 +251,11 @@ SettingsSection {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
-                    text: section.labelFor(row.modelData)
+                    text: row.modelData.text
                 }
                 QQC2.ToolButton {
                     icon.name: "document-edit"
-                    Accessible.name: i18n("Edit %1", section.labelFor(row.modelData))
+                    Accessible.name: i18n("Edit %1", row.modelData.text)
                     enabled: !section.busy
                     onClicked: {
                         section.editing = row.modelData;
@@ -194,14 +269,14 @@ SettingsSection {
                 QQC2.ToolButton {
                     icon.name: "edit-delete"
                     objectName: "deleteRememberedFact"
-                    Accessible.name: i18n("Delete %1", section.labelFor(row.modelData))
+                    Accessible.name: i18n("Delete %1", row.modelData.text)
                     enabled: !section.busy
                     onClicked: section.deleting = row.modelData
                 }
             }
             QQC2.CheckBox {
                 text: i18n("Local only")
-                Accessible.name: i18n("Local only for %1", section.labelFor(row.modelData))
+                Accessible.name: i18n("Local only for %1", row.modelData.text)
                 checked: row.modelData.local_only
                 enabled: !section.busy
                 onClicked: {

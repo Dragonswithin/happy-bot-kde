@@ -45,6 +45,18 @@ Item {
             keyClick(Qt.Key_Return);
             compare(page.last.prompt, "name");
             compare(page.last.local_only, true);
+            const language = findChild(facts, "rememberedFactChoice-language");
+            const units = findChild(facts, "rememberedFactChoice-units");
+            verify(language.model.includes("Spanish"));
+            verify(units.model.includes("Metric"));
+            language.currentIndex = language.model.indexOf("Spanish");
+            mouseClick(findChild(facts, "saveRememberedFact-language"));
+            compare(page.last.fact, "Spanish");
+            language.currentIndex = language.model.indexOf("French");
+            mouseClick(findChild(facts, "saveRememberedFact-language"));
+            compare(page.last.action, "edit");
+            compare(page.last.fact, "French");
+            compare(facts.facts.filter(fact => fact.prompt === "language").length, 1);
             const search = findChild(facts, "rememberedFactsSearch");
             const entry = findChild(facts, "rememberedFactEntry");
             search.forceActiveFocus();
@@ -56,7 +68,7 @@ Item {
             keyClick(Qt.Key_A);
             keyClick(Qt.Key_Return);
             compare(page.last.action, "add");
-            compare(facts.shown.length, 3);
+            compare(facts.shown.length, 2);
             const first = findChild(facts, "deleteRememberedFact");
             mouseClick(first);
             compare(page.last.action, "add");
@@ -64,7 +76,7 @@ Item {
             const confirm = findChild(facts, "confirmRememberedFactDelete");
             mouseClick(confirm);
             compare(page.last.action, "delete");
-            compare(facts.shown.length, 2);
+            compare(facts.shown.length, 1);
         }
     }
 }
