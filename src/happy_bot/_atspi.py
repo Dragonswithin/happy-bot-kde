@@ -49,12 +49,24 @@ INTERACTIVE_ROLES = {
 CONTEXT_ROLES = {"label", "heading", "static", "alert", "dialog", "frame", "status bar", "notification", "tool tip"}
 _LOCK = threading.RLock()
 _atspi: Any = None
-_enabled = False
+_bus_guid: str | None = None
 
 
 
 class AccessibilityUnavailable(RuntimeError):
     """AT-SPI cannot be used here; the message says why."""
+
+
+class BusUnavailable(AccessibilityUnavailable):
+    """The accessibility address advertised by the session could not be reached."""
+
+
+class WindowUnavailable(AccessibilityUnavailable):
+    """No window for the requested process is registered yet."""
+
+
+class WorkerStale(AccessibilityUnavailable):
+    """Native state must be initialized in a fresh process."""
 
 
 class ElementGone(RuntimeError):
@@ -109,7 +121,9 @@ def _load() -> Any:
         except (ImportError, ValueError) as error:
             raise AccessibilityUnavailable(
                 f"the accessibility library (PyGObject with at-spi2-core) is not available: {error}") from error
-        Atspi.init()
+        result = Atspi.init()
+        if result not in (0, 1):
+            raise WorkerStale(f"AT-SPI initialization failed with code {result}")
         # Method calls wait at most this long. An action that opens a modal
         # dialog never replies while the dialog is up (see ``press``).
         Atspi.set_timeout(ACTION_TIMEOUT_MS, ACTION_TIMEOUT_MS)
@@ -119,32 +133,50 @@ def _load() -> Any:
 
 def ensure_enabled() -> None:
     """Turn on the session's accessibility flag so applications publish their interfaces."""
-    global _enabled
-    with _LOCK:
-        if _enabled:
-            return
+    global _bus_guid
+    try:
+        import gi
+        gi.require_version("Gio", "2.0")
+        from gi.repository import Gio, GLib
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    except Exception as error:
+        raise AccessibilityUnavailable(f"could not access the desktop session bus: {error}") from error
+
+    def connect(address):
+        return Gio.DBusConnection.new_for_address_sync(
+            address, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
+            None, None)
+
+    override = os.environ.get("AT_SPI_BUS_ADDRESS")
+    probe = None
+    if override:
         try:
-            import gi
-
-            gi.require_version("Gio", "2.0")
-            from gi.repository import Gio, GLib
-
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-            address = os.environ.get("AT_SPI_BUS_ADDRESS") or bus.call_sync(
+            probe = connect(override)
+        except GLib.Error:
+            # This environment belongs to the isolated worker. Let libatspi
+            # discover the current address if the inherited one is stale.
+            del os.environ["AT_SPI_BUS_ADDRESS"]
+    if probe is None:
+        try:
+            address = bus.call_sync(
                 "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Bus", "GetAddress", None,
                 None, Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
-            # libatspi can abort on a stale address. Check connectivity with
-            # Gio first, which returns an ordinary error for a refused socket.
-            probe = Gio.DBusConnection.new_for_address_sync(
-                address, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
-            probe.close_sync(None)
-            bus.call_sync(
-                "org.a11y.Bus", "/org/a11y/bus", "org.freedesktop.DBus.Properties", "Set",
-                GLib.Variant("(ssv)", ("org.a11y.Status", "IsEnabled", GLib.Variant("b", True))),
-                None, Gio.DBusCallFlags.NONE, 3000, None)
-        except Exception as error:  # noqa: BLE001 - GLib.Error and import problems alike
-            raise AccessibilityUnavailable(f"could not connect to or enable the desktop accessibility service: {error}") from error
-        _enabled = True
+            probe = connect(address)
+        except GLib.Error as error:
+            raise BusUnavailable(f"desktop accessibility bus discovery or connection failed: {error}") from error
+    try:
+        guid = probe.get_guid()
+    finally:
+        probe.close_sync(None)
+    if _bus_guid == guid:
+        return
+    if _bus_guid is not None:
+        raise WorkerStale("the desktop accessibility bus was replaced")
+    bus.call_sync(
+        "org.a11y.Bus", "/org/a11y/bus", "org.freedesktop.DBus.Properties", "Set",
+        GLib.Variant("(ssv)", ("org.a11y.Status", "IsEnabled", GLib.Variant("b", True))),
+        None, Gio.DBusCallFlags.NONE, 3000, None)
+    _bus_guid = guid
 
 
 def _clean(text: str | None) -> str:
@@ -217,7 +249,7 @@ def _find_window(atspi: Any, pid: int, title: str) -> tuple[Any, Any]:
         except Exception:  # noqa: BLE001 - an application may vanish mid-walk
             continue
     if not candidates:
-        raise AccessibilityUnavailable(
+        raise WindowUnavailable(
             "this application does not publish its interface for assistive tools, so it cannot be operated this way")
     wanted = _clean(title)
     for application, window in candidates:
@@ -232,7 +264,6 @@ def _find_window(atspi: Any, pid: int, title: str) -> tuple[Any, Any]:
 def take_snapshot(pid: int, title: str) -> Snapshot:
     """Read the window of process ``pid`` whose title is ``title`` (else its active window)."""
     with _LOCK:
-        ensure_enabled()
         atspi = _load()
         application, window = _find_window(atspi, pid, title)
         elements: list[Element] = []

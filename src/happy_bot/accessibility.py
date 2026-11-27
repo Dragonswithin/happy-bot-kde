@@ -1,8 +1,11 @@
 """Isolate native AT-SPI calls so a disconnected desktop bus cannot abort Happy Bot."""
 from __future__ import annotations
 
+import logging
 import multiprocessing
+import subprocess
 import threading
+import time
 import uuid
 from dataclasses import replace
 
@@ -10,6 +13,8 @@ from . import _atspi
 from ._atspi import AccessibilityUnavailable, Element, ElementGone, REF_PATTERN, Snapshot, find_elements
 
 _lock = threading.Lock()
+_last_restart = float("-inf")
+_log = logging.getLogger(__name__)
 _process = None
 _connection = None
 
@@ -26,7 +31,11 @@ def _serve(connection):
         while True:
             operation, args = connection.recv()
             try:
-                if operation == "snapshot":
+                if operation != "last":
+                    _atspi.ensure_enabled()
+                if operation == "probe":
+                    result = None
+                elif operation == "snapshot":
                     snapshot = _atspi.take_snapshot(*args)
                     token = uuid.uuid4().hex
                     snapshots[token] = snapshot
@@ -46,6 +55,12 @@ def _serve(connection):
                               "focus": _atspi.focus}[operation]
                     result = action(element, *values)
                 reply = ("ok", result)
+            except _atspi.WindowUnavailable as error:
+                reply = ("window", str(error))
+            except _atspi.BusUnavailable as error:
+                reply = ("bus", str(error))
+            except _atspi.WorkerStale as error:
+                reply = ("stale", str(error))
             except ElementGone:
                 reply = ("gone", "")
             except Exception as error:
@@ -57,39 +72,96 @@ def _serve(connection):
         connection.close()
 
 
-def _call(operation, *args):
+def _exchange(operation, *args):
     global _process, _connection
-    with _lock:
-        if _connection is None:
-            ctx = multiprocessing.get_context("spawn")
-            _connection, child = ctx.Pipe()
-            _process = ctx.Process(target=_serve, args=(child,), daemon=True)
-            try:
-                _process.start()
-            except Exception:
-                _connection.close()
-                _connection = None
-                raise
-            finally:
-                child.close()
+    if _connection is None:
+        ctx = multiprocessing.get_context("spawn")
+        _connection, child = ctx.Pipe()
+        _process = ctx.Process(target=_serve, args=(child,), daemon=True)
         try:
-            _connection.send((operation, args))
-            if not _connection.poll(30):
-                raise TimeoutError("accessibility service timed out")
-            status, value = _connection.recv()
-        except (OSError, EOFError) as error:
+            _process.start()
+        except Exception:
             _connection.close()
             _connection = None
-            _process.kill()
-            _process.join()
-            _process.close()
-            raise AccessibilityUnavailable("The desktop accessibility service disconnected or stopped responding. "
-                                           "Take a fresh window snapshot to try again.") from error
-        if status == "gone":
-            raise ElementGone
-        if status == "error":
-            raise AccessibilityUnavailable(value)
-        return value
+            raise
+        finally:
+            child.close()
+    try:
+        _connection.send((operation, args))
+        if not _connection.poll(30):
+            raise TimeoutError("accessibility service timed out")
+        status, value = _connection.recv()
+    except (OSError, EOFError) as error:
+        raise _atspi.WorkerStale(
+            f"accessibility worker lost during {operation} (exit={_process.exitcode}, {type(error).__name__})"
+        ) from error
+    if status == "window":
+        raise _atspi.WindowUnavailable(value)
+    if status == "bus":
+        raise _atspi.BusUnavailable(value)
+    if status == "stale":
+        raise _atspi.WorkerStale(value)
+    if status == "gone":
+        raise ElementGone
+    if status == "error":
+        raise AccessibilityUnavailable(value)
+    return value
+
+
+def _reset_worker():
+    global _process, _connection
+    if _connection is not None:
+        _connection.close()
+        _connection = None
+        _process.kill()
+        _process.join()
+        _process.close()
+        _process = None
+
+
+def _recover():
+    global _last_restart
+    _reset_worker()
+    try:
+        _exchange("probe")
+        return
+    except _atspi.BusUnavailable as error:
+        if time.monotonic() - _last_restart < 60:
+            raise AccessibilityUnavailable(f"Accessibility is still unavailable after a recent restart: {error}") from error
+        _log.warning("Restarting at-spi-dbus-bus.service after a fresh worker confirmed bus failure: %s", error)
+    _last_restart = time.monotonic()
+    try:
+        subprocess.run(["systemctl", "--user", "restart", "at-spi-dbus-bus.service"],
+                       capture_output=True, text=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = getattr(error, "stderr", "") or str(error)
+        raise AccessibilityUnavailable(f"Could not restart the desktop accessibility service: {detail.strip()}") from error
+    _exchange("probe")
+
+
+def _call(operation, *args):
+    with _lock:
+        try:
+            return _exchange(operation, *args)
+        except (_atspi.WorkerStale, _atspi.BusUnavailable) as error:
+            _log.warning("Recovering desktop accessibility during %s: %s", operation, error)
+        if operation == "last":
+            _reset_worker()
+            return None  # cached refs lived in the lost worker
+        _recover()
+        _log.warning("Desktop accessibility reconnected during %s", operation)
+        if operation == "snapshot":
+            # Applications register their windows asynchronously after a bus restart.
+            for delay in (0, 0.2, 0.5):
+                time.sleep(delay)
+                try:
+                    return _exchange(operation, *args)
+                except _atspi.WindowUnavailable:
+                    continue
+            return _exchange(operation, *args)
+        raise AccessibilityUnavailable(
+            "Desktop accessibility reconnected. Inspect the window with a fresh snapshot to check the outcome "
+            "before taking any further action.")
 
 
 def take_snapshot(pid: int, title: str) -> Snapshot:

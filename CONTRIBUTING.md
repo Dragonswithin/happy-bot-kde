@@ -57,9 +57,13 @@ python3 -m unittest discover -s tests
 python3 -m compileall -q src/happy_bot
 printf '%s\0' scripts/*.sh launchers/happy-bot-app | xargs -0 -n1 bash -n
 QT_FORCE_STDERR_LOGGING=1 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml plasmoid/*/contents/ui/*.qml
-/usr/lib/qt6/bin/qmltestrunner -input tests
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software scripts/test_session.sh /usr/lib/qt6/bin/qmltestrunner -input tests
 systemd-analyze --user verify systemd/user/happy-bot-daemon.service
 ```
+
+For nested KWin tests, launch the compositor and its test command together under
+`scripts/test_session.sh`. It sets the runtime directory before starting the
+private D-Bus session so activated accessibility services use private sockets.
 
 For a live check after installing, run `happy-bot doctor` and open the
 widget in its own window. To see load errors in the terminal, use

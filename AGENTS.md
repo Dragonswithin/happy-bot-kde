@@ -34,3 +34,7 @@
 - Before closeout, run focused checks: Python syntax, shell syntax, service
   unit sanity where possible, and Plasma package install/windowed smoke when a
   KDE session is available.
+
+- Use `scripts/test_session.sh` for private D-Bus or nested Plasma tests.
+  It isolates the runtime directory before the bus starts so test services
+  cannot replace the desktop accessibility socket.

@@ -68,13 +68,63 @@ class ElementTests(unittest.TestCase):
 
 
 class AccessibilityWorkerTests(unittest.TestCase):
-    def test_worker_loss_is_reported_and_next_request_starts_a_new_worker(self):
+    def test_worker_loss_invalidates_cached_refs_and_next_request_starts_a_new_worker(self):
         self.assertIsNone(accessibility.last_snapshot(0))
         accessibility._process.kill()
         accessibility._process.join()
-        with self.assertRaisesRegex(accessibility.AccessibilityUnavailable, "disconnected"):
-            accessibility.last_snapshot(0)
         self.assertIsNone(accessibility.last_snapshot(0))
+        self.assertIsNone(accessibility.last_snapshot(0))
+
+    def test_failed_init_never_calls_native_methods(self):
+        from happy_bot import _atspi
+        try:
+            import gi
+            gi.require_version("Atspi", "2.0")
+            from gi.repository import Atspi
+        except (ImportError, ValueError):
+            self.skipTest("AT-SPI bindings unavailable")
+        with mock.patch.object(_atspi, "_atspi", None), mock.patch.object(Atspi, "init", return_value=2), \
+                mock.patch.object(Atspi, "get_desktop") as desktop:
+            with self.assertRaisesRegex(_atspi.WorkerStale, "code 2"):
+                _atspi.take_snapshot(1, "")
+            desktop.assert_not_called()
+
+    def test_reconnect_retries_snapshot_restarting_only_a_confirmed_broken_bus(self):
+        a = accessibility
+        down = a._atspi.BusUnavailable("refused")
+        for probe_failed in (True, False):
+            sequence = [down] + ([down] if probe_failed else []) + [None, snapshot()]
+            with mock.patch.object(a, "_exchange", side_effect=sequence) as exchange, \
+                    mock.patch.object(a, "_reset_worker"), mock.patch.object(a, "_last_restart", float("-inf")), \
+                    mock.patch.object(a.subprocess, "run") as systemctl:
+                self.assertEqual(a.take_snapshot(42, "test").pid, 42)
+                self.assertEqual(exchange.call_args_list[-1], mock.call("snapshot", 42, "test"))
+                self.assertEqual(systemctl.call_count, int(probe_failed))
+                if probe_failed:
+                    self.assertEqual(systemctl.call_args.args[0], ["systemctl", "--user", "restart", "at-spi-dbus-bus.service"])
+
+    def test_persistent_failure_is_rate_limited_and_app_errors_do_not_restart_bus(self):
+        a = accessibility
+        with mock.patch.object(a, "_exchange", side_effect=a._atspi.BusUnavailable("refused")), \
+                mock.patch.object(a, "_reset_worker"), mock.patch.object(a, "_last_restart", a.time.monotonic()), \
+                mock.patch.object(a.subprocess, "run") as systemctl:
+            with self.assertRaisesRegex(a.AccessibilityUnavailable, "recent restart"):
+                a.take_snapshot(1, "test")
+            systemctl.assert_not_called()
+        with mock.patch.object(a, "_exchange", side_effect=a._atspi.WindowUnavailable("no window")), \
+                mock.patch.object(a, "_recover") as recover:
+            with self.assertRaisesRegex(a.AccessibilityUnavailable, "no window"):
+                a.take_snapshot(1, "test")
+            recover.assert_not_called()
+
+    def test_lost_action_reply_recovers_connection_without_repeating_action(self):
+        a = accessibility
+        with mock.patch.object(a, "_exchange", side_effect=[a._atspi.WorkerStale("EOF"), None]) as exchange, \
+                mock.patch.object(a, "_reset_worker"), mock.patch.object(a.subprocess, "run") as systemctl:
+            with self.assertRaisesRegex(a.AccessibilityUnavailable, "fresh snapshot"):
+                a.press(element("e1", "button", "OK"))
+            self.assertEqual([c.args[0] for c in exchange.call_args_list], ["press", "probe"])
+            systemctl.assert_not_called()
 
 
 class KeyParsingTests(unittest.TestCase):
