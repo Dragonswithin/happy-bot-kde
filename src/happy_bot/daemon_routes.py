@@ -91,6 +91,8 @@ Endpoints:
   conversations, activity, undo, previous months' usage, or temporary cache files and graph samples.
 - ``POST /conversations/pin``: ``{"id": ..., "pinned": bool}``; pinned ones
   are listed first and kept past ``history_days``.
+- ``POST /conversations/export``: save one chat (``id``) or every chat (``all: true``)
+  to the local Markdown ``path`` selected in Settings.
 - ``GET /export`` / ``POST /import``: everything the assistant keeps for the
   user, without secrets (``personal_data``).
 - ``GET /tools/catalog`` / ``POST /tools/run``: the built-in tools lent to
@@ -158,7 +160,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import remembered_facts, task_routes
+from . import conversation_export, remembered_facts, task_routes
 from . import (app_actions, selection_fix, text_rewrite, app_context, app_control, voice, desktop_actions, desktop_context, input_portal, instant_search, mcp_discovery, model_discovery, personal_data,
                model_check, model_presets, model_setup, panel_widget, quick_results, search_choices, search_setup, self_check, spend)
 from . import help_screenshot, settings as settings_store, sounds, ui_settings, web_preferences
@@ -754,6 +756,21 @@ def get_conversation(server: "AssistantServer", query: dict[str, list[str]], bod
                  "events": conversation.events, "context_usage": conversation.context_usage}
 
 
+def export_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
+    path = body.get("path")
+    chat_id = body.get("id")
+    if not isinstance(path, str) or not (
+        (set(body) == {"path", "all"} and body["all"] is True)
+        or (set(body) == {"path", "id"} and isinstance(chat_id, str) and chat_id)
+    ):
+        return _error(400, "Select a conversation or choose all conversations and a destination file.", "invalid")
+    try:
+        count = conversation_export.save_markdown(server.conversations, Path(path), chat_id)
+    except (OSError, ValueError) as error:
+        return _error(400, str(error), "export_failed")
+    return 200, {"ok": True, "count": count}
+
+
 def delete_conversations(server: "AssistantServer", query: dict[str, list[str]], body: dict[str, Any]) -> Reply:
     if body.get("all") is True:
         return clear_history(server, query, {"kind": "conversations"})
@@ -1020,6 +1037,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/approve"): approve,
     ("GET", "/conversations"): list_conversations,
     ("GET", "/context/usage"): get_context_usage,
+    ("POST", "/conversations/export"): export_conversations,
     ("GET", "/conversation"): get_conversation,
     ("POST", "/conversations/delete"): delete_conversations,
     ("POST", "/history/clear"): clear_history,

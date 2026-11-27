@@ -7,6 +7,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Dialogs as Dialogs
+import QtCore
 
 import org.kde.kirigami as Kirigami
 
@@ -60,6 +62,61 @@ ColumnLayout {
           done: i18n("Temporary cache cleared.") }
     ]
 
+    property var exportChoices: []
+    property bool exportBusy: false
+    property var exportChoice: null
+
+    function chooseExport() {
+        section.exportBusy = true;
+        section.page.client.request("GET", "/conversations", null, data => {
+            section.exportBusy = false;
+            const chats = data.conversations || [];
+            if (!chats.length) {
+                section.page.report(i18n("There are no conversations to export."), false);
+                return;
+            }
+            const choices = chats.map(chat => ({
+                id: chat.id, title: chat.title || i18n("Untitled conversation"),
+                label: (chat.title || i18n("Untitled conversation")) + " · "
+                    + new Date(chat.updated * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)
+            }));
+            choices.splice(1, 0, { all: true, label: i18n("All conversations (one Markdown file)") });
+            section.exportChoices = choices;
+        }, data => {
+            section.exportBusy = false;
+            section.page.report(data.error || i18n("Could not load conversations."), true);
+        });
+    }
+
+    function saveExport(url) {
+        const location = url.toString();
+        if (!location.startsWith("file:///")) {
+            section.page.report(i18n("Choose a local folder for the Markdown file."), true);
+            return;
+        }
+        const body = section.exportChoice.all ? {all: true} : {id: section.exportChoice.id};
+        body.path = decodeURIComponent(location.slice(7));
+        section.exportBusy = true;
+        section.page.client.request("POST", "/conversations/export", body, () => {
+            section.exportBusy = false;
+            section.exportChoices = [];
+            section.page.report(i18n("Saved to %1", body.path), false);
+        }, data => {
+            section.exportBusy = false;
+            section.page.report(data.error || i18n("Could not save the Markdown file."), true);
+        });
+    }
+
+    Dialogs.FileDialog {
+        id: exportDialog
+        objectName: "markdownFileDialog"
+        title: i18n("Save conversations as Markdown")
+        fileMode: Dialogs.FileDialog.SaveFile
+        defaultSuffix: "md"
+        nameFilters: [i18n("Markdown files (*.md)")]
+        onAccepted: section.saveExport(selectedFile)
+    }
+
     function setFolder(name, path) {
         const wanted = path.trim();
         if (wanted === (section.overrides[name] || "")) {
@@ -84,6 +141,7 @@ ColumnLayout {
         section.page.client.request("POST", "/history/clear", { kind: choice.kind }, () => {
             section.clearingKind = "";
             section.confirmingKind = "";
+            if (choice.kind === "conversations") section.exportChoices = [];
             section.page.report(choice.done, false);
         }, data => {
             section.clearingKind = "";
@@ -152,6 +210,14 @@ ColumnLayout {
                         wrapMode: Text.Wrap
                     }
                     QQC2.Button {
+                        objectName: "export-" + row.modelData.kind
+                        visible: row.modelData.kind === "conversations" && !row.confirming && !section.exportChoices.length
+                        enabled: !section.exportBusy && !section.clearingKind
+                        text: i18n("Export…")
+                        icon.name: "document-export"
+                        onClicked: section.chooseExport()
+                    }
+                    QQC2.Button {
                         objectName: "cancel-" + row.modelData.kind
                         visible: row.confirming
                         enabled: !section.clearingKind
@@ -173,6 +239,37 @@ ColumnLayout {
                     Layout.minimumWidth: 0
                     text: row.modelData.detail
                     wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: row.modelData.kind === "conversations" && section.exportChoices.length > 0
+                    enabled: !section.exportBusy
+                    QQC2.ComboBox {
+                        id: exportPicker
+                        objectName: "exportPicker-" + row.modelData.kind
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        textRole: "label"
+                        model: row.modelData.kind === "conversations" ? section.exportChoices : []
+                        Accessible.name: i18n("Conversations to export")
+                    }
+                    QQC2.Button {
+                        objectName: "saveMarkdown-" + row.modelData.kind
+                        enabled: exportPicker.currentIndex >= 0
+                        text: i18n("Save as…")
+                        onClicked: {
+                            section.exportChoice = section.exportChoices[exportPicker.currentIndex];
+                            const stem = section.exportChoice.all ? i18n("Happy Bot conversations")
+                                : section.exportChoice.title.replace(/[\/\\:*?"<>|%#\x00-\x1f]/g, " ").trim();
+                            const documents = StandardPaths.writableLocation(StandardPaths.DocumentsLocation).toString();
+                            exportDialog.selectedFile = documents + "/" + encodeURIComponent(Array.from(stem || "Happy Bot").slice(0, 48).join("")) + ".md";
+                            exportDialog.open();
+                        }
+                    }
+                    QQC2.Button {
+                        text: i18n("Cancel")
+                        onClicked: section.exportChoices = []
+                    }
                 }
             }
         }

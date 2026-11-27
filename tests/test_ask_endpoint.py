@@ -171,6 +171,45 @@ class AskEndpointTests(unittest.TestCase):
         self.assertNotEqual(self.ask("hello")[0]["conversation_id"], conversation_id)
         self.assertEqual(len(self.model.requests[2]["messages"]), 2)
 
+    def test_markdown_exports_one_or_all_chats_in_order(self) -> None:
+        self.configure()
+        answer = "Café\n\n```python\nprint('hello')\n```"
+        self.model.replies += [chunks_for(answer), chunks_for("Follow-up answer"), chunks_for("Second chat answer")]
+        first = self.ask("First question")[0]["conversation_id"]
+        self.ask("Follow-up", first)
+        self.ask("Second question")
+        target = Path(self._tmp.name) / "My chats.md"
+        route = "/conversations/export"
+        self.assertEqual(self.call("POST", route, {"id": first, "path": str(target)})["count"], 1)
+        self.assertEqual(target.read_text(), f"# First question\n\n## You\n\nFirst question\n\n## Happy Bot\n\n{answer}"
+                         "\n\n## You\n\nFollow-up\n\n## Happy Bot\n\nFollow-up answer\n")
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.call("POST", route, {"all": True, "path": str(target)})["count"], 2)
+        grouped = target.read_text()
+        self.assertTrue(grouped.startswith("# Happy Bot conversations\n\n## First question"))
+        self.assertLess(grouped.index("Follow-up answer"), grouped.index("## Second question"))
+        self.assertIn(answer, grouped)
+        self.assertTrue(grouped.endswith("### Happy Bot\n\nSecond chat answer\n"))
+        response = self.request("POST", route, {"id": "missing", "path": str(target)})
+        self.assertEqual(response.status, 400)
+        self.assertEqual(target.read_text(), grouped)
+
+    def test_markdown_preserves_uncapped_replies_and_interrupted_text(self) -> None:
+        from happy_bot.conversation import Message
+
+        chat = self.server.conversations.get_or_create()
+        self.server.conversations.begin_turn(chat, "Explain")
+        complete = "    indented code\n" * 1400
+        chat.history.extend([Message("system", "hidden instructions"), Message("user", "Explain", context="private UI"),
+                             Message("assistant", complete), Message("tool", "private tool output")])
+        chat.record({"type": "text_delta", "text": complete[:20000]})
+        chat.record({"type": "tool_call", "name": "example"})
+        chat.record({"type": "text_delta", "text": "Partial final answer"})
+        target = Path(self._tmp.name) / "Full.md"
+        self.call("POST", "/conversations/export", {"id": chat.id, "path": str(target)})
+        self.assertEqual(target.read_text(), f"# Explain\n\n## You\n\nExplain\n\n## Happy Bot\n\n{complete}"
+                         "\n\n## Happy Bot\n\nPartial final answer\n")
+
     def test_the_application_the_user_came_from_reaches_the_model_only(self) -> None:
         self.configure()
         self.model.replies.append(chunks_for("Use Ctrl+Shift+L."))

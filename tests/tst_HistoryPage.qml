@@ -85,6 +85,33 @@ Item {
             verify(!section.page.reportError && section.page.reportText.length > 0);
         }
 
+        function test_markdownSelection_data() {
+            return [{tag: "one", all: false}, {tag: "all", all: true}];
+        }
+
+        function test_markdownSelection(data) {
+            mouseClick(button("export", "conversations"));
+            const requests = section.page.requests;
+            compare(requests[0].path, "/conversations");
+            requests[0].success({conversations: [{id: "abc", title: "First chat", updated: 10}]});
+            const picker = button("exportPicker", "conversations");
+            tryCompare(picker, "count", 2);
+            compare(picker.currentIndex, 0);
+            if (data.all) picker.currentIndex = 1;
+            waitForRendering(section);
+            mouseClick(button("saveMarkdown", "conversations"));
+            const dialog = findChild(section, "markdownFileDialog");
+            tryCompare(dialog, "visible", true);
+            dialog.reject();
+            compare(requests.length, 1);
+            section.saveExport("file:///tmp/Chat%20export.md");
+            compare(requests[1].path, "/conversations/export");
+            compare(requests[1].body, data.all ? {all: true, path: "/tmp/Chat export.md"}
+                                               : {id: "abc", path: "/tmp/Chat export.md"});
+            requests[1].success({ok: true});
+            verify(!section.page.reportError);
+        }
+
         function test_retryAfterFailure() {
             const clear = button("clear", "search");
             const cancel = button("cancel", "search");

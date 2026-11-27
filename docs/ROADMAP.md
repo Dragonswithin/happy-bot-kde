@@ -499,7 +499,7 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
 | Prayer times and Hijri calendar | Timers and reminders. | Phase 15 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
 | Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
-| Markdown export | CLI backup can export conversations with settings. | Phase 13 adds Save conversation as Markdown from the chat UI. |
+| Markdown export | Settings → History & Folders exports one conversation or all conversations into a local Markdown file. | Built in Phase 13. |
 
 **Phase 13: Everyday assistant features.** Build the task manager on the
 existing reminders and notes, then add the memory editor, live context use,
@@ -509,8 +509,8 @@ model privacy settings before including them in context.
 *Exit:* make a recurring task manually and through chat, add a subtask,
 restart Happy Bot and verify due dates and completion survive. Save and
 forget a preference and check that the next eligible request sees the change.
-Verify context use, pin the popup while using another window, and export a
-conversation with its code blocks and messages intact.
+Verify context use, pin the popup while using another window, and export one
+conversation or all conversations from Settings with code blocks and messages intact.
 
 **Phase 14: Models, voice, files, and search.** Build the provider and search
 compatibility checks around the existing adapters. Add spoken replies,
