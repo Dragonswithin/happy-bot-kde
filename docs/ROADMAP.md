@@ -482,6 +482,7 @@ source beside each difference.
 
 This checklist follows the [KDE Assistant feature list](https://github.com/hadealahmad/KDE-Assisstant#features).
 It records what Happy Bot already has and schedules the remaining workflows.
+Religion-specific features are outside Happy Bot’s scope.
 The existing panel search, popup, and floating shortcut are the entry points.
 
 | Feature | Happy Bot baseline | Remaining work |
@@ -497,7 +498,6 @@ The existing panel search, popup, and floating shortcut are the entry points.
 | Live context tracker | The chat meter shows per-request usage, configured capacity, a labeled estimate or provider count, and a near-limit warning. | Built in Phase 13. |
 | Pin chat above windows | Pin window beside Close keeps the panel or floating popup visible while another app has keyboard focus. | Built in Phase 13. |
 | Mobile web access | Desktop-local app with authenticated loopback service. | Out of scope for the public project. Any future mobile companion is a separate closed-source project at the maintainer's discretion. |
-| Prayer times and Hijri calendar | Timers and reminders. | Phase 15 adds optional prayer times, Hijri dates, configurable calculation methods, and reminder sounds. |
 | Local persistence | Conversation files and settings persist locally, with history retention controls. | Phase 13 covers task and memory persistence, expiry rules, and restart checks. Keep the existing conversation and settings formats where they meet the workflow. |
 | Markdown export | Settings → History & Folders exports one conversation or all conversations into a local Markdown file. | Built in Phase 13. |
 
@@ -521,13 +521,6 @@ from the assistant. Keep all provider and search endpoints user-selected.
 transcribe and read a reply aloud, submit a text file, image, and PDF,
 search a local project, and get linked web results from configured providers.
 The documented compatibility list records the outcome for each provider.
-
-**Phase 15: Optional calendar tools.** Add an optional Hijri calendar and
-prayer-time view with user-chosen location and calculation settings. Disclose
-location sharing if the selected provider is online.
-
-*Exit:* verify prayer times for a known location, calculation method, and
-date, including reminder delivery through Happy Bot's existing controls.
 
 **Later.** Native providers, broker-backed privileged actions, packaging
 (AUR, KDE Store), non-stdio MCP transports. The full feature backlog and
