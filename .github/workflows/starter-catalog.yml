@@ -1,0 +1,22 @@
+name: Review starter model catalog
+on:
+  schedule:
+    - cron: "37 9 * * 1"
+  workflow_dispatch:
+  push:
+    paths:
+      - src/happy_bot/starter_models.json
+      - scripts/check_starter_catalog.py
+      - .github/workflows/starter-catalog.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for new models and changed downloads
+        run: python3 scripts/check_starter_catalog.py
