@@ -49,16 +49,20 @@ class ToolModels(HTMLParser):
             self.families.add(self.family)
 
 
-def changed_families(library, sitemap, reviewed):
+def tool_families(library):
     parser = ToolModels()
     parser.feed(library)
     if not parser.families:
         raise ValueError("Ollama's library returned no tool-capable models")
+    return parser.families
+
+
+def changed_families(families, sitemap, reviewed):
     dated = {}
     for node in ElementTree.fromstring(sitemap).findall("{*}url"):
         link = node.findtext("{*}loc", "")
         family = link.removeprefix(LIBRARY)
-        if link.startswith(LIBRARY) and family in parser.families:
+        if link.startswith(LIBRARY) and family in families:
             dated[family] = date.fromisoformat(node.findtext("{*}lastmod", ""))
     if not dated:
         raise ValueError("Ollama's sitemap returned no dated tool-capable models")
@@ -72,6 +76,12 @@ def main():
     issues = []
     if not 0 <= (today - reviewed).days <= 30:
         issues.append(f"The last catalog review was {reviewed}. Check the available local models.")
+    supported = tool_families(fetch(LIBRARY.rstrip("/"), 4_000_000).decode())
+    tags = [item["model"] for item in catalog["models"]]
+    if len(set(tags)) != len(tags):
+        issues.append("Duplicate model tags in the catalog.")
+    for family in sorted({tag.split(":")[0] for tag in tags} - supported):
+        issues.append(f"Check tool support for {LIBRARY}{family} before recommending it.")
     for model in catalog["models"]:
         family, tag = model["model"].split(":")
         if not re.fullmatch(FAMILY, family) or not re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", tag):
@@ -83,7 +93,7 @@ def main():
         size = sum(layer["size"] for layer in layers) / 1e9
         if abs(size - model["download_gb"]) > max(0.5, 0.05 * size):
             issues.append(f"{model['model']} now downloads {size:.1f} GB. Recheck its memory estimate.")
-    families = changed_families(fetch(LIBRARY.rstrip("/"), 4_000_000).decode(),
+    families = changed_families(supported,
                                 fetch("https://ollama.com/sitemap.xml", 2_000_000), reviewed)
     for family in families:
         issues.append(f"Review new or changed tool-capable family: {LIBRARY}{family}")
